@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:intl/intl.dart';
 
-String inr(num value) => NumberFormat.currency(
-      locale: 'en_IN', symbol: '₹', decimalDigits: 0,
-    ).format(value);
+import 'format.dart';
+import 'models.dart';
+import 'repositories.dart';
+
+export 'models.dart';
 
 enum UserRole { owner, tenant, admin }
 
@@ -23,123 +24,98 @@ class AppScope extends InheritedNotifier<AppState> {
       context.dependOnInheritedWidgetOfExactType<AppScope>()!.notifier!;
 }
 
+T? _firstOrNull<T>(List<T> list, bool Function(T) test) {
+  for (final item in list) {
+    if (test(item)) return item;
+  }
+  return null;
+}
+
 class AppState extends ChangeNotifier {
-  AppState(this.box) {
+  AppState(this.box)
+      : _pgRepo = HiveRepository<Pg>(box, 'pgs', fromMap: Pg.fromMap, toMap: (e) => e.toMap()),
+        _roomRepo = HiveRepository<Room>(box, 'rooms', fromMap: Room.fromMap, toMap: (e) => e.toMap()),
+        _tenantRepo = HiveRepository<Tenant>(box, 'tenants', fromMap: Tenant.fromMap, toMap: (e) => e.toMap()),
+        _paymentRepo = HiveRepository<Payment>(box, 'payments', fromMap: Payment.fromMap, toMap: (e) => e.toMap()),
+        _maintenanceRepo = HiveRepository<MaintenanceRequest>(box, 'maintenance', fromMap: MaintenanceRequest.fromMap, toMap: (e) => e.toMap()),
+        _visitorRepo = HiveRepository<Visitor>(box, 'visitors', fromMap: Visitor.fromMap, toMap: (e) => e.toMap()),
+        _announcementRepo = HiveRepository<Announcement>(box, 'announcements', fromMap: Announcement.fromMap, toMap: (e) => e.toMap()),
+        _attendanceRepo = HiveRepository<AttendanceRecord>(box, 'attendance', fromMap: AttendanceRecord.fromMap, toMap: (e) => e.toMap()),
+        _utilityRepo = HiveRepository<UtilityBill>(box, 'utilities', fromMap: UtilityBill.fromMap, toMap: (e) => e.toMap()),
+        _notificationRepo = HiveRepository<AppNotification>(box, 'notifications', fromMap: AppNotification.fromMap, toMap: (e) => e.toMap());
+
+  static const schemaVersion = 2;
+  static const utilityRate = 8; // ₹ per unit
+
+  // The demo profile behind the tenant role. A multi-user build would load
+  // this from the signed-in account instead.
+  static const currentTenantId = 't1';
+  static const ownerName = 'Ananya Kapoor';
+
+  final Box<dynamic> box;
+  final Repository<Pg> _pgRepo;
+  final Repository<Room> _roomRepo;
+  final Repository<Tenant> _tenantRepo;
+  final Repository<Payment> _paymentRepo;
+  final Repository<MaintenanceRequest> _maintenanceRepo;
+  final Repository<Visitor> _visitorRepo;
+  final Repository<Announcement> _announcementRepo;
+  final Repository<AttendanceRecord> _attendanceRepo;
+  final Repository<UtilityBill> _utilityRepo;
+  final Repository<AppNotification> _notificationRepo;
+
+  bool isLoggedIn = false;
+  UserRole role = UserRole.owner;
+
+  List<Pg> pgs = [];
+  List<Room> rooms = [];
+  List<Tenant> tenants = [];
+  List<Payment> payments = [];
+  List<MaintenanceRequest> maintenance = [];
+  List<Visitor> visitors = [];
+  List<Announcement> announcements = [];
+  List<AttendanceRecord> attendance = [];
+  List<UtilityBill> utilities = [];
+  List<AppNotification> notifications = [];
+
+  Future<void> init() async {
+    if (box.get('schemaVersion') != schemaVersion) {
+      await box.clear();
+      await box.put('schemaVersion', schemaVersion);
+    }
     final savedRole = box.get('sessionRole') as String?;
     if (savedRole != null) {
       role = UserRole.values.firstWhere((e) => e.name == savedRole);
       isLoggedIn = true;
     }
-  }
-
-  // The demo profile behind the tenant role. A multi-user build would load
-  // this from the signed-in account instead.
-  static const currentTenantName = 'Aarav Mehta';
-  static const currentTenantRoom = '101';
-  static const currentTenantBed = '101-A';
-  static const ownerName = 'Ananya Kapoor';
-
-  final Box<dynamic> box;
-  bool isLoggedIn = false;
-  UserRole role = UserRole.owner;
-
-  String get displayName => role == UserRole.tenant ? currentTenantName : ownerName;
-  String get initials => displayName.split(' ').map((e) => e[0]).take(2).join();
-
-  List<Map<String, dynamic>> pgs = [];
-  List<Map<String, dynamic>> rooms = [];
-  List<Map<String, dynamic>> tenants = [];
-  List<Map<String, dynamic>> payments = [];
-  List<Map<String, dynamic>> maintenance = [];
-  List<Map<String, dynamic>> visitors = [];
-  List<Map<String, dynamic>> announcements = [];
-  List<Map<String, dynamic>> attendance = [];
-  List<Map<String, dynamic>> utilities = [];
-  List<Map<String, dynamic>> notifications = [];
-
-  void seedIfNeeded() {
-    pgs = _read('pgs');
-    rooms = _read('rooms');
-    tenants = _read('tenants');
-    payments = _read('payments');
-    maintenance = _read('maintenance');
-    visitors = _read('visitors');
-    announcements = _read('announcements');
-    attendance = _read('attendance');
-    utilities = _read('utilities');
-    notifications = _read('notifications');
-    if (pgs.isNotEmpty) return;
-
-    pgs = [
-      {'id': 'p1', 'name': 'Nestora HSR', 'address': '27th Main, HSR Layout, Bengaluru', 'beds': 48, 'occupied': 41, 'amenities': 'Wi-Fi • Food • Laundry • CCTV', 'rating': 4.8},
-      {'id': 'p2', 'name': 'Nestora Koramangala', 'address': '5th Block, Koramangala, Bengaluru', 'beds': 36, 'occupied': 29, 'amenities': 'Wi-Fi • AC • Gym • Power backup', 'rating': 4.6},
-    ];
-    rooms = [
-      {'id': 'r1', 'number': '101', 'floor': 1, 'type': 'Double sharing', 'rent': 9500, 'beds': 2, 'occupied': 2},
-      {'id': 'r2', 'number': '102', 'floor': 1, 'type': 'Triple sharing', 'rent': 8200, 'beds': 3, 'occupied': 2},
-      {'id': 'r3', 'number': '201', 'floor': 2, 'type': 'Single', 'rent': 14500, 'beds': 1, 'occupied': 1},
-      {'id': 'r4', 'number': '202', 'floor': 2, 'type': 'Double sharing', 'rent': 10000, 'beds': 2, 'occupied': 1},
-      {'id': 'r5', 'number': '301', 'floor': 3, 'type': 'Triple sharing', 'rent': 7800, 'beds': 3, 'occupied': 3},
-    ];
-    tenants = [
-      {'id': 't1', 'name': 'Aarav Mehta', 'phone': '98765 43210', 'room': '101-A', 'kyc': 'Verified', 'joinDate': '12 Jan 2026', 'agreement': 'Signed'},
-      {'id': 't2', 'name': 'Diya Sharma', 'phone': '99887 66110', 'room': '101-B', 'kyc': 'Verified', 'joinDate': '04 Feb 2026', 'agreement': 'Signed'},
-      {'id': 't3', 'name': 'Rohan Nair', 'phone': '90123 45678', 'room': '102-A', 'kyc': 'Pending', 'joinDate': '21 Jun 2026', 'agreement': 'Awaiting sign'},
-      {'id': 't4', 'name': 'Ishita Rao', 'phone': '91234 56780', 'room': '201-A', 'kyc': 'Verified', 'joinDate': '10 Mar 2026', 'agreement': 'Signed'},
-    ];
-    payments = [
-      {'id': 'pay1', 'tenant': 'Aarav Mehta', 'month': 'July 2026', 'amount': 9500, 'status': 'Due', 'date': '05 Jul'},
-      {'id': 'pay2', 'tenant': 'Diya Sharma', 'month': 'July 2026', 'amount': 9500, 'status': 'Due', 'date': '05 Jul'},
-      {'id': 'pay3', 'tenant': 'Rohan Nair', 'month': 'July 2026', 'amount': 8200, 'status': 'Overdue', 'date': '01 Jul'},
-      {'id': 'pay4', 'tenant': 'Ishita Rao', 'month': 'July 2026', 'amount': 14500, 'status': 'Paid', 'date': '01 Jul'},
-    ];
-    maintenance = [
-      {'id': 'm1', 'title': 'Bathroom tap leaking', 'room': '102', 'category': 'Plumbing', 'status': 'In progress', 'priority': 'High', 'assignee': 'Ravi Kumar', 'date': 'Today, 9:30 AM'},
-      {'id': 'm2', 'title': 'Wi-Fi not connecting', 'room': '201', 'category': 'Internet', 'status': 'Open', 'priority': 'Medium', 'assignee': 'Unassigned', 'date': 'Yesterday'},
-      {'id': 'm3', 'title': 'Tube light replacement', 'room': '301', 'category': 'Electrical', 'status': 'Resolved', 'priority': 'Low', 'assignee': 'Suresh', 'date': '30 Jun'},
-    ];
-    visitors = [
-      {'id': 'v1', 'name': 'Karan Mehta', 'tenant': 'Aarav Mehta', 'purpose': 'Family', 'time': 'Today, 5:20 PM', 'status': 'Inside'},
-      {'id': 'v2', 'name': 'Maya Singh', 'tenant': 'Diya Sharma', 'purpose': 'Friend', 'time': 'Today, 4:10 PM', 'status': 'Awaiting approval'},
-      {'id': 'v3', 'name': 'Delivery partner', 'tenant': 'Rohan Nair', 'purpose': 'Delivery', 'time': 'Today, 1:45 PM', 'status': 'Checked out'},
-    ];
-    announcements = [
-      {'id': 'a1', 'title': 'Water tank cleaning', 'body': 'Water supply will be paused from 10 AM to 12 PM this Sunday.', 'date': 'Today', 'author': 'Management'},
-      {'id': 'a2', 'title': 'July community dinner', 'body': 'Join us on the terrace this Saturday at 7:30 PM.', 'date': '01 Jul', 'author': 'Ananya, Owner'},
-    ];
-    attendance = [
-      {'id': 'at1', 'name': 'Aarav Mehta', 'date': '03 Jul', 'checkIn': '8:45 AM', 'checkOut': '—', 'status': 'In'},
-      {'id': 'at2', 'name': 'Diya Sharma', 'date': '03 Jul', 'checkIn': '9:10 AM', 'checkOut': '6:30 PM', 'status': 'Out'},
-      {'id': 'at3', 'name': 'Rohan Nair', 'date': '03 Jul', 'checkIn': '10:05 AM', 'checkOut': '—', 'status': 'In'},
-    ];
-    utilities = [
-      {'id': 'u1', 'room': '101', 'previous': 1280, 'current': 1384, 'units': 104, 'amount': 832, 'status': 'Generated'},
-      {'id': 'u2', 'room': '102', 'previous': 988, 'current': 1108, 'units': 120, 'amount': 960, 'status': 'Generated'},
-      {'id': 'u3', 'room': '201', 'previous': 740, 'current': 807, 'units': 67, 'amount': 536, 'status': 'Pending reading'},
-    ];
-    notifications = [
-      {'id': 'n1', 'title': 'Rent received', 'body': '₹14,500 received from Ishita Rao.', 'time': '12 min ago', 'read': false, 'type': 'payment'},
-      {'id': 'n2', 'title': 'Visitor awaiting approval', 'body': 'Maya Singh is waiting at the reception.', 'time': '1 hr ago', 'read': false, 'type': 'visitor'},
-      {'id': 'n3', 'title': 'Maintenance updated', 'body': 'Bathroom tap issue is now in progress.', 'time': '3 hrs ago', 'read': true, 'type': 'maintenance'},
-    ];
-    persistAll();
-  }
-
-  List<Map<String, dynamic>> _read(String key) {
-    final raw = box.get(key, defaultValue: <dynamic>[]) as List;
-    return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    pgs = await _pgRepo.loadAll();
+    rooms = await _roomRepo.loadAll();
+    tenants = await _tenantRepo.loadAll();
+    payments = await _paymentRepo.loadAll();
+    maintenance = await _maintenanceRepo.loadAll();
+    visitors = await _visitorRepo.loadAll();
+    announcements = await _announcementRepo.loadAll();
+    attendance = await _attendanceRepo.loadAll();
+    utilities = await _utilityRepo.loadAll();
+    notifications = await _notificationRepo.loadAll();
+    if (pgs.isEmpty) {
+      _seed();
+      await persistAll();
+    }
   }
 
   Future<void> persistAll() async {
     await Future.wait([
-      box.put('pgs', pgs), box.put('rooms', rooms), box.put('tenants', tenants),
-      box.put('payments', payments), box.put('maintenance', maintenance),
-      box.put('visitors', visitors), box.put('announcements', announcements),
-      box.put('attendance', attendance), box.put('utilities', utilities),
-      box.put('notifications', notifications),
+      _pgRepo.saveAll(pgs), _roomRepo.saveAll(rooms), _tenantRepo.saveAll(tenants),
+      _paymentRepo.saveAll(payments), _maintenanceRepo.saveAll(maintenance),
+      _visitorRepo.saveAll(visitors), _announcementRepo.saveAll(announcements),
+      _attendanceRepo.saveAll(attendance), _utilityRepo.saveAll(utilities),
+      _notificationRepo.saveAll(notifications),
     ]);
     notifyListeners();
   }
+
+  // ---- Session ----
 
   void login(UserRole selectedRole) {
     role = selectedRole;
@@ -154,104 +130,287 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void addItem(List<Map<String, dynamic>> list, Map<String, dynamic> item) {
-    list.insert(0, item);
-    persistAll();
+  // ---- Lookups ----
+
+  Pg? pgById(String id) => _firstOrNull(pgs, (e) => e.id == id);
+  Room? roomById(String id) => _firstOrNull(rooms, (e) => e.id == id);
+  Tenant? tenantById(String id) => _firstOrNull(tenants, (e) => e.id == id);
+
+  String tenantName(String id) => tenantById(id)?.name ?? 'Former tenant';
+  String roomNumber(String roomId) => roomById(roomId)?.number ?? '—';
+  String tenantRoomLabel(Tenant tenant) => '${roomNumber(tenant.roomId)}-${tenant.bed}';
+
+  Tenant? get currentTenant => tenantById(currentTenantId);
+  String get currentTenantRoomLabel {
+    final tenant = currentTenant;
+    return tenant == null ? '—' : tenantRoomLabel(tenant);
   }
 
-  String get today => DateFormat('dd MMM').format(DateTime.now());
-  String get timeNow => DateFormat('h:mm a').format(DateTime.now());
-  String get currentMonth => DateFormat('MMMM yyyy').format(DateTime.now());
+  String pgNameForTenant(String tenantId) {
+    final room = roomById(tenantById(tenantId)?.roomId ?? '');
+    return pgById(room?.pgId ?? '')?.name ?? 'PG Management';
+  }
 
-  void _notify(String title, String body, String type) {
-    notifications.insert(0, {
-      'id': 'n${DateTime.now().millisecondsSinceEpoch}',
-      'title': title, 'body': body, 'time': 'Just now', 'read': false, 'type': type,
+  String get displayName => role == UserRole.tenant ? (currentTenant?.name ?? 'Tenant') : ownerName;
+  String get initials => displayName.split(' ').where((e) => e.isNotEmpty).map((e) => e[0]).take(2).join();
+
+  // ---- Aggregates ----
+
+  int get totalBeds => pgs.fold(0, (sum, e) => sum + e.beds);
+  int get occupiedBeds => pgs.fold(0, (sum, e) => sum + e.occupied);
+  int get dueAmount => payments.where((e) => e.status == PaymentStatus.due).fold(0, (sum, e) => sum + e.amount);
+
+  int get collectedAmount {
+    final now = DateTime.now();
+    return payments
+        .where((e) => e.status == PaymentStatus.paid && e.period.year == now.year && e.period.month == now.month)
+        .fold(0, (sum, e) => sum + e.amount);
+  }
+
+  List<({DateTime month, int total})> monthlyRevenue({int months = 6}) {
+    final now = DateTime.now();
+    return List.generate(months, (i) {
+      final month = DateTime(now.year, now.month - (months - 1 - i));
+      final total = payments
+          .where((e) => e.status == PaymentStatus.paid && e.period.year == month.year && e.period.month == month.month)
+          .fold(0, (sum, e) => sum + e.amount);
+      return (month: month, total: total);
     });
   }
 
-  Map<String, dynamic>? get tenantDuePayment {
-    for (final payment in payments) {
-      if (payment['tenant'] == currentTenantName && payment['status'] != 'Paid') return payment;
-    }
-    return null;
+  /// Growth of the last completed month over the one before, in percent.
+  double? get revenueGrowth {
+    final revenue = monthlyRevenue();
+    if (revenue.length < 3) return null;
+    final previous = revenue[revenue.length - 3].total;
+    final last = revenue[revenue.length - 2].total;
+    if (previous == 0) return null;
+    return (last - previous) / previous * 100;
   }
+
+  // ---- Actions ----
+
+  String _id(String prefix) => '$prefix${DateTime.now().microsecondsSinceEpoch}';
+
+  void _notify(String title, String body, NotificationType type) {
+    notifications.insert(0, AppNotification(
+      id: _id('n'), title: title, body: body, type: type, createdAt: DateTime.now(),
+    ));
+  }
+
+  bool get hasUnread => notifications.any((n) => !n.read);
+
+  void markNotificationRead(String id) {
+    final i = notifications.indexWhere((n) => n.id == id);
+    if (i == -1) return;
+    notifications[i] = notifications[i].copyWith(read: true);
+    persistAll();
+  }
+
+  void markAllNotificationsRead() {
+    notifications = notifications.map((n) => n.copyWith(read: true)).toList();
+    persistAll();
+  }
+
+  void savePg(Pg pg) {
+    final i = pgs.indexWhere((e) => e.id == pg.id);
+    if (i == -1) {
+      pgs.insert(0, pg);
+    } else {
+      pgs[i] = pg;
+    }
+    persistAll();
+  }
+
+  void addRoom(Room room) {
+    rooms.add(room);
+    persistAll();
+  }
+
+  void onboardTenant({required String name, required String phone, required String roomId, required String bed}) {
+    tenants.insert(0, Tenant(
+      id: _id('t'), name: name, phone: phone, roomId: roomId, bed: bed,
+      kyc: KycStatus.pending, agreement: AgreementStatus.awaitingSign, joinDate: DateTime.now(),
+    ));
+    final i = rooms.indexWhere((r) => r.id == roomId);
+    if (i != -1 && rooms[i].occupied < rooms[i].beds) {
+      rooms[i] = rooms[i].copyWith(occupied: rooms[i].occupied + 1);
+      final p = pgs.indexWhere((e) => e.id == rooms[i].pgId);
+      if (p != -1 && pgs[p].occupied < pgs[p].beds) {
+        pgs[p] = pgs[p].copyWith(occupied: pgs[p].occupied + 1);
+      }
+    }
+    persistAll();
+  }
+
+  Payment? get tenantDuePayment =>
+      _firstOrNull(payments, (p) => p.tenantId == currentTenantId && p.status == PaymentStatus.due);
 
   void payRent(String id, String method) {
-    final payment = payments.firstWhere((e) => e['id'] == id);
-    payment['status'] = 'Paid';
-    payment['date'] = today;
-    payment['method'] = method;
-    _notify('Rent received', '${inr(payment['amount'] as int)} received from ${payment['tenant']}.', 'payment');
+    final i = payments.indexWhere((p) => p.id == id);
+    if (i == -1) return;
+    payments[i] = payments[i].copyWith(status: PaymentStatus.paid, paidDate: DateTime.now(), method: method);
+    _notify('Rent received', '${inr(payments[i].amount)} received from ${tenantName(payments[i].tenantId)}.', NotificationType.payment);
     persistAll();
   }
 
-  void recordPayment({required String tenant, required int amount, required String method}) {
-    payments.insert(0, {
-      'id': 'pay${DateTime.now().millisecondsSinceEpoch}',
-      'tenant': tenant, 'month': currentMonth, 'amount': amount,
-      'status': 'Paid', 'date': today, 'method': method,
-    });
-    _notify('Payment recorded', '${inr(amount)} from $tenant marked as received.', 'payment');
+  void recordPayment({required String tenantId, required int amount, required String method}) {
+    final now = DateTime.now();
+    payments.insert(0, Payment(
+      id: _id('pay'), tenantId: tenantId, period: DateTime(now.year, now.month),
+      amount: amount, status: PaymentStatus.paid,
+      dueDate: DateTime(now.year, now.month, 5), paidDate: now, method: method,
+    ));
+    _notify('Payment recorded', '${inr(amount)} from ${tenantName(tenantId)} marked as received.', NotificationType.payment);
     persistAll();
   }
 
-  void setVisitorStatus(String id, String status) {
-    final visitor = visitors.firstWhere((e) => e['id'] == id);
-    visitor['status'] = status;
+  void addMaintenanceRequest({required String title, required String roomId, required String category, required Priority priority}) {
+    maintenance.insert(0, MaintenanceRequest(
+      id: _id('m'), roomId: roomId, title: title, category: category,
+      status: MaintenanceStatus.open, priority: priority, createdAt: DateTime.now(),
+    ));
+    persistAll();
+  }
+
+  void setMaintenanceStatus(String id, MaintenanceStatus status, {String? assignee}) {
+    final i = maintenance.indexWhere((e) => e.id == id);
+    if (i == -1) return;
+    final trimmed = assignee?.trim();
+    maintenance[i] = maintenance[i].copyWith(status: status, assignee: (trimmed?.isEmpty ?? true) ? null : trimmed);
+    _notify('Maintenance updated', '${maintenance[i].title} is now ${status.label.toLowerCase()}.', NotificationType.maintenance);
+    persistAll();
+  }
+
+  void addVisitor({required String name, required String tenantId, required String purpose}) {
+    visitors.insert(0, Visitor(
+      id: _id('v'), tenantId: tenantId, name: name, purpose: purpose,
+      status: VisitorStatus.awaitingApproval, expectedAt: DateTime.now(),
+    ));
+    persistAll();
+  }
+
+  void setVisitorStatus(String id, VisitorStatus status) {
+    final i = visitors.indexWhere((e) => e.id == id);
+    if (i == -1) return;
+    visitors[i] = visitors[i].copyWith(status: status);
+    final visitor = visitors[i];
     final title = switch (status) {
-      'Inside' => 'Visitor checked in',
-      'Checked out' => 'Visitor checked out',
-      'Declined' => 'Visitor declined',
-      _ => 'Visitor updated',
+      VisitorStatus.inside => 'Visitor checked in',
+      VisitorStatus.checkedOut => 'Visitor checked out',
+      VisitorStatus.declined => 'Visitor declined',
+      VisitorStatus.awaitingApproval => 'Visitor updated',
     };
-    _notify(title, '${visitor['name']} · ${visitor['purpose']} visit for ${visitor['tenant']}.', 'visitor');
-    persistAll();
-  }
-
-  void setMaintenanceStatus(String id, String status, {String? assignee}) {
-    final item = maintenance.firstWhere((e) => e['id'] == id);
-    item['status'] = status;
-    if (assignee != null && assignee.trim().isNotEmpty) item['assignee'] = assignee.trim();
-    _notify('Maintenance updated', '${item['title']} is now ${status.toLowerCase()}.', 'maintenance');
+    _notify(title, '${visitor.name} · ${visitor.purpose} visit for ${tenantName(visitor.tenantId)}.', NotificationType.visitor);
     persistAll();
   }
 
   void publishAnnouncement(String title, String body) {
-    announcements.insert(0, {
-      'id': 'a${DateTime.now().millisecondsSinceEpoch}',
-      'title': title, 'body': body, 'date': 'Just now', 'author': '$ownerName, ${role.label}',
-    });
-    _notify('New announcement', title, 'announcement');
+    announcements.insert(0, Announcement(
+      id: _id('a'), title: title, body: body,
+      author: '$ownerName, ${role.label}', postedAt: DateTime.now(),
+    ));
+    _notify('New announcement', title, NotificationType.announcement);
     persistAll();
   }
 
-  Map<String, dynamic>? get todayAttendance {
-    for (final record in attendance) {
-      if (record['name'] == currentTenantName && record['date'] == today) return record;
-    }
-    return null;
+  void addUtilityBill({required String roomId, required int previous, required int current}) {
+    utilities.insert(0, UtilityBill(
+      id: _id('u'), roomId: roomId, previous: previous, current: current,
+      rate: utilityRate, status: BillStatus.generated,
+    ));
+    persistAll();
   }
 
-  bool get isCheckedIn => todayAttendance?['status'] == 'In';
+  AttendanceRecord? get todayAttendance =>
+      _firstOrNull(attendance, (a) => a.tenantId == currentTenantId && isSameDay(a.checkIn, DateTime.now()));
+
+  bool get isCheckedIn => todayAttendance?.isIn ?? false;
 
   void toggleCheckIn() {
     final record = todayAttendance;
-    if (record == null || record['status'] == 'Out') {
-      attendance.insert(0, {
-        'id': 'at${DateTime.now().millisecondsSinceEpoch}',
-        'name': currentTenantName, 'date': today,
-        'checkIn': timeNow, 'checkOut': '—', 'status': 'In',
-      });
+    if (record == null || !record.isIn) {
+      attendance.insert(0, AttendanceRecord(id: _id('at'), tenantId: currentTenantId, checkIn: DateTime.now()));
     } else {
-      record['checkOut'] = timeNow;
-      record['status'] = 'Out';
+      final i = attendance.indexWhere((a) => a.id == record.id);
+      attendance[i] = record.copyWith(checkOut: DateTime.now());
     }
     persistAll();
   }
 
-  int get totalBeds => pgs.fold(0, (sum, e) => sum + (e['beds'] as int));
-  int get occupiedBeds => pgs.fold(0, (sum, e) => sum + (e['occupied'] as int));
-  int get dueAmount => payments.where((e) => e['status'] != 'Paid').fold(0, (sum, e) => sum + (e['amount'] as int));
-  int get collectedAmount => payments.where((e) => e['status'] == 'Paid').fold(0, (sum, e) => sum + (e['amount'] as int));
+  // ---- Seed data ----
+
+  void _seed() {
+    final now = DateTime.now();
+    DateTime month(int offset) => DateTime(now.year, now.month + offset);
+
+    pgs = [
+      const Pg(id: 'p1', name: 'HSR Layout PG', address: '27th Main, HSR Layout, Bengaluru', beds: 48, occupied: 41, amenities: 'Wi-Fi • Food • Laundry • CCTV', rating: 4.8),
+      const Pg(id: 'p2', name: 'Koramangala PG', address: '5th Block, Koramangala, Bengaluru', beds: 36, occupied: 29, amenities: 'Wi-Fi • AC • Gym • Power backup', rating: 4.6),
+    ];
+    rooms = [
+      const Room(id: 'r1', pgId: 'p1', number: '101', floor: 1, beds: 2, occupied: 2, rent: 9500),
+      const Room(id: 'r2', pgId: 'p1', number: '102', floor: 1, beds: 3, occupied: 2, rent: 8200),
+      const Room(id: 'r3', pgId: 'p1', number: '201', floor: 2, beds: 1, occupied: 1, rent: 14500),
+      const Room(id: 'r4', pgId: 'p1', number: '202', floor: 2, beds: 2, occupied: 1, rent: 10000),
+      const Room(id: 'r5', pgId: 'p1', number: '301', floor: 3, beds: 3, occupied: 3, rent: 7800),
+    ];
+    tenants = [
+      Tenant(id: 't1', name: 'Aarav Mehta', phone: '98765 43210', roomId: 'r1', bed: 'A', kyc: KycStatus.verified, agreement: AgreementStatus.signed, joinDate: DateTime(month(-5).year, month(-5).month, 12)),
+      Tenant(id: 't2', name: 'Diya Sharma', phone: '99887 66110', roomId: 'r1', bed: 'B', kyc: KycStatus.verified, agreement: AgreementStatus.signed, joinDate: DateTime(month(-5).year, month(-5).month, 4)),
+      Tenant(id: 't3', name: 'Rohan Nair', phone: '90123 45678', roomId: 'r2', bed: 'A', kyc: KycStatus.pending, agreement: AgreementStatus.awaitingSign, joinDate: now.subtract(const Duration(days: 12))),
+      Tenant(id: 't4', name: 'Ishita Rao', phone: '91234 56780', roomId: 'r3', bed: 'A', kyc: KycStatus.verified, agreement: AgreementStatus.signed, joinDate: DateTime(month(-4).year, month(-4).month, 10)),
+    ];
+
+    var payId = 0;
+    Payment paid(String tenantId, DateTime m, int amount, String method) => Payment(
+          id: 'pay${++payId}', tenantId: tenantId, period: m, amount: amount,
+          status: PaymentStatus.paid,
+          dueDate: DateTime(m.year, m.month, 5), paidDate: DateTime(m.year, m.month, 3), method: method,
+        );
+    payments = [
+      // Current month: one collected, two due, one overdue.
+      Payment(id: 'pay${++payId}', tenantId: 't4', period: month(0), amount: 14500, status: PaymentStatus.paid, dueDate: DateTime(now.year, now.month, 5), paidDate: now.subtract(const Duration(days: 1)), method: 'UPI'),
+      Payment(id: 'pay${++payId}', tenantId: 't1', period: month(0), amount: 9500, status: PaymentStatus.due, dueDate: now.add(const Duration(days: 2))),
+      Payment(id: 'pay${++payId}', tenantId: 't2', period: month(0), amount: 9500, status: PaymentStatus.due, dueDate: now.add(const Duration(days: 2))),
+      Payment(id: 'pay${++payId}', tenantId: 't3', period: month(0), amount: 8200, status: PaymentStatus.due, dueDate: now.subtract(const Duration(days: 2))),
+      // History powering the revenue chart.
+      paid('t1', month(-1), 9500, 'UPI'), paid('t1', month(-2), 9500, 'UPI'),
+      paid('t1', month(-3), 9000, 'Bank transfer'), paid('t1', month(-4), 9000, 'UPI'), paid('t1', month(-5), 9000, 'Cash'),
+      paid('t2', month(-1), 9500, 'UPI'), paid('t2', month(-2), 9500, 'Card'),
+      paid('t2', month(-3), 9500, 'UPI'), paid('t2', month(-4), 9500, 'UPI'), paid('t2', month(-5), 9500, 'Bank transfer'),
+      paid('t4', month(-1), 14500, 'UPI'), paid('t4', month(-2), 14500, 'UPI'),
+      paid('t4', month(-3), 13500, 'Bank transfer'), paid('t4', month(-4), 13500, 'UPI'),
+      paid('t3', month(-1), 2500, 'UPI'), // prorated first month
+    ];
+    maintenance = [
+      MaintenanceRequest(id: 'm1', roomId: 'r2', title: 'Bathroom tap leaking', category: 'Plumbing', status: MaintenanceStatus.inProgress, priority: Priority.high, assignee: 'Ravi Kumar', createdAt: now.subtract(const Duration(hours: 4))),
+      MaintenanceRequest(id: 'm2', roomId: 'r3', title: 'Wi-Fi not connecting', category: 'Internet', status: MaintenanceStatus.open, priority: Priority.medium, createdAt: now.subtract(const Duration(days: 1))),
+      MaintenanceRequest(id: 'm3', roomId: 'r5', title: 'Tube light replacement', category: 'Electrical', status: MaintenanceStatus.resolved, priority: Priority.low, assignee: 'Suresh', createdAt: now.subtract(const Duration(days: 3))),
+    ];
+    visitors = [
+      Visitor(id: 'v1', tenantId: 't1', name: 'Karan Mehta', purpose: 'Family', status: VisitorStatus.inside, expectedAt: now.subtract(const Duration(hours: 1))),
+      Visitor(id: 'v2', tenantId: 't2', name: 'Maya Singh', purpose: 'Friend', status: VisitorStatus.awaitingApproval, expectedAt: now.subtract(const Duration(hours: 2))),
+      Visitor(id: 'v3', tenantId: 't3', name: 'Delivery partner', purpose: 'Delivery', status: VisitorStatus.checkedOut, expectedAt: now.subtract(const Duration(hours: 5))),
+    ];
+    announcements = [
+      Announcement(id: 'a1', title: 'Water tank cleaning', body: 'Water supply will be paused from 10 AM to 12 PM this Sunday.', author: 'Management', postedAt: now.subtract(const Duration(hours: 2))),
+      Announcement(id: 'a2', title: 'Community dinner', body: 'Join us on the terrace this Saturday at 7:30 PM.', author: '$ownerName, Owner', postedAt: now.subtract(const Duration(days: 2))),
+    ];
+    attendance = [
+      AttendanceRecord(id: 'at1', tenantId: 't1', checkIn: now.subtract(const Duration(hours: 3))),
+      AttendanceRecord(id: 'at2', tenantId: 't2', checkIn: now.subtract(const Duration(hours: 6)), checkOut: now.subtract(const Duration(minutes: 30))),
+      AttendanceRecord(id: 'at3', tenantId: 't3', checkIn: now.subtract(const Duration(hours: 2))),
+    ];
+    utilities = [
+      const UtilityBill(id: 'u1', roomId: 'r1', previous: 1280, current: 1384, rate: utilityRate, status: BillStatus.generated),
+      const UtilityBill(id: 'u2', roomId: 'r2', previous: 988, current: 1108, rate: utilityRate, status: BillStatus.generated),
+      const UtilityBill(id: 'u3', roomId: 'r3', previous: 740, current: 807, rate: utilityRate, status: BillStatus.pendingReading),
+    ];
+    notifications = [
+      AppNotification(id: 'n1', title: 'Rent received', body: '₹14,500 received from Ishita Rao.', type: NotificationType.payment, createdAt: now.subtract(const Duration(minutes: 12))),
+      AppNotification(id: 'n2', title: 'Visitor awaiting approval', body: 'Maya Singh is waiting at the reception.', type: NotificationType.visitor, createdAt: now.subtract(const Duration(hours: 1))),
+      AppNotification(id: 'n3', title: 'Maintenance updated', body: 'Bathroom tap issue is now in progress.', type: NotificationType.maintenance, createdAt: now.subtract(const Duration(hours: 3)), read: true),
+    ];
+  }
 }

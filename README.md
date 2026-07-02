@@ -1,6 +1,6 @@
-# Nestora PG Management
+# PG Management
 
-A mobile-first Flutter platform for PG owners, administrators, and tenants. It ships in a zero-setup local mode backed by Hive, with realistic seeded data and working CRUD/status workflows.
+A mobile-first Flutter platform for PG owners, administrators, and tenants. It ships in a zero-setup local mode backed by Hive, with realistic seeded data and working CRUD/status workflows. Domain data is fully typed (models with IDs, enums and `DateTime`s) behind a repository layer, so a cloud backend can be added without touching the UI.
 
 ## Included
 
@@ -26,7 +26,7 @@ flutter create --platforms=android,ios,web .
 flutter run
 ```
 
-`flutter create` adds the native runner projects when cloning this source-only workspace; it preserves the existing `lib/`, `web/`, and package configuration. Select any role on the sign-in screen and use the prefilled demo credentials. Data is stored in the local Hive box `nestora_local` and survives app restarts.
+`flutter create` adds the native runner projects when cloning this source-only workspace; it preserves the existing `lib/`, `web/`, and package configuration. Select any role on the sign-in screen and use the prefilled demo credentials. Data is stored in the local Hive box `pg_management` and survives app restarts; the store is schema-versioned and reseeds itself after breaking model changes.
 
 ## Firebase production upgrade
 

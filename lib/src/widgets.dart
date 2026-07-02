@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 
+import 'models.dart';
 import 'theme.dart';
 
-export 'app_state.dart' show inr;
+export 'format.dart';
 
-IconData notificationIcon(String type) => switch (type) {
-      'payment' => Icons.payments_outlined,
-      'visitor' => Icons.badge_outlined,
-      'announcement' => Icons.campaign_outlined,
-      _ => Icons.build_outlined,
+IconData notificationIcon(NotificationType type) => switch (type) {
+      NotificationType.payment => Icons.payments_outlined,
+      NotificationType.visitor => Icons.badge_outlined,
+      NotificationType.announcement => Icons.campaign_outlined,
+      NotificationType.maintenance => Icons.build_outlined,
     };
 
 class PageHeader extends StatelessWidget {

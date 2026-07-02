@@ -32,22 +32,7 @@ class DashboardScreen extends StatelessWidget {
           if (state.role != UserRole.tenant) ...[
             Text('Revenue overview', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 12),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(18),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(inr(384000), style: Theme.of(context).textTheme.headlineMedium),
-                      const Text('Last 6 months · +12.4%', style: TextStyle(color: primary, fontWeight: FontWeight.w700, fontSize: 12)),
-                    ]),
-                    const StatusPill('On track'),
-                  ]),
-                  const SizedBox(height: 20),
-                  const SizedBox(height: 150, width: double.infinity, child: RevenueChart()),
-                ]),
-              ),
-            ),
+            _revenueCard(context, state),
             const SizedBox(height: 28),
           ],
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -58,14 +43,41 @@ class DashboardScreen extends StatelessWidget {
           Card(
             child: Column(
               children: state.notifications.take(3).map((n) => ListTile(
-                leading: CircleAvatar(backgroundColor: primarySoft, child: Icon(notificationIcon(n['type'] as String), color: primary, size: 20)),
-                title: Text(n['title'] as String, style: const TextStyle(fontWeight: FontWeight.w700)),
-                subtitle: Text(n['body'] as String, maxLines: 1, overflow: TextOverflow.ellipsis),
-                trailing: Text(n['time'] as String, style: const TextStyle(fontSize: 10, color: Colors.black45)),
+                leading: CircleAvatar(backgroundColor: primarySoft, child: Icon(notificationIcon(n.type), color: primary, size: 20)),
+                title: Text(n.title, style: const TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: Text(n.body, maxLines: 1, overflow: TextOverflow.ellipsis),
+                trailing: Text(relativeTime(n.createdAt), style: const TextStyle(fontSize: 10, color: Colors.black45)),
               )).toList(),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _revenueCard(BuildContext context, AppState state) {
+    final revenue = state.monthlyRevenue();
+    final total = revenue.fold(0, (sum, e) => sum + e.total);
+    final growth = state.revenueGrowth;
+    final max = revenue.fold(0, (m, e) => e.total > m ? e.total : m);
+    final values = revenue.map((e) => max == 0 ? 0.0 : e.total / max).toList();
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(inr(total), style: Theme.of(context).textTheme.headlineMedium),
+              Text(
+                growth == null ? 'Last 6 months' : 'Last 6 months · ${growth >= 0 ? '+' : ''}${growth.toStringAsFixed(1)}%',
+                style: const TextStyle(color: primary, fontWeight: FontWeight.w700, fontSize: 12),
+              ),
+            ]),
+            StatusPill((growth ?? 0) >= 0 ? 'On track' : 'Dipping'),
+          ]),
+          const SizedBox(height: 20),
+          SizedBox(height: 150, width: double.infinity, child: RevenueChart(values: values)),
+        ]),
       ),
     );
   }
@@ -84,8 +96,8 @@ class DashboardScreen extends StatelessWidget {
         children: [
           StatCard(label: 'Occupancy', value: '$occupancy%', icon: Icons.bed_rounded, tint: primary, caption: '${state.occupiedBeds}/${state.totalBeds} beds'),
           StatCard(label: 'Collected', value: inr(state.collectedAmount), icon: Icons.savings_outlined, tint: const Color(0xFF3478C7), caption: 'This month'),
-          StatCard(label: 'Outstanding', value: inr(state.dueAmount), icon: Icons.pending_actions, tint: coral, caption: '${state.payments.where((e) => e['status'] != 'Paid').length} dues'),
-          StatCard(label: 'Open requests', value: '${state.maintenance.where((e) => e['status'] != 'Resolved').length}', icon: Icons.build_circle_outlined, tint: warning, caption: 'Needs attention'),
+          StatCard(label: 'Outstanding', value: inr(state.dueAmount), icon: Icons.pending_actions, tint: coral, caption: '${state.payments.where((e) => e.status == PaymentStatus.due).length} dues'),
+          StatCard(label: 'Open requests', value: '${state.maintenance.where((e) => e.status != MaintenanceStatus.resolved).length}', icon: Icons.build_circle_outlined, tint: warning, caption: 'Needs attention'),
         ],
       );
     });
@@ -93,25 +105,30 @@ class DashboardScreen extends StatelessWidget {
 
   Widget _tenantHero(BuildContext context, AppState state) {
     final due = state.tenantDuePayment;
-    final latest = due ??
-        state.payments.firstWhere(
-          (e) => e['tenant'] == AppState.currentTenantName,
-          orElse: () => <String, dynamic>{'month': state.currentMonth, 'amount': 0, 'status': 'Paid', 'date': state.today},
-        );
-    final paid = due == null;
+    final latest = due ?? _latestTenantPayment(state);
+    if (latest == null) {
+      return Card(color: ink, child: Padding(
+        padding: const EdgeInsets.all(22),
+        child: Text('No rent scheduled yet', style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white)),
+      ));
+    }
+    final paid = latest.status == PaymentStatus.paid;
     return Card(
       color: ink,
       child: Padding(
         padding: const EdgeInsets.all(22),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text('${(latest['month'] as String).split(' ').first.toUpperCase()} RENT', style: const TextStyle(color: Colors.white54, letterSpacing: 1.2, fontWeight: FontWeight.w700, fontSize: 11)),
-            StatusPill(latest['status'] as String),
+            Text('${formatMonthName(latest.period).toUpperCase()} RENT', style: const TextStyle(color: Colors.white54, letterSpacing: 1.2, fontWeight: FontWeight.w700, fontSize: 11)),
+            StatusPill(latest.displayStatus),
           ]),
           const SizedBox(height: 14),
-          Text(inr(latest['amount'] as int), style: Theme.of(context).textTheme.headlineLarge?.copyWith(color: Colors.white)),
+          Text(inr(latest.amount), style: Theme.of(context).textTheme.headlineLarge?.copyWith(color: Colors.white)),
           const SizedBox(height: 4),
-          Text('${paid ? 'Paid on' : 'Due by'} ${latest['date']} · Room ${AppState.currentTenantBed}', style: const TextStyle(color: Colors.white60)),
+          Text(
+            paid ? 'Paid on ${formatDay(latest.paidDate!)} · Room ${state.currentTenantRoomLabel}' : 'Due by ${formatDay(latest.dueDate)} · Room ${state.currentTenantRoomLabel}',
+            style: const TextStyle(color: Colors.white60),
+          ),
           const SizedBox(height: 18),
           OutlinedButton.icon(
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PaymentsScreen())),
@@ -122,6 +139,13 @@ class DashboardScreen extends StatelessWidget {
         ]),
       ),
     );
+  }
+
+  Payment? _latestTenantPayment(AppState state) {
+    for (final payment in state.payments) {
+      if (payment.tenantId == AppState.currentTenantId) return payment;
+    }
+    return null;
   }
 
   Widget _quickActions(BuildContext context, UserRole role) {
@@ -164,16 +188,23 @@ class DashboardScreen extends StatelessWidget {
     final hour = DateTime.now().hour;
     return hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   }
-
 }
 
 class RevenueChart extends StatelessWidget {
-  const RevenueChart({super.key});
+  const RevenueChart({super.key, required this.values});
+
+  /// Normalised 0..1 revenue points, oldest first.
+  final List<double> values;
+
   @override
-  Widget build(BuildContext context) => CustomPaint(painter: _RevenuePainter());
+  Widget build(BuildContext context) => CustomPaint(painter: _RevenuePainter(values));
 }
 
 class _RevenuePainter extends CustomPainter {
+  _RevenuePainter(this.values);
+
+  final List<double> values;
+
   @override
   void paint(Canvas canvas, Size size) {
     final grid = Paint()..color = const Color(0xFFE9ECEB)..strokeWidth = 1;
@@ -181,10 +212,10 @@ class _RevenuePainter extends CustomPainter {
       final y = size.height * i / 3;
       canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
     }
-    const values = [.38, .55, .49, .72, .68, .9];
+    if (values.length < 2) return;
     final points = <Offset>[];
     for (var i = 0; i < values.length; i++) {
-      points.add(Offset(size.width * i / (values.length - 1), size.height * (1 - values[i])));
+      points.add(Offset(size.width * i / (values.length - 1), size.height * (1 - values[i] * .9)));
     }
     final fillPath = Path()..moveTo(0, size.height);
     for (final p in points) { fillPath.lineTo(p.dx, p.dy); }
@@ -205,5 +236,5 @@ class _RevenuePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _RevenuePainter oldDelegate) => oldDelegate.values != values;
 }

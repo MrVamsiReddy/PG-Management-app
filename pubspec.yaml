@@ -1,4 +1,4 @@
-name: nestora_pg
+name: pg_management
 description: A complete role-based PG management platform.
 publish_to: "none"
 version: 1.0.0+1

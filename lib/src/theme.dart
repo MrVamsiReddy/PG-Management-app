@@ -9,7 +9,7 @@ const warning = Color(0xFFF4B740);
 
 ThemeData buildAppTheme() {
   // fromSeed derives a tonal primary that drifts from the brand colour, so
-  // pin it — buttons, chips and toggles must all use the exact Nestora teal.
+  // pin it — buttons, chips and toggles must all use the exact brand teal.
   final scheme = ColorScheme.fromSeed(
     seedColor: primary,
     brightness: Brightness.light,

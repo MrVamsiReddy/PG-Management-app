@@ -49,7 +49,7 @@ class _HomeShellState extends State<HomeShell> {
             child: const Icon(Icons.apartment_rounded, color: Colors.white, size: 21),
           ),
           const SizedBox(width: 10),
-          Text('nestora', style: Theme.of(context).textTheme.titleLarge?.copyWith(letterSpacing: -.7)),
+          Flexible(child: Text('PG Management', overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleLarge?.copyWith(letterSpacing: -.7))),
           const SizedBox(width: 10),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -64,7 +64,7 @@ class _HomeShellState extends State<HomeShell> {
               onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen())),
               icon: const Icon(Icons.notifications_none_rounded),
             ),
-            if (state.notifications.any((e) => e['read'] == false))
+            if (state.hasUnread)
               Positioned(right: 10, top: 10, child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: coral, shape: BoxShape.circle))),
           ]),
           const SizedBox(width: 8),
@@ -111,13 +111,15 @@ class ProfileScreen extends StatelessWidget {
         ),
         const SizedBox(height: 13),
         Center(child: Text(state.displayName, style: Theme.of(context).textTheme.titleLarge)),
-        Center(child: Text(state.role == UserRole.tenant ? '${state.role.label} · Room ${AppState.currentTenantBed} · Nestora HSR' : '${state.role.label} · Nestora HSR')),
+        Center(child: Text(state.role == UserRole.tenant
+            ? '${state.role.label} · Room ${state.currentTenantRoomLabel} · ${state.pgNameForTenant(AppState.currentTenantId)}'
+            : '${state.role.label} · ${state.pgs.isEmpty ? 'PG Management' : state.pgs.first.name}')),
         const SizedBox(height: 28),
         Card(
           child: Column(children: [
             _profileTile(Icons.person_outline, 'Personal details', 'Name, phone, email'),
-            _profileTile(Icons.verified_user_outlined, 'KYC & documents', state.role == UserRole.tenant ? 'Aadhaar verified' : 'Business details'),
-            _profileTile(Icons.description_outlined, 'Rental agreement', state.role == UserRole.tenant ? 'Signed · View copy' : 'Templates and e-signatures'),
+            _profileTile(Icons.verified_user_outlined, 'KYC & documents', state.role == UserRole.tenant ? 'Aadhaar ${state.currentTenant?.kyc.label.toLowerCase() ?? 'pending'}' : 'Business details'),
+            _profileTile(Icons.description_outlined, 'Rental agreement', state.role == UserRole.tenant ? (state.currentTenant?.agreement == AgreementStatus.signed ? 'Signed · View copy' : 'Awaiting signature') : 'Templates and e-signatures'),
             _profileTile(Icons.settings_outlined, 'App settings', 'Notifications, security, language'),
             _profileTile(Icons.help_outline, 'Help & support', 'FAQs and contact support'),
           ]),
@@ -130,7 +132,7 @@ class ProfileScreen extends StatelessWidget {
           style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFFC94444), padding: const EdgeInsets.all(15)),
         ),
         const SizedBox(height: 16),
-        const Center(child: Text('Nestora v1.0 · Local demo', style: TextStyle(fontSize: 11, color: Colors.black38))),
+        const Center(child: Text('PG Management v1.0 · Local demo', style: TextStyle(fontSize: 11, color: Colors.black38))),
       ],
     );
   }

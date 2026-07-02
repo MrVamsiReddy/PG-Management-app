@@ -14,7 +14,7 @@ class _AuthScreenState extends State<AuthScreen> {
   bool obscure = true;
   UserRole role = UserRole.owner;
   final formKey = GlobalKey<FormState>();
-  final email = TextEditingController(text: 'owner@nestora.app');
+  final email = TextEditingController(text: 'owner@pgmanagement.app');
   final password = TextEditingController(text: 'password');
 
   @override
@@ -49,7 +49,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       child: const Icon(Icons.apartment_rounded, color: Colors.white, size: 28),
                     ),
                     const SizedBox(width: 12),
-                    Text('nestora', style: Theme.of(context).textTheme.headlineMedium?.copyWith(letterSpacing: -1.2)),
+                    Text('PG Management', style: Theme.of(context).textTheme.headlineMedium?.copyWith(letterSpacing: -1.2)),
                   ]),
                   const SizedBox(height: 44),
                   Text(signup ? 'Create your account' : 'Welcome back', style: Theme.of(context).textTheme.headlineLarge?.copyWith(fontSize: 30)),
@@ -95,7 +95,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   FilledButton(onPressed: submit, child: Text(signup ? 'Create account' : 'Sign in')),
                   const SizedBox(height: 18),
                   Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    Text(signup ? 'Already have an account?' : 'New to Nestora?'),
+                    Text(signup ? 'Already have an account?' : 'New here?'),
                     TextButton(onPressed: () => setState(() => signup = !signup), child: Text(signup ? 'Sign in' : 'Create account')),
                   ]),
                   const SizedBox(height: 18),

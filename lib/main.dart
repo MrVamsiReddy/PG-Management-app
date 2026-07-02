@@ -9,13 +9,14 @@ import 'src/theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
-  final box = await Hive.openBox<dynamic>('nestora_local');
-  final state = AppState(box)..seedIfNeeded();
-  runApp(NestoraApp(state: state));
+  final box = await Hive.openBox<dynamic>('pg_management');
+  final state = AppState(box);
+  await state.init();
+  runApp(PgManagementApp(state: state));
 }
 
-class NestoraApp extends StatelessWidget {
-  const NestoraApp({super.key, required this.state});
+class PgManagementApp extends StatelessWidget {
+  const PgManagementApp({super.key, required this.state});
 
   final AppState state;
 
@@ -25,7 +26,7 @@ class NestoraApp extends StatelessWidget {
       notifier: state,
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        title: 'Nestora PG',
+        title: 'PG Management',
         theme: buildAppTheme(),
         home: AnimatedBuilder(
           animation: state,

@@ -1,6 +1,6 @@
 {
-  "name": "Nestora PG Management",
-  "short_name": "Nestora",
+  "name": "PG Management",
+  "short_name": "PG Management",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#F5F7F6",
