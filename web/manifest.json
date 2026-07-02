@@ -1,0 +1,11 @@
+{
+  "name": "Nestora PG Management",
+  "short_name": "Nestora",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#F5F7F6",
+  "theme_color": "#1A7F72",
+  "description": "Role-based PG management for owners, admins and tenants.",
+  "orientation": "portrait-primary",
+  "prefer_related_applications": false
+}

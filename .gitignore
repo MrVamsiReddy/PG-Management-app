@@ -1,0 +1,27 @@
+.dart_tool/
+.packages
+.pub-cache/
+build/
+coverage/
+*.iml
+
+# Local tooling and artifacts (not part of the source tree)
+.android-sdk/
+.android-tools-extracted/
+.android-commandline-tools.zip
+.agents/
+.codex/
+*.apk
+*.log
+.flutter-plugins-dependencies
+.metadata
+.idea/
+.vscode/
+android/local.properties
+android/key.properties
+ios/Flutter/ephemeral/
+macos/Flutter/ephemeral/
+firebase_options.dart
+google-services.json
+GoogleService-Info.plist
+service-account*.json
