@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'app_state.dart';
 import 'theme.dart';
@@ -27,9 +28,12 @@ class PgListingsScreen extends StatelessWidget {
                 height: 140,
                 decoration: const BoxDecoration(gradient: LinearGradient(colors: [Color(0xFF195F59), Color(0xFF45A497)])),
                 child: Stack(children: [
-                  const Positioned(right: 20, bottom: -18, child: Icon(Icons.apartment_rounded, size: 150, color: Colors.white10)),
+                  if (pg.photo != null)
+                    Positioned.fill(child: base64Image(pg.photo!))
+                  else
+                    const Positioned(right: 20, bottom: -18, child: Icon(Icons.apartment_rounded, size: 150, color: Colors.white10)),
                   Positioned(left: 17, top: 17, child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)), child: Row(children: [const Icon(Icons.star, color: warning, size: 15), const SizedBox(width: 3), Text('${pg.rating}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12))]))),
-                  Positioned(right: 10, top: 9, child: IconButton(onPressed: () => _editPg(context, state, existing: pg), icon: const Icon(Icons.edit_outlined, color: Colors.white))),
+                  Positioned(right: 10, top: 9, child: IconButton(onPressed: () => _editPg(context, state, existing: pg), icon: const Icon(Icons.edit_outlined, color: Colors.white), style: IconButton.styleFrom(backgroundColor: Colors.black26))),
                 ]),
               ),
               Padding(
@@ -58,7 +62,8 @@ class PgListingsScreen extends StatelessWidget {
     final address = TextEditingController(text: existing?.address);
     final beds = TextEditingController(text: '${existing?.beds ?? 24}');
     final amenities = TextEditingController(text: existing?.amenities ?? 'Wi-Fi • Food • Laundry');
-    showAppSheet(context, SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    String? photo = existing?.photo;
+    showAppSheet(context, StatefulBuilder(builder: (context, setModalState) => SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       const SheetHandle(),
       Text(existing == null ? 'Add a PG property' : 'Edit property', style: Theme.of(context).textTheme.headlineMedium),
       const FormLabel('Property name'), TextField(controller: name, decoration: const InputDecoration(hintText: 'e.g. Indiranagar PG')),
@@ -66,7 +71,18 @@ class PgListingsScreen extends StatelessWidget {
       const FormLabel('Total beds'), TextField(controller: beds, keyboardType: TextInputType.number, decoration: const InputDecoration(prefixIcon: Icon(Icons.bed_outlined))),
       const FormLabel('Amenities'), TextField(controller: amenities, maxLines: 2),
       const SizedBox(height: 14),
-      OutlinedButton.icon(onPressed: () {}, icon: const Icon(Icons.add_a_photo_outlined), label: const Text('Add property photos')),
+      if (photo != null) ...[
+        ClipRRect(borderRadius: BorderRadius.circular(14), child: base64Image(photo!, height: 120)),
+        const SizedBox(height: 10),
+      ],
+      OutlinedButton.icon(
+        onPressed: () async {
+          final picked = await pickImageBase64(context);
+          if (picked != null) setModalState(() => photo = picked);
+        },
+        icon: Icon(photo == null ? Icons.add_a_photo_outlined : Icons.check_circle_outline),
+        label: Text(photo == null ? 'Add property photo' : 'Photo added · tap to change'),
+      ),
       const SizedBox(height: 18),
       FilledButton(onPressed: () {
         if (name.text.trim().isEmpty || address.text.trim().isEmpty) return;
@@ -76,10 +92,11 @@ class PgListingsScreen extends StatelessWidget {
           address: address.text.trim(),
           beds: int.tryParse(beds.text) ?? 24,
           amenities: amenities.text.trim(),
+          photo: photo,
         ));
         Navigator.pop(context);
       }, child: Text(existing == null ? 'Create property' : 'Save changes')),
-    ])));
+    ]))));
   }
 }
 
@@ -206,7 +223,11 @@ class _TenantsScreenState extends State<TenantsScreen> {
               _detail(Icons.calendar_today_outlined, 'Joined', formatFullDate(tenant.joinDate)),
               _detail(Icons.description_outlined, 'Agreement', tenant.agreement.label),
               const SizedBox(height: 10),
-              Row(children: [Expanded(child: OutlinedButton.icon(onPressed: () {}, icon: const Icon(Icons.call_outlined), label: const Text('Call'))), const SizedBox(width: 8), Expanded(child: FilledButton.icon(onPressed: () => _agreement(context, state, tenant), icon: const Icon(Icons.draw_outlined), label: const Text('Agreement')))]),
+              if (tenant.kycDoc != null) ...[
+                SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () => _viewKycDoc(context, tenant), icon: const Icon(Icons.badge_outlined), label: const Text('View KYC document'))),
+                const SizedBox(height: 8),
+              ],
+              Row(children: [Expanded(child: OutlinedButton.icon(onPressed: () => _call(tenant.phone), icon: const Icon(Icons.call_outlined), label: const Text('Call'))), const SizedBox(width: 8), Expanded(child: FilledButton.icon(onPressed: () => _agreement(context, state, tenant), icon: const Icon(Icons.draw_outlined), label: const Text('Agreement')))]),
             ]))],
           ),
         )),
@@ -216,12 +237,29 @@ class _TenantsScreenState extends State<TenantsScreen> {
 
   Widget _detail(IconData icon, String label, String value) => Padding(padding: const EdgeInsets.symmetric(vertical: 5), child: Row(children: [Icon(icon, size: 17, color: Colors.black45), const SizedBox(width: 8), Text('$label: ', style: const TextStyle(fontSize: 12)), Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700))]));
 
+  void _call(String phone) {
+    final digits = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+    launchUrl(Uri(scheme: 'tel', path: digits));
+  }
+
+  void _viewKycDoc(BuildContext context, Tenant tenant) => showDialog<void>(
+        context: context,
+        builder: (context) => Dialog(
+          clipBehavior: Clip.antiAlias,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            base64Image(tenant.kycDoc!, fit: BoxFit.contain),
+            Padding(padding: const EdgeInsets.all(10), child: Text('${tenant.name} · identity document', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+          ]),
+        ),
+      );
+
   void _onboard(BuildContext context, AppState state) {
     if (state.rooms.isEmpty) return;
     final name = TextEditingController();
     final phone = TextEditingController();
     final bed = TextEditingController(text: 'A');
     var roomId = state.rooms.first.id;
+    String? kycDoc;
     showAppSheet(context, StatefulBuilder(builder: (context, setModalState) => SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       const SheetHandle(), Text('Onboard tenant', style: Theme.of(context).textTheme.headlineMedium),
       const SizedBox(height: 6), const Text('Capture details, verify KYC and send the rental agreement.'),
@@ -234,11 +272,19 @@ class _TenantsScreenState extends State<TenantsScreen> {
         onChanged: (v) => setModalState(() => roomId = v!),
       ),
       const FormLabel('Bed label'), TextField(controller: bed, decoration: const InputDecoration(hintText: 'e.g. B')),
-      const FormLabel('Identity document'), OutlinedButton.icon(onPressed: () {}, icon: const Icon(Icons.upload_file_outlined), label: const Text('Upload Aadhaar / passport')),
+      const FormLabel('Identity document'),
+      OutlinedButton.icon(
+        onPressed: () async {
+          final picked = await pickImageBase64(context);
+          if (picked != null) setModalState(() => kycDoc = picked);
+        },
+        icon: Icon(kycDoc == null ? Icons.upload_file_outlined : Icons.check_circle_outline),
+        label: Text(kycDoc == null ? 'Upload Aadhaar / passport' : 'Document attached · tap to change'),
+      ),
       const FormLabel('Rental agreement'), SwitchListTile(contentPadding: EdgeInsets.zero, value: true, onChanged: (_) {}, title: const Text('Send e-sign request'), subtitle: const Text('Tenant receives a secure signing link')),
       const SizedBox(height: 16), FilledButton(onPressed: () {
         if (name.text.trim().isEmpty || phone.text.trim().isEmpty) return;
-        state.onboardTenant(name: name.text.trim(), phone: phone.text.trim(), roomId: roomId, bed: bed.text.trim().isEmpty ? 'A' : bed.text.trim());
+        state.onboardTenant(name: name.text.trim(), phone: phone.text.trim(), roomId: roomId, bed: bed.text.trim().isEmpty ? 'A' : bed.text.trim(), kycDoc: kycDoc);
         Navigator.pop(context);
       }, child: const Text('Create & send agreement')),
     ]))));

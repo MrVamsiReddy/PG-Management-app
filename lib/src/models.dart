@@ -67,6 +67,7 @@ class Pg {
     required this.occupied,
     required this.amenities,
     required this.rating,
+    this.photo,
   });
 
   final String id;
@@ -76,8 +77,9 @@ class Pg {
   final int occupied;
   final String amenities;
   final double rating;
+  final String? photo; // compressed image, base64
 
-  Pg copyWith({String? name, String? address, int? beds, int? occupied, String? amenities, double? rating}) => Pg(
+  Pg copyWith({String? name, String? address, int? beds, int? occupied, String? amenities, double? rating, String? photo}) => Pg(
         id: id,
         name: name ?? this.name,
         address: address ?? this.address,
@@ -85,11 +87,13 @@ class Pg {
         occupied: occupied ?? this.occupied,
         amenities: amenities ?? this.amenities,
         rating: rating ?? this.rating,
+        photo: photo ?? this.photo,
       );
 
   Map<String, dynamic> toMap() => {
         'id': id, 'name': name, 'address': address, 'beds': beds,
         'occupied': occupied, 'amenities': amenities, 'rating': rating,
+        'photo': photo,
       };
 
   static Pg fromMap(Map<String, dynamic> map) => Pg(
@@ -100,6 +104,7 @@ class Pg {
         occupied: map['occupied'] as int,
         amenities: map['amenities'] as String,
         rating: (map['rating'] as num).toDouble(),
+        photo: map['photo'] as String?,
       );
 }
 
@@ -156,6 +161,7 @@ class Tenant {
     required this.kyc,
     required this.agreement,
     required this.joinDate,
+    this.kycDoc,
   });
 
   final String id;
@@ -166,20 +172,23 @@ class Tenant {
   final KycStatus kyc;
   final AgreementStatus agreement;
   final DateTime joinDate;
+  final String? kycDoc; // identity document image, base64
 
   String get initials => name.split(' ').where((e) => e.isNotEmpty).map((e) => e[0]).take(2).join();
 
-  Tenant copyWith({KycStatus? kyc, AgreementStatus? agreement}) => Tenant(
+  Tenant copyWith({KycStatus? kyc, AgreementStatus? agreement, String? kycDoc}) => Tenant(
         id: id, name: name, phone: phone, roomId: roomId, bed: bed,
         kyc: kyc ?? this.kyc,
         agreement: agreement ?? this.agreement,
         joinDate: joinDate,
+        kycDoc: kycDoc ?? this.kycDoc,
       );
 
   Map<String, dynamic> toMap() => {
         'id': id, 'name': name, 'phone': phone, 'roomId': roomId, 'bed': bed,
         'kyc': kyc.name, 'agreement': agreement.name,
         'joinDate': joinDate.toIso8601String(),
+        'kycDoc': kycDoc,
       };
 
   static Tenant fromMap(Map<String, dynamic> map) => Tenant(
@@ -191,6 +200,7 @@ class Tenant {
         kyc: KycStatus.values.byName(map['kyc'] as String),
         agreement: AgreementStatus.values.byName(map['agreement'] as String),
         joinDate: DateTime.parse(map['joinDate'] as String),
+        kycDoc: map['kycDoc'] as String?,
       );
 }
 
@@ -254,6 +264,7 @@ class MaintenanceRequest {
     required this.priority,
     required this.createdAt,
     this.assignee,
+    this.photo,
   });
 
   final String id;
@@ -264,10 +275,11 @@ class MaintenanceRequest {
   final Priority priority;
   final DateTime createdAt;
   final String? assignee;
+  final String? photo; // issue photo, base64
 
   MaintenanceRequest copyWith({MaintenanceStatus? status, String? assignee}) => MaintenanceRequest(
         id: id, roomId: roomId, title: title, category: category,
-        priority: priority, createdAt: createdAt,
+        priority: priority, createdAt: createdAt, photo: photo,
         status: status ?? this.status,
         assignee: assignee ?? this.assignee,
       );
@@ -276,6 +288,7 @@ class MaintenanceRequest {
         'id': id, 'roomId': roomId, 'title': title, 'category': category,
         'status': status.name, 'priority': priority.name,
         'createdAt': createdAt.toIso8601String(), 'assignee': assignee,
+        'photo': photo,
       };
 
   static MaintenanceRequest fromMap(Map<String, dynamic> map) => MaintenanceRequest(
@@ -287,6 +300,7 @@ class MaintenanceRequest {
         priority: Priority.values.byName(map['priority'] as String),
         createdAt: DateTime.parse(map['createdAt'] as String),
         assignee: map['assignee'] as String?,
+        photo: map['photo'] as String?,
       );
 }
 

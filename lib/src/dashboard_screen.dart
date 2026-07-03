@@ -12,7 +12,7 @@ class DashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     return RefreshIndicator(
-      onRefresh: () async => state.persistAll(),
+      onRefresh: state.refresh,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 40),
         children: [

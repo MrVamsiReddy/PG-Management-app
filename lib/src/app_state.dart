@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show AuthException, PostgrestException, User;
+import 'package:supabase_flutter/supabase_flutter.dart' show AuthException, PostgrestException, User, UserAttributes;
 
 import 'format.dart';
 import 'models.dart';
@@ -135,14 +135,36 @@ class AppState extends ChangeNotifier {
     notifications = await _notificationRepo.loadAll();
   }
 
-  Future<void> persistAll() async {
+  Future<void> persistAll() => _persist({
+        'pgs', 'rooms', 'tenants', 'payments', 'maintenance',
+        'visitors', 'announcements', 'attendance', 'utilities', 'notifications',
+      });
+
+  /// Saves only the collections that changed — with photos stored inline and
+  /// the cloud backend uploading whole collections, saving everything on
+  /// every action would get expensive.
+  Future<void> _persist(Set<String> keys) async {
     await Future.wait([
-      _pgRepo.saveAll(pgs), _roomRepo.saveAll(rooms), _tenantRepo.saveAll(tenants),
-      _paymentRepo.saveAll(payments), _maintenanceRepo.saveAll(maintenance),
-      _visitorRepo.saveAll(visitors), _announcementRepo.saveAll(announcements),
-      _attendanceRepo.saveAll(attendance), _utilityRepo.saveAll(utilities),
-      _notificationRepo.saveAll(notifications),
+      if (keys.contains('pgs')) _pgRepo.saveAll(pgs),
+      if (keys.contains('rooms')) _roomRepo.saveAll(rooms),
+      if (keys.contains('tenants')) _tenantRepo.saveAll(tenants),
+      if (keys.contains('payments')) _paymentRepo.saveAll(payments),
+      if (keys.contains('maintenance')) _maintenanceRepo.saveAll(maintenance),
+      if (keys.contains('visitors')) _visitorRepo.saveAll(visitors),
+      if (keys.contains('announcements')) _announcementRepo.saveAll(announcements),
+      if (keys.contains('attendance')) _attendanceRepo.saveAll(attendance),
+      if (keys.contains('utilities')) _utilityRepo.saveAll(utilities),
+      if (keys.contains('notifications')) _notificationRepo.saveAll(notifications),
     ]);
+    notifyListeners();
+  }
+
+  /// Pull-to-refresh: re-read from the backing store (picks up changes made
+  /// on other devices in cloud mode). Keeps current data if offline.
+  Future<void> refresh() async {
+    try {
+      await _loadAll();
+    } catch (_) {}
     notifyListeners();
   }
 
@@ -214,6 +236,34 @@ class AppState extends ChangeNotifier {
           'If this mentions app_data, run supabase/schema.sql in the Supabase SQL Editor.';
     } catch (_) {
       return 'Could not reach the server. Check your connection and try again.';
+    }
+  }
+
+  /// Emails a password-reset link. Returns an error message, or null.
+  Future<String?> sendPasswordReset(String email) async {
+    final client = supabaseOrNull;
+    if (client == null) return 'Password reset needs an internet connection.';
+    try {
+      await client.auth.resetPasswordForEmail(email);
+      return null;
+    } on AuthException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Could not send the reset email. Check your connection.';
+    }
+  }
+
+  /// Changes the signed-in account's password. Returns an error, or null.
+  Future<String?> changePassword(String password) async {
+    final client = supabaseOrNull;
+    if (client == null || !cloudMode) return 'Sign in with an account to change your password.';
+    try {
+      await client.auth.updateUser(UserAttributes(password: password));
+      return null;
+    } on AuthException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Could not update the password. Check your connection.';
     }
   }
 
@@ -322,12 +372,12 @@ class AppState extends ChangeNotifier {
     final i = notifications.indexWhere((n) => n.id == id);
     if (i == -1) return;
     notifications[i] = notifications[i].copyWith(read: true);
-    persistAll();
+    _persist({'notifications'});
   }
 
   void markAllNotificationsRead() {
     notifications = notifications.map((n) => n.copyWith(read: true)).toList();
-    persistAll();
+    _persist({'notifications'});
   }
 
   void savePg(Pg pg) {
@@ -337,18 +387,19 @@ class AppState extends ChangeNotifier {
     } else {
       pgs[i] = pg;
     }
-    persistAll();
+    _persist({'pgs'});
   }
 
   void addRoom(Room room) {
     rooms.add(room);
-    persistAll();
+    _persist({'rooms'});
   }
 
-  void onboardTenant({required String name, required String phone, required String roomId, required String bed}) {
+  void onboardTenant({required String name, required String phone, required String roomId, required String bed, String? kycDoc}) {
     tenants.insert(0, Tenant(
       id: _id('t'), name: name, phone: phone, roomId: roomId, bed: bed,
       kyc: KycStatus.pending, agreement: AgreementStatus.awaitingSign, joinDate: DateTime.now(),
+      kycDoc: kycDoc,
     ));
     final i = rooms.indexWhere((r) => r.id == roomId);
     if (i != -1 && rooms[i].occupied < rooms[i].beds) {
@@ -358,7 +409,7 @@ class AppState extends ChangeNotifier {
         pgs[p] = pgs[p].copyWith(occupied: pgs[p].occupied + 1);
       }
     }
-    persistAll();
+    _persist({'tenants', 'rooms', 'pgs'});
   }
 
   Payment? get tenantDuePayment =>
@@ -369,7 +420,7 @@ class AppState extends ChangeNotifier {
     if (i == -1) return;
     payments[i] = payments[i].copyWith(status: PaymentStatus.paid, paidDate: DateTime.now(), method: method);
     _notify('Rent received', '${inr(payments[i].amount)} received from ${tenantName(payments[i].tenantId)}.', NotificationType.payment);
-    persistAll();
+    _persist({'payments', 'notifications'});
   }
 
   void recordPayment({required String tenantId, required int amount, required String method}) {
@@ -380,15 +431,16 @@ class AppState extends ChangeNotifier {
       dueDate: DateTime(now.year, now.month, 5), paidDate: now, method: method,
     ));
     _notify('Payment recorded', '${inr(amount)} from ${tenantName(tenantId)} marked as received.', NotificationType.payment);
-    persistAll();
+    _persist({'payments', 'notifications'});
   }
 
-  void addMaintenanceRequest({required String title, required String roomId, required String category, required Priority priority}) {
+  void addMaintenanceRequest({required String title, required String roomId, required String category, required Priority priority, String? photo}) {
     maintenance.insert(0, MaintenanceRequest(
       id: _id('m'), roomId: roomId, title: title, category: category,
       status: MaintenanceStatus.open, priority: priority, createdAt: DateTime.now(),
+      photo: photo,
     ));
-    persistAll();
+    _persist({'maintenance'});
   }
 
   void setMaintenanceStatus(String id, MaintenanceStatus status, {String? assignee}) {
@@ -397,7 +449,7 @@ class AppState extends ChangeNotifier {
     final trimmed = assignee?.trim();
     maintenance[i] = maintenance[i].copyWith(status: status, assignee: (trimmed?.isEmpty ?? true) ? null : trimmed);
     _notify('Maintenance updated', '${maintenance[i].title} is now ${status.label.toLowerCase()}.', NotificationType.maintenance);
-    persistAll();
+    _persist({'maintenance', 'notifications'});
   }
 
   void addVisitor({required String name, required String tenantId, required String purpose}) {
@@ -405,7 +457,7 @@ class AppState extends ChangeNotifier {
       id: _id('v'), tenantId: tenantId, name: name, purpose: purpose,
       status: VisitorStatus.awaitingApproval, expectedAt: DateTime.now(),
     ));
-    persistAll();
+    _persist({'visitors'});
   }
 
   void setVisitorStatus(String id, VisitorStatus status) {
@@ -420,7 +472,7 @@ class AppState extends ChangeNotifier {
       VisitorStatus.awaitingApproval => 'Visitor updated',
     };
     _notify(title, '${visitor.name} · ${visitor.purpose} visit for ${tenantName(visitor.tenantId)}.', NotificationType.visitor);
-    persistAll();
+    _persist({'visitors', 'notifications'});
   }
 
   void publishAnnouncement(String title, String body) {
@@ -429,7 +481,7 @@ class AppState extends ChangeNotifier {
       author: '$ownerName, ${role.label}', postedAt: DateTime.now(),
     ));
     _notify('New announcement', title, NotificationType.announcement);
-    persistAll();
+    _persist({'announcements', 'notifications'});
   }
 
   void addUtilityBill({required String roomId, required int previous, required int current}) {
@@ -437,7 +489,7 @@ class AppState extends ChangeNotifier {
       id: _id('u'), roomId: roomId, previous: previous, current: current,
       rate: utilityRate, status: BillStatus.generated,
     ));
-    persistAll();
+    _persist({'utilities'});
   }
 
   AttendanceRecord? get todayAttendance =>
@@ -453,7 +505,7 @@ class AppState extends ChangeNotifier {
       final i = attendance.indexWhere((a) => a.id == record.id);
       attendance[i] = record.copyWith(checkOut: DateTime.now());
     }
-    persistAll();
+    _persist({'attendance'});
   }
 
   // ---- Seed data ----

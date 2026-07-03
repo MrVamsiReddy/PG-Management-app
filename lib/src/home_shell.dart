@@ -122,6 +122,8 @@ class ProfileScreen extends StatelessWidget {
             _profileTile(Icons.person_outline, 'Personal details', 'Name, phone, email'),
             _profileTile(Icons.verified_user_outlined, 'KYC & documents', state.role == UserRole.tenant ? 'Aadhaar ${state.currentTenant?.kyc.label.toLowerCase() ?? 'pending'}' : 'Business details'),
             _profileTile(Icons.description_outlined, 'Rental agreement', state.role == UserRole.tenant ? (state.currentTenant?.agreement == AgreementStatus.signed ? 'Signed · View copy' : 'Awaiting signature') : 'Templates and e-signatures'),
+            if (state.cloudMode)
+              _profileTile(Icons.lock_outline, 'Change password', 'Update your account password', onTap: () => _changePassword(context, state)),
             _profileTile(Icons.settings_outlined, 'App settings', 'Notifications, security, language'),
             _profileTile(Icons.help_outline, 'Help & support', 'FAQs and contact support'),
           ]),
@@ -139,10 +141,37 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _profileTile(IconData icon, String title, String subtitle) => ListTile(
+  Widget _profileTile(IconData icon, String title, String subtitle, {VoidCallback? onTap}) => ListTile(
+        onTap: onTap,
         leading: Container(padding: const EdgeInsets.all(9), decoration: BoxDecoration(color: primarySoft, borderRadius: BorderRadius.circular(10)), child: Icon(icon, color: primary, size: 21)),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
         subtitle: Text(subtitle),
         trailing: const Icon(Icons.chevron_right),
       );
+
+  void _changePassword(BuildContext context, AppState state) {
+    final password = TextEditingController();
+    final messenger = ScaffoldMessenger.of(context);
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Change password'),
+        content: TextField(
+          controller: password,
+          obscureText: true,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'New password (6+ characters)'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+          FilledButton(onPressed: () async {
+            if (password.text.length < 6) return;
+            final error = await state.changePassword(password.text);
+            if (dialogContext.mounted) Navigator.pop(dialogContext);
+            messenger.showSnackBar(SnackBar(content: Text(error ?? 'Password updated.')));
+          }, child: const Text('Update')),
+        ],
+      ),
+    );
+  }
 }

@@ -28,6 +28,20 @@ class _AuthScreenState extends State<AuthScreen> {
     super.dispose();
   }
 
+  Future<void> forgotPassword() async {
+    final address = email.text.trim();
+    if (!address.contains('@')) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter your email address above first.')));
+      return;
+    }
+    final state = AppScope.of(context);
+    final error = await state.sendPasswordReset(address);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(error ?? 'Reset link sent to $address. Open it, sign in, then change your password from Profile.'),
+    ));
+  }
+
   Future<void> submit() async {
     if (!formKey.currentState!.validate()) return;
     final state = AppScope.of(context);
@@ -109,7 +123,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     validator: (v) => v == null || v.length < 6 ? 'Use at least 6 characters' : null,
                   ),
                   if (!signup)
-                    Align(alignment: Alignment.centerRight, child: TextButton(onPressed: () {}, child: const Text('Forgot password?'))),
+                    Align(alignment: Alignment.centerRight, child: TextButton(onPressed: busy ? null : forgotPassword, child: const Text('Forgot password?'))),
                   const SizedBox(height: 10),
                   FilledButton(
                     onPressed: busy ? null : submit,

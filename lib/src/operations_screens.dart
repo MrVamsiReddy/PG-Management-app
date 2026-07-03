@@ -54,6 +54,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
     var roomId = manager ? state.rooms.first.id : (state.currentTenant?.roomId ?? state.rooms.first.id);
     var category = 'Plumbing';
     var priority = Priority.medium;
+    String? photo;
     showAppSheet(context, StatefulBuilder(builder: (context, setModalState) => SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       const SheetHandle(), Text('Raise maintenance issue', style: Theme.of(context).textTheme.headlineMedium),
       const FormLabel('What needs fixing?'), TextField(controller: title, maxLines: 2, decoration: const InputDecoration(hintText: 'Describe the issue briefly')),
@@ -68,10 +69,22 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
         TextField(enabled: false, decoration: InputDecoration(hintText: 'Room ${state.roomNumber(roomId)}')),
       const FormLabel('Category'), DropdownButtonFormField<String>(initialValue: category, items: ['Plumbing', 'Electrical', 'Internet', 'Cleaning', 'Furniture', 'Other'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(), onChanged: (v) => setModalState(() => category = v!)),
       const FormLabel('Priority'), SegmentedButton<Priority>(segments: Priority.values.map((e) => ButtonSegment(value: e, label: Text(e.label))).toList(), selected: {priority}, onSelectionChanged: (v) => setModalState(() => priority = v.first)),
-      const SizedBox(height: 14), OutlinedButton.icon(onPressed: () {}, icon: const Icon(Icons.add_a_photo_outlined), label: const Text('Attach photos')),
+      const SizedBox(height: 14),
+      if (photo != null) ...[
+        ClipRRect(borderRadius: BorderRadius.circular(14), child: base64Image(photo!, height: 120)),
+        const SizedBox(height: 10),
+      ],
+      OutlinedButton.icon(
+        onPressed: () async {
+          final picked = await pickImageBase64(context);
+          if (picked != null) setModalState(() => photo = picked);
+        },
+        icon: Icon(photo == null ? Icons.add_a_photo_outlined : Icons.check_circle_outline),
+        label: Text(photo == null ? 'Attach a photo' : 'Photo attached · tap to change'),
+      ),
       const SizedBox(height: 18), FilledButton(onPressed: () {
         if (title.text.trim().isEmpty) return;
-        state.addMaintenanceRequest(title: title.text.trim(), roomId: roomId, category: category, priority: priority);
+        state.addMaintenanceRequest(title: title.text.trim(), roomId: roomId, category: category, priority: priority, photo: photo);
         Navigator.pop(context);
       }, child: const Text('Submit request')),
     ]))));
@@ -84,6 +97,10 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
     showAppSheet(context, SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       const SheetHandle(), Row(children: [Expanded(child: Text(item.title, style: Theme.of(context).textTheme.headlineMedium)), StatusPill(item.status.label)]),
       const SizedBox(height: 8), Text('${item.category} · Room ${state.roomNumber(item.roomId)} · ${item.priority.label} priority'),
+      if (item.photo != null) ...[
+        const SizedBox(height: 14),
+        ClipRRect(borderRadius: BorderRadius.circular(14), child: base64Image(item.photo!, height: 160)),
+      ],
       const SizedBox(height: 24), Text('Status timeline', style: Theme.of(context).textTheme.titleMedium),
       const SizedBox(height: 13),
       _timeline('Request created', formatWhen(item.createdAt), true, first: true),

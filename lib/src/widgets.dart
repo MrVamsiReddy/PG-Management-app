@@ -1,9 +1,37 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'models.dart';
 import 'theme.dart';
 
 export 'format.dart';
+
+/// Camera/gallery chooser → picked image compressed and returned as base64
+/// (small enough to store inline), or null if cancelled or unavailable.
+Future<String?> pickImageBase64(BuildContext context) async {
+  final source = await showModalBottomSheet<ImageSource>(
+    context: context,
+    builder: (context) => SafeArea(
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        ListTile(leading: const Icon(Icons.photo_camera_outlined), title: const Text('Take a photo'), onTap: () => Navigator.pop(context, ImageSource.camera)),
+        ListTile(leading: const Icon(Icons.photo_library_outlined), title: const Text('Choose from gallery'), onTap: () => Navigator.pop(context, ImageSource.gallery)),
+      ]),
+    ),
+  );
+  if (source == null) return null;
+  try {
+    final file = await ImagePicker().pickImage(source: source, maxWidth: 900, imageQuality: 55);
+    if (file == null) return null;
+    return base64Encode(await file.readAsBytes());
+  } catch (_) {
+    return null;
+  }
+}
+
+Widget base64Image(String data, {double? height, BoxFit fit = BoxFit.cover}) =>
+    Image.memory(base64Decode(data), height: height, width: double.infinity, fit: fit, gaplessPlayback: true);
 
 IconData notificationIcon(NotificationType type) => switch (type) {
       NotificationType.payment => Icons.payments_outlined,

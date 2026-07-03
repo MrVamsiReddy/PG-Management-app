@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
+import 'receipt_pdf.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -147,8 +148,37 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
       const Divider(height: 28),
       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('TOTAL PAID', style: TextStyle(fontWeight: FontWeight.w800)), Text(inr(payment.amount), style: Theme.of(context).textTheme.headlineMedium)]),
       const SizedBox(height: 20),
-      Row(children: [Expanded(child: OutlinedButton.icon(onPressed: () {}, icon: const Icon(Icons.share_outlined), label: const Text('Share'))), const SizedBox(width: 8), Expanded(child: FilledButton.icon(onPressed: () {}, icon: const Icon(Icons.download_outlined), label: const Text('Download')))]),
+      Row(children: [
+        Expanded(child: OutlinedButton.icon(onPressed: () => _exportReceipt(state, payment, ref, share: true), icon: const Icon(Icons.share_outlined), label: const Text('Share'))),
+        const SizedBox(width: 8),
+        Expanded(child: FilledButton.icon(onPressed: () => _exportReceipt(state, payment, ref, share: false), icon: const Icon(Icons.download_outlined), label: const Text('Download'))),
+      ]),
     ]));
+  }
+
+  Future<void> _exportReceipt(AppState state, Payment payment, String ref, {required bool share}) async {
+    final bytes = await buildReceiptPdf(
+      pgName: state.pgNameForTenant(payment.tenantId),
+      ref: 'PGM-$ref',
+      amount: payment.amount,
+      rows: [
+        ('Received from', state.tenantName(payment.tenantId)),
+        ('For', formatMonth(payment.period)),
+        ('Payment date', payment.paidDate == null ? '-' : formatDay(payment.paidDate!)),
+        if (payment.method != null) ('Method', payment.method!),
+        ('Status', payment.displayStatus),
+      ],
+    );
+    try {
+      if (share) {
+        await shareReceiptPdf(bytes, 'PGM-$ref.pdf');
+      } else {
+        await printReceiptPdf(bytes, 'PGM-$ref');
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sharing is not available on this device.')));
+    }
   }
 
   Widget _receiptRow(String label, String value) => Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(label), Text(value, style: const TextStyle(fontWeight: FontWeight.w700))]));
