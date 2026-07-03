@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show AuthException, User;
+import 'package:supabase_flutter/supabase_flutter.dart' show AuthException, PostgrestException, User;
 
 import 'format.dart';
 import 'models.dart';
@@ -191,6 +191,9 @@ class AppState extends ChangeNotifier {
       return null;
     } on AuthException catch (e) {
       return e.message;
+    } on PostgrestException catch (e) {
+      return 'Signed in, but the database rejected the request: ${e.message}. '
+          'If this mentions app_data, run supabase/schema.sql in the Supabase SQL Editor.';
     } catch (_) {
       return 'Could not reach the server. Check your connection and try again.';
     }
@@ -206,6 +209,9 @@ class AppState extends ChangeNotifier {
       return null;
     } on AuthException catch (e) {
       return e.message;
+    } on PostgrestException catch (e) {
+      return 'Signed in, but the database rejected the request: ${e.message}. '
+          'If this mentions app_data, run supabase/schema.sql in the Supabase SQL Editor.';
     } catch (_) {
       return 'Could not reach the server. Check your connection and try again.';
     }
