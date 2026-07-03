@@ -143,7 +143,7 @@ class DashboardScreen extends StatelessWidget {
 
   Payment? _latestTenantPayment(AppState state) {
     for (final payment in state.payments) {
-      if (payment.tenantId == AppState.currentTenantId) return payment;
+      if (payment.tenantId == state.currentTenantId) return payment;
     }
     return null;
   }

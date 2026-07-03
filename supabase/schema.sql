@@ -43,3 +43,5 @@ end $$;
 create trigger app_data_touch
   before update on public.app_data
   for each row execute function public.touch_updated_at();
+
+-- For a fresh project, also run 002_members.sql (owner ↔ tenant linking).

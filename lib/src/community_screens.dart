@@ -41,7 +41,7 @@ class VisitorsScreen extends StatelessWidget {
     if (state.tenants.isEmpty) return;
     final name = TextEditingController();
     final purpose = TextEditingController();
-    var tenantId = state.role == UserRole.tenant ? AppState.currentTenantId : state.tenants.first.id;
+    var tenantId = state.role == UserRole.tenant ? state.currentTenantId : state.tenants.first.id;
     showAppSheet(context, StatefulBuilder(builder: (context, setModalState) => Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       const SheetHandle(), Text('Pre-approve visitor', style: Theme.of(context).textTheme.headlineMedium),
       const FormLabel('Visitor name'), TextField(controller: name),

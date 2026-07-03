@@ -137,7 +137,7 @@ class AttendanceScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     final tenant = state.role == UserRole.tenant;
-    final items = tenant ? state.attendance.where((e) => e.tenantId == AppState.currentTenantId).toList() : state.attendance;
+    final items = tenant ? state.attendance.where((e) => e.tenantId == state.currentTenantId).toList() : state.attendance;
     final record = state.todayAttendance;
     final checkedIn = state.isCheckedIn;
     return Scaffold(

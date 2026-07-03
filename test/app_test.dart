@@ -206,6 +206,20 @@ void main() {
     expect(state.hasUnread, isFalse);
   });
 
+  test('demo sessions act as the default seeded tenant', () async {
+    expect(state.currentTenantId, AppState.defaultTenantId);
+    state.login(UserRole.tenant);
+    expect(state.currentTenant?.name, 'Aarav Mehta');
+    await state.logout();
+    expect(state.currentTenantId, AppState.defaultTenantId);
+  });
+
+  test('inviteTenant reports a friendly error without a cloud connection', () async {
+    final error = await state.inviteTenant(tenantId: 't1', email: 'someone@example.com');
+    expect(error, isNotNull);
+    expect(error, contains('cloud account'));
+  });
+
   test('formatting helpers render Indian currency and relative time', () {
     expect(inr(9500), '₹9,500');
     expect(inr(384000), '₹3,84,000');

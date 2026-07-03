@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_state.dart';
+import 'supabase_config.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -228,6 +229,10 @@ class _TenantsScreenState extends State<TenantsScreen> {
                 const SizedBox(height: 8),
               ],
               Row(children: [Expanded(child: OutlinedButton.icon(onPressed: () => _call(tenant.phone), icon: const Icon(Icons.call_outlined), label: const Text('Call'))), const SizedBox(width: 8), Expanded(child: FilledButton.icon(onPressed: () => _agreement(context, state, tenant), icon: const Icon(Icons.draw_outlined), label: const Text('Agreement')))]),
+              if (state.cloudMode) ...[
+                const SizedBox(height: 8),
+                SizedBox(width: double.infinity, child: FilledButton.tonalIcon(onPressed: () => _invite(context, state, tenant), icon: const Icon(Icons.send_outlined), label: const Text('Invite to app'))),
+              ],
             ]))],
           ),
         )),
@@ -240,6 +245,34 @@ class _TenantsScreenState extends State<TenantsScreen> {
   void _call(String phone) {
     final digits = phone.replaceAll(RegExp(r'[^0-9+]'), '');
     launchUrl(Uri(scheme: 'tel', path: digits));
+  }
+
+  void _invite(BuildContext context, AppState state, Tenant tenant) {
+    final email = TextEditingController();
+    final messenger = ScaffoldMessenger.of(context);
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Invite ${tenant.name.split(' ').first}'),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('When they sign up with this email, they will see their own room, rent and requests from your PG.', style: TextStyle(fontSize: 13)),
+          const SizedBox(height: 14),
+          TextField(controller: email, autofocus: true, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Tenant email address', prefixIcon: Icon(Icons.mail_outline))),
+          const SizedBox(height: 10),
+          const Text('They can use the Android app or $appWebUrl', style: TextStyle(fontSize: 11, color: Colors.black45)),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+          FilledButton(onPressed: () async {
+            final address = email.text.trim();
+            if (!address.contains('@')) return;
+            final error = await state.inviteTenant(tenantId: tenant.id, email: address);
+            if (dialogContext.mounted) Navigator.pop(dialogContext);
+            messenger.showSnackBar(SnackBar(content: Text(error ?? 'Invite saved — ask $address to sign up with that email.')));
+          }, child: const Text('Save invite')),
+        ],
+      ),
+    );
   }
 
   void _viewKycDoc(BuildContext context, Tenant tenant) => showDialog<void>(

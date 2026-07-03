@@ -41,10 +41,12 @@ class AppState extends ChangeNotifier {
   static const schemaVersion = 2;
   static const utilityRate = 8; // ₹ per unit
 
-  // The demo profile behind the tenant role. A multi-user build would load
-  // this from the signed-in account instead.
-  static const currentTenantId = 't1';
+  /// Demo/unlinked accounts act as this seeded tenant; a linked tenant
+  /// account gets the id from its membership instead.
+  static const defaultTenantId = 't1';
   static const ownerName = 'Ananya Kapoor';
+
+  String currentTenantId = defaultTenantId;
 
   final Box<dynamic> box;
   late Repository<Pg> _pgRepo;
@@ -80,18 +82,18 @@ class AppState extends ChangeNotifier {
     _notificationRepo = HiveRepository<AppNotification>(box, 'notifications', fromMap: AppNotification.fromMap, toMap: (e) => e.toMap());
   }
 
-  void _useSupabaseRepos() {
+  void _useSupabaseRepos(String workspaceOwnerId) {
     final client = supabaseOrNull!;
-    _pgRepo = SupabaseRepository<Pg>(client, 'pgs', fromMap: Pg.fromMap, toMap: (e) => e.toMap());
-    _roomRepo = SupabaseRepository<Room>(client, 'rooms', fromMap: Room.fromMap, toMap: (e) => e.toMap());
-    _tenantRepo = SupabaseRepository<Tenant>(client, 'tenants', fromMap: Tenant.fromMap, toMap: (e) => e.toMap());
-    _paymentRepo = SupabaseRepository<Payment>(client, 'payments', fromMap: Payment.fromMap, toMap: (e) => e.toMap());
-    _maintenanceRepo = SupabaseRepository<MaintenanceRequest>(client, 'maintenance', fromMap: MaintenanceRequest.fromMap, toMap: (e) => e.toMap());
-    _visitorRepo = SupabaseRepository<Visitor>(client, 'visitors', fromMap: Visitor.fromMap, toMap: (e) => e.toMap());
-    _announcementRepo = SupabaseRepository<Announcement>(client, 'announcements', fromMap: Announcement.fromMap, toMap: (e) => e.toMap());
-    _attendanceRepo = SupabaseRepository<AttendanceRecord>(client, 'attendance', fromMap: AttendanceRecord.fromMap, toMap: (e) => e.toMap());
-    _utilityRepo = SupabaseRepository<UtilityBill>(client, 'utilities', fromMap: UtilityBill.fromMap, toMap: (e) => e.toMap());
-    _notificationRepo = SupabaseRepository<AppNotification>(client, 'notifications', fromMap: AppNotification.fromMap, toMap: (e) => e.toMap());
+    _pgRepo = SupabaseRepository<Pg>(client, 'pgs', workspaceOwnerId: workspaceOwnerId, fromMap: Pg.fromMap, toMap: (e) => e.toMap());
+    _roomRepo = SupabaseRepository<Room>(client, 'rooms', workspaceOwnerId: workspaceOwnerId, fromMap: Room.fromMap, toMap: (e) => e.toMap());
+    _tenantRepo = SupabaseRepository<Tenant>(client, 'tenants', workspaceOwnerId: workspaceOwnerId, fromMap: Tenant.fromMap, toMap: (e) => e.toMap());
+    _paymentRepo = SupabaseRepository<Payment>(client, 'payments', workspaceOwnerId: workspaceOwnerId, fromMap: Payment.fromMap, toMap: (e) => e.toMap());
+    _maintenanceRepo = SupabaseRepository<MaintenanceRequest>(client, 'maintenance', workspaceOwnerId: workspaceOwnerId, fromMap: MaintenanceRequest.fromMap, toMap: (e) => e.toMap());
+    _visitorRepo = SupabaseRepository<Visitor>(client, 'visitors', workspaceOwnerId: workspaceOwnerId, fromMap: Visitor.fromMap, toMap: (e) => e.toMap());
+    _announcementRepo = SupabaseRepository<Announcement>(client, 'announcements', workspaceOwnerId: workspaceOwnerId, fromMap: Announcement.fromMap, toMap: (e) => e.toMap());
+    _attendanceRepo = SupabaseRepository<AttendanceRecord>(client, 'attendance', workspaceOwnerId: workspaceOwnerId, fromMap: AttendanceRecord.fromMap, toMap: (e) => e.toMap());
+    _utilityRepo = SupabaseRepository<UtilityBill>(client, 'utilities', workspaceOwnerId: workspaceOwnerId, fromMap: UtilityBill.fromMap, toMap: (e) => e.toMap());
+    _notificationRepo = SupabaseRepository<AppNotification>(client, 'notifications', workspaceOwnerId: workspaceOwnerId, fromMap: AppNotification.fromMap, toMap: (e) => e.toMap());
   }
 
   List<Pg> pgs = [];
@@ -186,6 +188,7 @@ class AppState extends ChangeNotifier {
       cloudMode = false;
       accountEmail = null;
       _cloudName = null;
+      currentTenantId = defaultTenantId;
       _useHiveRepos();
       await _loadAll();
     }
@@ -280,19 +283,67 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _enterCloud(User user) async {
-    final metaRole = user.userMetadata?['role'] as String?;
-    role = UserRole.values.firstWhere((e) => e.name == metaRole, orElse: () => UserRole.owner);
+    final client = supabaseOrNull!;
+
+    // A membership row means an owner invited this email: attach to that
+    // owner's workspace as the linked tenant instead of a private workspace.
+    String workspaceOwnerId = user.id;
+    String? linkedTenantId;
+    try {
+      final membership = await client
+          .from('members')
+          .select('owner_id, tenant_id')
+          .eq('member_email', (user.email ?? '').toLowerCase())
+          .limit(1)
+          .maybeSingle();
+      if (membership != null) {
+        workspaceOwnerId = membership['owner_id'] as String;
+        linkedTenantId = membership['tenant_id'] as String;
+      }
+    } catch (_) {
+      // members table missing or unreachable: fall back to a private workspace.
+    }
+
+    if (linkedTenantId != null) {
+      role = UserRole.tenant;
+      currentTenantId = linkedTenantId;
+    } else {
+      final metaRole = user.userMetadata?['role'] as String?;
+      role = UserRole.values.firstWhere((e) => e.name == metaRole, orElse: () => UserRole.owner);
+      currentTenantId = defaultTenantId;
+    }
     _cloudName = user.userMetadata?['full_name'] as String?;
     accountEmail = user.email;
     cloudMode = true;
-    _useSupabaseRepos();
+    _useSupabaseRepos(workspaceOwnerId);
     await _loadAll();
-    if (pgs.isEmpty) {
+    // Seed only a brand-new private workspace — never an owner's shared one.
+    if (pgs.isEmpty && workspaceOwnerId == user.id) {
       _seed();
       await persistAll();
     }
     isLoggedIn = true;
     notifyListeners();
+  }
+
+  /// Links [email] to one of this owner's tenant records; when an account
+  /// with that email signs in, it joins this workspace as that tenant.
+  /// Returns a user-facing error message, or null on success.
+  Future<String?> inviteTenant({required String tenantId, required String email}) async {
+    final client = supabaseOrNull;
+    if (client == null || !cloudMode) return 'Sign in with a cloud account to invite tenants.';
+    try {
+      await client.from('members').upsert({
+        'owner_id': client.auth.currentUser!.id,
+        'member_email': email.trim().toLowerCase(),
+        'tenant_id': tenantId,
+      }, onConflict: 'owner_id,member_email');
+      return null;
+    } on PostgrestException catch (e) {
+      return 'Could not save the invite: ${e.message}';
+    } catch (_) {
+      return 'Could not reach the server. Check your connection.';
+    }
   }
 
   // ---- Lookups ----
