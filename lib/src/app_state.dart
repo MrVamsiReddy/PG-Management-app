@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show AuthException, User;
 
 import 'format.dart';
 import 'models.dart';
 import 'repositories.dart';
+import 'supabase_config.dart';
 
 export 'models.dart';
 
@@ -32,17 +34,9 @@ T? _firstOrNull<T>(List<T> list, bool Function(T) test) {
 }
 
 class AppState extends ChangeNotifier {
-  AppState(this.box)
-      : _pgRepo = HiveRepository<Pg>(box, 'pgs', fromMap: Pg.fromMap, toMap: (e) => e.toMap()),
-        _roomRepo = HiveRepository<Room>(box, 'rooms', fromMap: Room.fromMap, toMap: (e) => e.toMap()),
-        _tenantRepo = HiveRepository<Tenant>(box, 'tenants', fromMap: Tenant.fromMap, toMap: (e) => e.toMap()),
-        _paymentRepo = HiveRepository<Payment>(box, 'payments', fromMap: Payment.fromMap, toMap: (e) => e.toMap()),
-        _maintenanceRepo = HiveRepository<MaintenanceRequest>(box, 'maintenance', fromMap: MaintenanceRequest.fromMap, toMap: (e) => e.toMap()),
-        _visitorRepo = HiveRepository<Visitor>(box, 'visitors', fromMap: Visitor.fromMap, toMap: (e) => e.toMap()),
-        _announcementRepo = HiveRepository<Announcement>(box, 'announcements', fromMap: Announcement.fromMap, toMap: (e) => e.toMap()),
-        _attendanceRepo = HiveRepository<AttendanceRecord>(box, 'attendance', fromMap: AttendanceRecord.fromMap, toMap: (e) => e.toMap()),
-        _utilityRepo = HiveRepository<UtilityBill>(box, 'utilities', fromMap: UtilityBill.fromMap, toMap: (e) => e.toMap()),
-        _notificationRepo = HiveRepository<AppNotification>(box, 'notifications', fromMap: AppNotification.fromMap, toMap: (e) => e.toMap());
+  AppState(this.box) {
+    _useHiveRepos();
+  }
 
   static const schemaVersion = 2;
   static const utilityRate = 8; // ₹ per unit
@@ -53,19 +47,52 @@ class AppState extends ChangeNotifier {
   static const ownerName = 'Ananya Kapoor';
 
   final Box<dynamic> box;
-  final Repository<Pg> _pgRepo;
-  final Repository<Room> _roomRepo;
-  final Repository<Tenant> _tenantRepo;
-  final Repository<Payment> _paymentRepo;
-  final Repository<MaintenanceRequest> _maintenanceRepo;
-  final Repository<Visitor> _visitorRepo;
-  final Repository<Announcement> _announcementRepo;
-  final Repository<AttendanceRecord> _attendanceRepo;
-  final Repository<UtilityBill> _utilityRepo;
-  final Repository<AppNotification> _notificationRepo;
+  late Repository<Pg> _pgRepo;
+  late Repository<Room> _roomRepo;
+  late Repository<Tenant> _tenantRepo;
+  late Repository<Payment> _paymentRepo;
+  late Repository<MaintenanceRequest> _maintenanceRepo;
+  late Repository<Visitor> _visitorRepo;
+  late Repository<Announcement> _announcementRepo;
+  late Repository<AttendanceRecord> _attendanceRepo;
+  late Repository<UtilityBill> _utilityRepo;
+  late Repository<AppNotification> _notificationRepo;
 
   bool isLoggedIn = false;
   UserRole role = UserRole.owner;
+
+  /// True when signed in with a real Supabase account; data then lives in the
+  /// cloud instead of the local Hive box.
+  bool cloudMode = false;
+  String? accountEmail;
+  String? _cloudName;
+
+  void _useHiveRepos() {
+    _pgRepo = HiveRepository<Pg>(box, 'pgs', fromMap: Pg.fromMap, toMap: (e) => e.toMap());
+    _roomRepo = HiveRepository<Room>(box, 'rooms', fromMap: Room.fromMap, toMap: (e) => e.toMap());
+    _tenantRepo = HiveRepository<Tenant>(box, 'tenants', fromMap: Tenant.fromMap, toMap: (e) => e.toMap());
+    _paymentRepo = HiveRepository<Payment>(box, 'payments', fromMap: Payment.fromMap, toMap: (e) => e.toMap());
+    _maintenanceRepo = HiveRepository<MaintenanceRequest>(box, 'maintenance', fromMap: MaintenanceRequest.fromMap, toMap: (e) => e.toMap());
+    _visitorRepo = HiveRepository<Visitor>(box, 'visitors', fromMap: Visitor.fromMap, toMap: (e) => e.toMap());
+    _announcementRepo = HiveRepository<Announcement>(box, 'announcements', fromMap: Announcement.fromMap, toMap: (e) => e.toMap());
+    _attendanceRepo = HiveRepository<AttendanceRecord>(box, 'attendance', fromMap: AttendanceRecord.fromMap, toMap: (e) => e.toMap());
+    _utilityRepo = HiveRepository<UtilityBill>(box, 'utilities', fromMap: UtilityBill.fromMap, toMap: (e) => e.toMap());
+    _notificationRepo = HiveRepository<AppNotification>(box, 'notifications', fromMap: AppNotification.fromMap, toMap: (e) => e.toMap());
+  }
+
+  void _useSupabaseRepos() {
+    final client = supabaseOrNull!;
+    _pgRepo = SupabaseRepository<Pg>(client, 'pgs', fromMap: Pg.fromMap, toMap: (e) => e.toMap());
+    _roomRepo = SupabaseRepository<Room>(client, 'rooms', fromMap: Room.fromMap, toMap: (e) => e.toMap());
+    _tenantRepo = SupabaseRepository<Tenant>(client, 'tenants', fromMap: Tenant.fromMap, toMap: (e) => e.toMap());
+    _paymentRepo = SupabaseRepository<Payment>(client, 'payments', fromMap: Payment.fromMap, toMap: (e) => e.toMap());
+    _maintenanceRepo = SupabaseRepository<MaintenanceRequest>(client, 'maintenance', fromMap: MaintenanceRequest.fromMap, toMap: (e) => e.toMap());
+    _visitorRepo = SupabaseRepository<Visitor>(client, 'visitors', fromMap: Visitor.fromMap, toMap: (e) => e.toMap());
+    _announcementRepo = SupabaseRepository<Announcement>(client, 'announcements', fromMap: Announcement.fromMap, toMap: (e) => e.toMap());
+    _attendanceRepo = SupabaseRepository<AttendanceRecord>(client, 'attendance', fromMap: AttendanceRecord.fromMap, toMap: (e) => e.toMap());
+    _utilityRepo = SupabaseRepository<UtilityBill>(client, 'utilities', fromMap: UtilityBill.fromMap, toMap: (e) => e.toMap());
+    _notificationRepo = SupabaseRepository<AppNotification>(client, 'notifications', fromMap: AppNotification.fromMap, toMap: (e) => e.toMap());
+  }
 
   List<Pg> pgs = [];
   List<Room> rooms = [];
@@ -88,6 +115,14 @@ class AppState extends ChangeNotifier {
       role = UserRole.values.firstWhere((e) => e.name == savedRole);
       isLoggedIn = true;
     }
+    await _loadAll();
+    if (pgs.isEmpty) {
+      _seed();
+      await persistAll();
+    }
+  }
+
+  Future<void> _loadAll() async {
     pgs = await _pgRepo.loadAll();
     rooms = await _roomRepo.loadAll();
     tenants = await _tenantRepo.loadAll();
@@ -98,10 +133,6 @@ class AppState extends ChangeNotifier {
     attendance = await _attendanceRepo.loadAll();
     utilities = await _utilityRepo.loadAll();
     notifications = await _notificationRepo.loadAll();
-    if (pgs.isEmpty) {
-      _seed();
-      await persistAll();
-    }
   }
 
   Future<void> persistAll() async {
@@ -117,6 +148,7 @@ class AppState extends ChangeNotifier {
 
   // ---- Session ----
 
+  /// Local demo session: no account, data stays in the on-device Hive box.
   void login(UserRole selectedRole) {
     role = selectedRole;
     isLoggedIn = true;
@@ -124,9 +156,86 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void logout() {
+  Future<void> logout() async {
+    if (cloudMode) {
+      try {
+        await supabaseOrNull?.auth.signOut();
+      } catch (_) {} // Signing out while offline still logs out locally.
+      cloudMode = false;
+      accountEmail = null;
+      _cloudName = null;
+      _useHiveRepos();
+      await _loadAll();
+    }
     isLoggedIn = false;
     box.delete('sessionRole');
+    notifyListeners();
+  }
+
+  // ---- Cloud accounts (Supabase) ----
+
+  /// Returns a user-facing error message, or null on success.
+  Future<String?> signUpCloud({required String name, required String email, required String password, required UserRole selectedRole}) async {
+    final client = supabaseOrNull;
+    if (client == null) return 'Cloud accounts are unavailable right now — try demo mode.';
+    try {
+      final result = await client.auth.signUp(
+        email: email,
+        password: password,
+        data: {'full_name': name, 'role': selectedRole.name},
+      );
+      if (result.session == null) {
+        return 'Account created — confirm the link sent to $email, then sign in.';
+      }
+      await _enterCloud(result.session!.user);
+      return null;
+    } on AuthException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Could not reach the server. Check your connection and try again.';
+    }
+  }
+
+  /// Returns a user-facing error message, or null on success.
+  Future<String?> signInCloud({required String email, required String password}) async {
+    final client = supabaseOrNull;
+    if (client == null) return 'Cloud accounts are unavailable right now — try demo mode.';
+    try {
+      final result = await client.auth.signInWithPassword(email: email, password: password);
+      await _enterCloud(result.user!);
+      return null;
+    } on AuthException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Could not reach the server. Check your connection and try again.';
+    }
+  }
+
+  /// Restores a previously signed-in cloud session at app start, if any.
+  Future<void> restoreCloudSession() async {
+    final user = supabaseOrNull?.auth.currentSession?.user;
+    if (user == null) return;
+    try {
+      await _enterCloud(user);
+    } catch (_) {
+      // Offline at startup with a cloud session: stay signed out; demo mode
+      // remains available from the auth screen.
+    }
+  }
+
+  Future<void> _enterCloud(User user) async {
+    final metaRole = user.userMetadata?['role'] as String?;
+    role = UserRole.values.firstWhere((e) => e.name == metaRole, orElse: () => UserRole.owner);
+    _cloudName = user.userMetadata?['full_name'] as String?;
+    accountEmail = user.email;
+    cloudMode = true;
+    _useSupabaseRepos();
+    await _loadAll();
+    if (pgs.isEmpty) {
+      _seed();
+      await persistAll();
+    }
+    isLoggedIn = true;
     notifyListeners();
   }
 
@@ -151,7 +260,10 @@ class AppState extends ChangeNotifier {
     return pgById(room?.pgId ?? '')?.name ?? 'PG Management';
   }
 
-  String get displayName => role == UserRole.tenant ? (currentTenant?.name ?? 'Tenant') : ownerName;
+  String get displayName {
+    if (cloudMode) return _cloudName ?? accountEmail?.split('@').first ?? 'Account';
+    return role == UserRole.tenant ? (currentTenant?.name ?? 'Tenant') : ownerName;
+  }
   String get initials => displayName.split(' ').where((e) => e.isNotEmpty).map((e) => e[0]).take(2).join();
 
   // ---- Aggregates ----

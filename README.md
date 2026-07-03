@@ -28,18 +28,20 @@ flutter run
 
 `flutter create` adds the native runner projects when cloning this source-only workspace; it preserves the existing `lib/`, `web/`, and package configuration. Select any role on the sign-in screen and use the prefilled demo credentials. Data is stored in the local Hive box `pg_management` and survives app restarts; the store is schema-versioned and reseeds itself after breaking model changes.
 
-## Firebase production upgrade
+## Cloud accounts (Supabase)
 
-The included build deliberately defaults to local mode so it starts without cloud credentials. For a Firebase deployment:
+The app supports two modes side by side:
 
-1. Add `firebase_core`, `firebase_auth`, `cloud_firestore`, `firebase_storage`, and `firebase_messaging`.
-2. Run `flutterfire configure` and place the generated platform configuration files in their normal Android/iOS locations.
-3. Move each list in `AppState` behind repository interfaces and implement Firestore-backed repositories with per-property document paths.
-4. Use Firebase Auth custom claims (`owner`, `tenant`, `admin`) for server-enforced RBAC; never rely only on hidden UI.
-5. Store property/KYC images in Cloud Storage and keep only their URLs in Firestore.
-6. Keep service-account credentials on a trusted server or Cloud Functions only—never bundle an Admin SDK key in the Flutter app.
+- **Demo mode** — no account, data lives in the on-device Hive box, works offline.
+- **Cloud accounts** — real email/password sign-up and sign-in via Supabase Auth; each account's data syncs to Postgres and is isolated by row-level security.
 
-The local entities and IDs are already shaped to map cleanly to Firestore collections.
+Setup for a fresh Supabase project (free tier, no card):
+
+1. Create a project at supabase.com and put its URL and publishable key in `lib/src/supabase_config.dart`. The publishable key is safe to commit — access control lives server-side.
+2. Run `supabase/schema.sql` in the dashboard's SQL Editor. It creates the `app_data` table and RLS policies restricting every row to its owner.
+3. For frictionless testing, disable email confirmation: Authentication → Sign In / Providers → Email → turn off "Confirm email". Leave it on for production.
+
+The role picked at sign-up (Owner / Tenant / Admin) is stored in user metadata and drives the role-based UI. Data is stored per account as JSONB collections mirroring the local layout; moving to fully relational tables is planned for when cross-account access (owner ↔ tenant linking) lands.
 
 ## Safety notes
 

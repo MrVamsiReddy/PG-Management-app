@@ -111,6 +111,8 @@ class ProfileScreen extends StatelessWidget {
         ),
         const SizedBox(height: 13),
         Center(child: Text(state.displayName, style: Theme.of(context).textTheme.titleLarge)),
+        if (state.accountEmail != null)
+          Center(child: Text(state.accountEmail!, style: const TextStyle(fontSize: 12, color: Colors.black45))),
         Center(child: Text(state.role == UserRole.tenant
             ? '${state.role.label} · Room ${state.currentTenantRoomLabel} · ${state.pgNameForTenant(AppState.currentTenantId)}'
             : '${state.role.label} · ${state.pgs.isEmpty ? 'PG Management' : state.pgs.first.name}')),

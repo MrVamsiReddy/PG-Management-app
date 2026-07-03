@@ -73,7 +73,7 @@ void main() {
     expect(restored.isLoggedIn, isTrue);
     expect(restored.role, UserRole.tenant);
 
-    state.logout();
+    await state.logout();
     expect(box.get('sessionRole'), isNull);
   });
 
