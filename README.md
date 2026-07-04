@@ -7,7 +7,7 @@ A mobile-first Flutter platform for PG owners, administrators, and tenants. It s
 - Role-based sign-in and sign-up for Owner, Tenant, and Admin
 - PG listings, amenities, property photos entry point, rooms, floors, and bed occupancy
 - Tenant onboarding, KYC capture, and rental agreement/e-sign flow
-- Rent dues, a working demo checkout that marks rent paid, receipts, and owner-side payment recording
+- Monthly rent dues generated automatically, a working demo checkout, PDF receipts, and owner-side payment recording
 - Maintenance requests with priorities, technician assignment, and status timeline
 - Visitor pre-approvals with approve/decline, check-in, and check-out
 - Announcements and push-notification preference
