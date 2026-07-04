@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_state.dart';
@@ -259,20 +261,38 @@ class _TenantsScreenState extends State<TenantsScreen> {
           const SizedBox(height: 14),
           TextField(controller: email, autofocus: true, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Tenant email address', prefixIcon: Icon(Icons.mail_outline))),
           const SizedBox(height: 10),
-          const Text('They can use the Android app or $appWebUrl', style: TextStyle(fontSize: 11, color: Colors.black45)),
+          const Text('No email is sent automatically — next you can share the invite by WhatsApp, SMS or email.', style: TextStyle(fontSize: 11, color: Colors.black45)),
         ]),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
-          FilledButton(onPressed: () async {
+          FilledButton.icon(onPressed: () async {
             final address = email.text.trim();
             if (!address.contains('@')) return;
             final error = await state.inviteTenant(tenantId: tenant.id, email: address);
             if (dialogContext.mounted) Navigator.pop(dialogContext);
-            messenger.showSnackBar(SnackBar(content: Text(error ?? 'Invite saved — ask $address to sign up with that email.')));
-          }, child: const Text('Save invite')),
+            if (error != null) {
+              messenger.showSnackBar(SnackBar(content: Text(error)));
+              return;
+            }
+            await _shareInvite(messenger, state, tenant, address);
+          }, icon: const Icon(Icons.send_outlined), label: const Text('Save & share')),
         ],
       ),
     );
+  }
+
+  Future<void> _shareInvite(ScaffoldMessengerState messenger, AppState state, Tenant tenant, String email) async {
+    final message = 'Hi ${tenant.name.split(' ').first}! You are invited to ${state.pgNameForTenant(tenant.id)} on PG Management.\n\n'
+        'Create your account using this email address: $email\n'
+        'Open $appWebUrl or use the Android app.\n\n'
+        'You will see your room, rent and requests as soon as you sign in.';
+    try {
+      await SharePlus.instance.share(ShareParams(text: message, subject: 'Your PG Management invite'));
+    } catch (_) {
+      // Share sheet unavailable (e.g. desktop browser): copy instead.
+      await Clipboard.setData(ClipboardData(text: message));
+      messenger.showSnackBar(const SnackBar(content: Text('Invite message copied — paste it into WhatsApp or email.')));
+    }
   }
 
   void _viewKycDoc(BuildContext context, Tenant tenant) => showDialog<void>(
