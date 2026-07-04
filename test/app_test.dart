@@ -244,6 +244,17 @@ void main() {
     expect(error, contains('cloud account'));
   });
 
+  test('payments export as spreadsheet-ready CSV', () {
+    final csv = state.paymentsCsv();
+    final lines = csv.split('\n');
+    expect(lines.first, 'Receipt,Tenant,Month,Amount,Status,Due date,Paid date,Method');
+    expect(lines.length, state.payments.length + 1);
+    expect(csv, contains('"Aarav Mehta"'));
+    expect(csv, contains('"9500"'));
+    // Values with quotes/commas stay one cell.
+    expect(state.paymentsCsv(), isNot(contains('""Aarav')));
+  });
+
   test('formatting helpers render Indian currency and relative time', () {
     expect(inr(9500), '₹9,500');
     expect(inr(384000), '₹3,84,000');

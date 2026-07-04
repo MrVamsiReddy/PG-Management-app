@@ -1,4 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
 import 'app_state.dart';
 import 'receipt_pdf.dart';
@@ -22,7 +26,13 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     var items = tenant ? state.payments.where((e) => e.tenantId == state.currentTenantId).toList() : state.payments;
     if (filter != 'All') items = items.where((e) => e.displayStatus == filter).toList();
     return Scaffold(
-      appBar: AppBar(title: Text(tenant ? 'My rent' : 'Rent collection')),
+      appBar: AppBar(
+        title: Text(tenant ? 'My rent' : 'Rent collection'),
+        actions: [
+          if (!tenant)
+            IconButton(tooltip: 'Export CSV', onPressed: () => _exportCsv(state), icon: const Icon(Icons.table_view_outlined)),
+        ],
+      ),
       floatingActionButton: tenant
           ? (due == null ? null : FloatingActionButton.extended(onPressed: () => _paymentFlow(state, due), icon: const Icon(Icons.lock_outline), label: const Text('Pay rent')))
           : FloatingActionButton.extended(onPressed: () => _recordPayment(state), icon: const Icon(Icons.add), label: const Text('Record payment')),
@@ -65,6 +75,21 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
         if (items.isEmpty) const EmptyState(icon: Icons.receipt_long_outlined, title: 'No payments found'),
       ]),
     );
+  }
+
+  Future<void> _exportCsv(AppState state) async {
+    final csv = state.paymentsCsv();
+    try {
+      await SharePlus.instance.share(ShareParams(
+        files: [XFile.fromData(utf8.encode(csv), mimeType: 'text/csv', name: 'rent-collection.csv')],
+        fileNameOverrides: ['rent-collection.csv'],
+        subject: 'Rent collection export',
+      ));
+    } catch (_) {
+      await Clipboard.setData(ClipboardData(text: csv));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('CSV copied to clipboard — paste it into a spreadsheet.')));
+    }
   }
 
   void _paymentFlow(AppState state, Payment payment) {

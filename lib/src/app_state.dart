@@ -478,6 +478,25 @@ class AppState extends ChangeNotifier {
   Payment? get tenantDuePayment =>
       _firstOrNull(payments, (p) => p.tenantId == currentTenantId && p.status == PaymentStatus.due);
 
+  /// Rent collection as spreadsheet-ready CSV (newest first, like the UI).
+  String paymentsCsv() {
+    String cell(String value) => '"${value.replaceAll('"', '""')}"';
+    final rows = <String>['Receipt,Tenant,Month,Amount,Status,Due date,Paid date,Method'];
+    for (final p in payments) {
+      rows.add([
+        p.id,
+        tenantName(p.tenantId),
+        formatMonth(p.period),
+        '${p.amount}',
+        p.displayStatus,
+        formatFullDate(p.dueDate),
+        p.paidDate == null ? '' : formatFullDate(p.paidDate!),
+        p.method ?? '',
+      ].map(cell).join(','));
+    }
+    return rows.join('\n');
+  }
+
   /// Creates this month's Due payment for every tenant who doesn't have one
   /// (new tenants join at their room's full rent — no proration yet).
   /// Deterministic ids make it idempotent. Returns true if anything was added.
