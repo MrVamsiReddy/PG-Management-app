@@ -13,6 +13,13 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const sa = JSON.parse(Deno.env.get("FIREBASE_SERVICE_ACCOUNT") ?? "{}");
 
+// Browsers (the web app) preflight cross-origin calls; every response must
+// carry CORS headers or the invoke fails silently on web.
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
 function pemToDer(pem: string): ArrayBuffer {
   const b64 = pem.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "");
   const raw = atob(b64);
@@ -57,9 +64,10 @@ async function fcmAccessToken(): Promise<string> {
 }
 
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const { workspaceOwnerId, title, body } = await req.json();
-    if (!workspaceOwnerId || !title) return new Response("bad request", { status: 400 });
+    if (!workspaceOwnerId || !title) return new Response("bad request", { status: 400, headers: corsHeaders });
 
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -74,14 +82,14 @@ Deno.serve(async (req) => {
     );
     const { data: userData } = await authed.auth.getUser();
     const caller = userData?.user;
-    if (!caller) return new Response("unauthorized", { status: 401 });
+    if (!caller) return new Response("unauthorized", { status: 401, headers: corsHeaders });
 
     // The caller must belong to the workspace: owner or invited member.
     const callerEmail = (caller.email ?? "").toLowerCase();
     if (caller.id !== workspaceOwnerId) {
       const { data: membership } = await admin.from("members").select("tenant_id")
         .eq("owner_id", workspaceOwnerId).eq("member_email", callerEmail).maybeSingle();
-      if (!membership) return new Response("forbidden", { status: 403 });
+      if (!membership) return new Response("forbidden", { status: 403, headers: corsHeaders });
     }
 
     // Recipients: the owner's devices + every invited member's devices.
@@ -92,7 +100,7 @@ Deno.serve(async (req) => {
     const { data: tokens } = await admin.from("push_tokens")
       .select("token, user_id").or(filter);
     const targets = (tokens ?? []).filter((t: { user_id: string }) => t.user_id !== caller.id);
-    if (targets.length === 0) return Response.json({ sent: 0 });
+    if (targets.length === 0) return Response.json({ sent: 0 }, { headers: corsHeaders });
 
     const accessToken = await fcmAccessToken();
     let sent = 0;
@@ -108,8 +116,8 @@ Deno.serve(async (req) => {
         await admin.from("push_tokens").delete().eq("token", t.token); // stale device
       }
     }
-    return Response.json({ sent });
+    return Response.json({ sent }, { headers: corsHeaders });
   } catch (e) {
-    return new Response(`error: ${e}`, { status: 500 });
+    return new Response(`error: ${e}`, { status: 500, headers: corsHeaders });
   }
 });
