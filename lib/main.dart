@@ -48,9 +48,11 @@ class PgManagementApp extends StatelessWidget {
         theme: buildAppTheme(),
         home: AnimatedBuilder(
           animation: state,
-          builder: (context, _) => state.isLoggedIn
-              ? const HomeShell()
-              : const AuthScreen(),
+          builder: (context, _) => !state.isLoggedIn
+              ? const AuthScreen()
+              : state.mustChangePassword
+                  ? const SetPasswordScreen()
+                  : const HomeShell(),
         ),
       ),
     );

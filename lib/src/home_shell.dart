@@ -49,7 +49,28 @@ class _HomeShellState extends State<HomeShell> {
             child: const Icon(Icons.apartment_rounded, color: Colors.white, size: 21),
           ),
           const SizedBox(width: 10),
-          Flexible(child: Text('PG Management', overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleLarge?.copyWith(letterSpacing: -.7))),
+          // Owners work one property at a time: the title doubles as the
+          // property switcher. Tenants just see the app name.
+          if (state.role != UserRole.tenant && state.activePg != null)
+            Flexible(
+              child: PopupMenuButton<String>(
+                tooltip: 'Switch property',
+                onSelected: state.selectPg,
+                itemBuilder: (_) => state.pgs
+                    .map((p) => PopupMenuItem(value: p.id, child: Row(children: [
+                          if (p.id == state.activePg!.id) const Icon(Icons.check, size: 16, color: primary) else const SizedBox(width: 16),
+                          const SizedBox(width: 8),
+                          Flexible(child: Text(p.name, overflow: TextOverflow.ellipsis)),
+                        ])))
+                    .toList(),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Flexible(child: Text(state.activePg!.name, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleLarge?.copyWith(letterSpacing: -.7))),
+                  const Icon(Icons.arrow_drop_down),
+                ]),
+              ),
+            )
+          else
+            Flexible(child: Text('PG Management', overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleLarge?.copyWith(letterSpacing: -.7))),
           const SizedBox(width: 10),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

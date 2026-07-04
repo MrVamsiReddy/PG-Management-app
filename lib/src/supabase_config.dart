@@ -9,6 +9,9 @@ const supabasePublishableKey = 'sb_publishable_AbpcjS3ZRxowxBSdkvu5PA_Yto9Teob';
 /// Public web build — shown in tenant invites.
 const appWebUrl = 'https://mrvamsireddy.github.io/PG-Management-app/';
 
+/// Always points at the newest published APK (GitHub release asset).
+const apkDownloadUrl = 'https://github.com/MrVamsiReddy/PG-Management-app/releases/latest/download/PG-Management.apk';
+
 /// Set by main() once Supabase.initialize succeeds. Stays false in tests and
 /// when offline at startup, in which case the app runs in local demo mode.
 bool supabaseReady = false;

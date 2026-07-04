@@ -239,9 +239,33 @@ void main() {
   });
 
   test('inviteTenant reports a friendly error without a cloud connection', () async {
-    final error = await state.inviteTenant(tenantId: 't1', email: 'someone@example.com');
-    expect(error, isNotNull);
-    expect(error, contains('cloud account'));
+    final result = await state.inviteTenant(tenantId: 't1', email: 'someone@example.com');
+    expect(result.error, isNotNull);
+    expect(result.error, contains('cloud account'));
+    expect(result.tempPassword, isNull);
+  });
+
+  test('the active property scopes rooms, tenants and money', () {
+    expect(state.activePg?.id, 'p1');
+    expect(state.pgRooms, hasLength(5));
+    expect(state.pgTenants, hasLength(4));
+    expect(state.pgCollectedAmount, state.collectedAmount);
+
+    state.selectPg('p2'); // seeded second property has no rooms yet
+    expect(state.activePg?.id, 'p2');
+    expect(state.pgRooms, isEmpty);
+    expect(state.pgTenants, isEmpty);
+    expect(state.pgPayments, isEmpty);
+    expect(state.pgCollectedAmount, 0);
+
+    state.selectPg('p1');
+    expect(state.pgRooms, hasLength(5));
+  });
+
+  test('fresh sessions never start on the set-password gate', () {
+    expect(state.mustChangePassword, isFalse);
+    state.login(UserRole.owner);
+    expect(state.mustChangePassword, isFalse);
   });
 
   test('payments export as spreadsheet-ready CSV', () {
@@ -274,7 +298,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(state.isLoggedIn, isTrue);
-    expect(find.text('PG Management'), findsOneWidget);
+    // Owners see the property switcher as the title.
+    expect(find.text('HSR Layout PG'), findsWidgets);
     expect(find.text('Quick actions'), findsOneWidget);
   });
 }

@@ -9,13 +9,17 @@ class VisitorsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
+    final tenant = state.role == UserRole.tenant;
+    // Tenants see their own visitors; managers see the active property's log.
+    final entries = tenant ? state.visitors.where((v) => v.tenantId == state.currentTenantId).toList() : state.pgVisitors;
     return Scaffold(
       appBar: AppBar(title: const Text('Visitors')),
       floatingActionButton: FloatingActionButton.extended(onPressed: () => _addVisitor(context, state), icon: const Icon(Icons.person_add_alt), label: const Text('Add visitor')),
       body: ListView(padding: const EdgeInsets.fromLTRB(20, 10, 20, 100), children: [
-        PageHeader(title: 'Visitor log', subtitle: '${state.visitors.where((e) => e.status == VisitorStatus.inside).length} inside · ${state.visitors.where((e) => e.status == VisitorStatus.awaitingApproval).length} awaiting approval'),
+        PageHeader(title: 'Visitor log', subtitle: '${entries.where((e) => e.status == VisitorStatus.inside).length} inside · ${entries.where((e) => e.status == VisitorStatus.awaitingApproval).length} awaiting approval'),
         const SizedBox(height: 18),
-        ...state.visitors.map((visitor) => Card(
+        if (entries.isEmpty) const EmptyState(icon: Icons.badge_outlined, title: 'No visitors yet'),
+        ...entries.map((visitor) => Card(
           margin: const EdgeInsets.only(bottom: 10),
           child: Padding(padding: const EdgeInsets.all(15), child: Column(children: [
             Row(children: [
@@ -38,16 +42,18 @@ class VisitorsScreen extends StatelessWidget {
   }
 
   void _addVisitor(BuildContext context, AppState state) {
-    if (state.tenants.isEmpty) return;
+    final manager = state.role != UserRole.tenant;
+    final scoped = manager && state.pgTenants.isNotEmpty ? state.pgTenants : state.tenants;
+    if (scoped.isEmpty) return;
     final name = TextEditingController();
     final purpose = TextEditingController();
-    var tenantId = state.role == UserRole.tenant ? state.currentTenantId : state.tenants.first.id;
+    var tenantId = manager ? scoped.first.id : state.currentTenantId;
     showAppSheet(context, StatefulBuilder(builder: (context, setModalState) => Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       const SheetHandle(), Text('Pre-approve visitor', style: Theme.of(context).textTheme.headlineMedium),
       const FormLabel('Visitor name'), TextField(controller: name),
       if (state.role != UserRole.tenant) ...[
         const FormLabel('Visiting tenant'),
-        DropdownButtonFormField<String>(initialValue: tenantId, items: state.tenants.map((e) => DropdownMenuItem(value: e.id, child: Text(e.name))).toList(), onChanged: (v) => setModalState(() => tenantId = v!)),
+        DropdownButtonFormField<String>(initialValue: tenantId, items: scoped.map((e) => DropdownMenuItem(value: e.id, child: Text(e.name))).toList(), onChanged: (v) => setModalState(() => tenantId = v!)),
       ],
       const FormLabel('Purpose'), TextField(controller: purpose, decoration: const InputDecoration(hintText: 'Family, friend, delivery...')),
       const SizedBox(height: 20), FilledButton(onPressed: () {

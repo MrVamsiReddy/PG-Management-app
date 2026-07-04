@@ -70,6 +70,12 @@ class AppState extends ChangeNotifier {
   String? _cloudName;
   String? _workspaceOwnerId;
 
+  /// True right after signing in with a temporary password: the app blocks
+  /// on the set-password screen until a permanent one is chosen.
+  bool mustChangePassword = false;
+
+  String? _activePgId;
+
   void _useHiveRepos() {
     _pgRepo = HiveRepository<Pg>(box, 'pgs', fromMap: Pg.fromMap, toMap: (e) => e.toMap());
     _roomRepo = HiveRepository<Room>(box, 'rooms', fromMap: Room.fromMap, toMap: (e) => e.toMap());
@@ -118,6 +124,7 @@ class AppState extends ChangeNotifier {
       role = UserRole.values.firstWhere((e) => e.name == savedRole);
       isLoggedIn = true;
     }
+    _activePgId = box.get('activePgId') as String?;
     await _loadAll();
     if (pgs.isEmpty) {
       _seed();
@@ -197,6 +204,7 @@ class AppState extends ChangeNotifier {
       accountEmail = null;
       _cloudName = null;
       _workspaceOwnerId = null;
+      mustChangePassword = false;
       currentTenantId = defaultTenantId;
       _useHiveRepos();
       await _loadAll();
@@ -265,12 +273,15 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Changes the signed-in account's password. Returns an error, or null.
+  /// Changes the signed-in account's password and clears the temporary-
+  /// password flag. Returns an error, or null.
   Future<String?> changePassword(String password) async {
     final client = supabaseOrNull;
     if (client == null || !cloudMode) return 'Sign in with an account to change your password.';
     try {
-      await client.auth.updateUser(UserAttributes(password: password));
+      await client.auth.updateUser(UserAttributes(password: password, data: {'must_change_password': false}));
+      mustChangePassword = false;
+      notifyListeners();
       return null;
     } on AuthException catch (e) {
       return e.message;
@@ -323,6 +334,7 @@ class AppState extends ChangeNotifier {
     }
     _cloudName = user.userMetadata?['full_name'] as String?;
     accountEmail = user.email;
+    mustChangePassword = user.userMetadata?['must_change_password'] == true;
     cloudMode = true;
     _workspaceOwnerId = workspaceOwnerId;
     _useSupabaseRepos(workspaceOwnerId);
@@ -339,23 +351,40 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Links [email] to one of this owner's tenant records; when an account
-  /// with that email signs in, it joins this workspace as that tenant.
-  /// Returns a user-facing error message, or null on success.
-  Future<String?> inviteTenant({required String tenantId, required String email}) async {
+  /// Creates the tenant's login (temporary password, forced change on first
+  /// sign-in) and links it to this workspace, via the `invite` Edge Function.
+  /// Falls back to link-only membership when the function isn't deployed.
+  /// [tempPassword] is null when the email already had an account.
+  Future<({String? error, String? tempPassword})> inviteTenant({required String tenantId, required String email}) async {
     final client = supabaseOrNull;
-    if (client == null || !cloudMode) return 'Sign in with a cloud account to invite tenants.';
+    if (client == null || !cloudMode) {
+      return (error: 'Sign in with a cloud account to invite tenants.', tempPassword: null);
+    }
+    final address = email.trim().toLowerCase();
+    final tenant = tenantById(tenantId);
     try {
-      await client.from('members').upsert({
-        'owner_id': client.auth.currentUser!.id,
-        'member_email': email.trim().toLowerCase(),
-        'tenant_id': tenantId,
-      }, onConflict: 'owner_id,member_email');
-      return null;
-    } on PostgrestException catch (e) {
-      return 'Could not save the invite: ${e.message}';
+      final result = await client.functions.invoke('invite', body: {
+        'email': address,
+        'tenantId': tenantId,
+        'tenantName': tenant?.name ?? '',
+      });
+      final data = result.data as Map?;
+      return (error: null, tempPassword: data?['tempPassword'] as String?);
     } catch (_) {
-      return 'Could not reach the server. Check your connection.';
+      // Function not deployed or unreachable: save a link-only invite so the
+      // tenant can still self-register with this email.
+      try {
+        await client.from('members').upsert({
+          'owner_id': client.auth.currentUser!.id,
+          'member_email': address,
+          'tenant_id': tenantId,
+        }, onConflict: 'owner_id,member_email');
+        return (error: null, tempPassword: null);
+      } on PostgrestException catch (e) {
+        return (error: 'Could not save the invite: ${e.message}', tempPassword: null);
+      } catch (_) {
+        return (error: 'Could not reach the server. Check your connection.', tempPassword: null);
+      }
     }
   }
 
@@ -373,6 +402,67 @@ class AppState extends ChangeNotifier {
   String get currentTenantRoomLabel {
     final tenant = currentTenant;
     return tenant == null ? '—' : tenantRoomLabel(tenant);
+  }
+
+  // ---- Active property (multi-PG owners work one property at a time) ----
+
+  Pg? get activePg {
+    if (pgs.isEmpty) return null;
+    return pgById(_activePgId ?? '') ?? pgs.first;
+  }
+
+  void selectPg(String id) {
+    _activePgId = id;
+    box.put('activePgId', id);
+    notifyListeners();
+  }
+
+  List<Room> get pgRooms {
+    final pg = activePg;
+    return pg == null ? rooms : rooms.where((r) => r.pgId == pg.id).toList();
+  }
+
+  Set<String> get _pgRoomIds => pgRooms.map((r) => r.id).toSet();
+
+  List<Tenant> get pgTenants {
+    final ids = _pgRoomIds;
+    return tenants.where((t) => ids.contains(t.roomId)).toList();
+  }
+
+  Set<String> get _pgTenantIds => pgTenants.map((t) => t.id).toSet();
+
+  List<Payment> get pgPayments {
+    final ids = _pgTenantIds;
+    return payments.where((p) => ids.contains(p.tenantId)).toList();
+  }
+
+  List<MaintenanceRequest> get pgMaintenance {
+    final ids = _pgRoomIds;
+    return maintenance.where((m) => ids.contains(m.roomId)).toList();
+  }
+
+  List<UtilityBill> get pgUtilities {
+    final ids = _pgRoomIds;
+    return utilities.where((u) => ids.contains(u.roomId)).toList();
+  }
+
+  List<Visitor> get pgVisitors {
+    final ids = _pgTenantIds;
+    return visitors.where((v) => ids.contains(v.tenantId)).toList();
+  }
+
+  List<AttendanceRecord> get pgAttendance {
+    final ids = _pgTenantIds;
+    return attendance.where((a) => ids.contains(a.tenantId)).toList();
+  }
+
+  int get pgDueAmount => pgPayments.where((e) => e.status == PaymentStatus.due).fold(0, (sum, e) => sum + e.amount);
+
+  int get pgCollectedAmount {
+    final now = DateTime.now();
+    return pgPayments
+        .where((e) => e.status == PaymentStatus.paid && e.period.year == now.year && e.period.month == now.month)
+        .fold(0, (sum, e) => sum + e.amount);
   }
 
   String pgNameForTenant(String tenantId) {
@@ -399,11 +489,12 @@ class AppState extends ChangeNotifier {
         .fold(0, (sum, e) => sum + e.amount);
   }
 
-  List<({DateTime month, int total})> monthlyRevenue({int months = 6}) {
+  List<({DateTime month, int total})> monthlyRevenue({int months = 6, List<Payment>? source}) {
     final now = DateTime.now();
+    final pool = source ?? payments;
     return List.generate(months, (i) {
       final month = DateTime(now.year, now.month - (months - 1 - i));
-      final total = payments
+      final total = pool
           .where((e) => e.status == PaymentStatus.paid && e.period.year == month.year && e.period.month == month.month)
           .fold(0, (sum, e) => sum + e.amount);
       return (month: month, total: total);

@@ -23,7 +23,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     final state = AppScope.of(context);
     final tenant = state.role == UserRole.tenant;
     final due = state.tenantDuePayment;
-    var items = tenant ? state.payments.where((e) => e.tenantId == state.currentTenantId).toList() : state.payments;
+    var items = tenant ? state.payments.where((e) => e.tenantId == state.currentTenantId).toList() : state.pgPayments;
     if (filter != 'All') items = items.where((e) => e.displayStatus == filter).toList();
     return Scaffold(
       appBar: AppBar(
@@ -39,9 +39,9 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
       body: ListView(padding: const EdgeInsets.fromLTRB(20, 10, 20, 100), children: [
         if (!tenant) ...[
           Row(children: [
-            Expanded(child: StatCard(label: 'Collected', value: inr(state.collectedAmount), icon: Icons.check_circle_outline, tint: primary, caption: 'This month')),
+            Expanded(child: StatCard(label: 'Collected', value: inr(state.pgCollectedAmount), icon: Icons.check_circle_outline, tint: primary, caption: 'This month')),
             const SizedBox(width: 12),
-            Expanded(child: StatCard(label: 'Outstanding', value: inr(state.dueAmount), icon: Icons.schedule, tint: coral, caption: 'Needs follow-up')),
+            Expanded(child: StatCard(label: 'Outstanding', value: inr(state.pgDueAmount), icon: Icons.schedule, tint: coral, caption: 'Needs follow-up')),
           ]),
           const SizedBox(height: 20),
         ] else ...[
@@ -130,16 +130,17 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   ));
 
   void _recordPayment(AppState state) {
-    if (state.tenants.isEmpty) return;
-    var tenantId = state.tenants.first.id;
+    final scoped = state.pgTenants;
+    if (scoped.isEmpty) return;
+    var tenantId = scoped.first.id;
     var method = 'UPI';
-    final amount = TextEditingController(text: '${state.roomById(state.tenants.first.roomId)?.rent ?? 9000}');
+    final amount = TextEditingController(text: '${state.roomById(scoped.first.roomId)?.rent ?? 9000}');
     showAppSheet(context, StatefulBuilder(builder: (context, setModalState) => Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       const SheetHandle(), Text('Record a payment', style: Theme.of(context).textTheme.headlineMedium),
       const FormLabel('Tenant'),
       DropdownButtonFormField<String>(
         initialValue: tenantId,
-        items: state.tenants.map((e) => DropdownMenuItem(value: e.id, child: Text(e.name))).toList(),
+        items: scoped.map((e) => DropdownMenuItem(value: e.id, child: Text(e.name))).toList(),
         onChanged: (v) => setModalState(() {
           tenantId = v!;
           amount.text = '${state.roomById(state.tenantById(v)!.roomId)?.rent ?? 9000}';
@@ -216,7 +217,7 @@ class UtilitiesScreen extends StatelessWidget {
     final state = AppScope.of(context);
     final manager = state.role != UserRole.tenant;
     final myRoomId = state.currentTenant?.roomId;
-    final entries = manager ? state.utilities : state.utilities.where((e) => e.roomId == myRoomId).toList();
+    final entries = manager ? state.pgUtilities : state.utilities.where((e) => e.roomId == myRoomId).toList();
     final myBill = entries.isEmpty ? null : entries.first;
     final occupants = (state.roomById(myRoomId ?? '')?.occupied ?? 1).clamp(1, 100);
     final myShare = myBill == null ? 0 : (myBill.amount / occupants).round();
@@ -244,8 +245,9 @@ class UtilitiesScreen extends StatelessWidget {
   Widget _meterValue(String label, String value) => Column(children: [Text(label, style: const TextStyle(fontSize: 10, color: Colors.black45)), const SizedBox(height: 3), Text(value, style: const TextStyle(fontWeight: FontWeight.w800))]);
 
   void _addReading(BuildContext context, AppState state) {
-    if (state.rooms.isEmpty) return;
-    var roomId = state.rooms.first.id;
+    final scoped = state.pgRooms;
+    if (scoped.isEmpty) return;
+    var roomId = scoped.first.id;
     final previous = TextEditingController();
     final current = TextEditingController();
     void prefill() {
@@ -258,7 +260,7 @@ class UtilitiesScreen extends StatelessWidget {
       const FormLabel('Room'),
       DropdownButtonFormField<String>(
         initialValue: roomId,
-        items: state.rooms.map((r) => DropdownMenuItem(value: r.id, child: Text('Room ${r.number} · Floor ${r.floor}'))).toList(),
+        items: scoped.map((r) => DropdownMenuItem(value: r.id, child: Text('Room ${r.number} · Floor ${r.floor}'))).toList(),
         onChanged: (v) => setModalState(() { roomId = v!; prefill(); }),
       ),
       Row(children: [Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [const FormLabel('Previous'), TextField(controller: previous, keyboardType: TextInputType.number)])), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [const FormLabel('Current'), TextField(controller: current, keyboardType: TextInputType.number)]))]),

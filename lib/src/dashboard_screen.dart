@@ -56,9 +56,11 @@ class DashboardScreen extends StatelessWidget {
   }
 
   Widget _revenueCard(BuildContext context, AppState state) {
-    final revenue = state.monthlyRevenue();
+    final revenue = state.monthlyRevenue(source: state.pgPayments);
     final total = revenue.fold(0, (sum, e) => sum + e.total);
-    final growth = state.revenueGrowth;
+    final previous = revenue[revenue.length - 3].total;
+    final last = revenue[revenue.length - 2].total;
+    final growth = previous == 0 ? null : (last - previous) / previous * 100;
     final max = revenue.fold(0, (m, e) => e.total > m ? e.total : m);
     final values = revenue.map((e) => max == 0 ? 0.0 : e.total / max).toList();
     return Card(
@@ -83,7 +85,10 @@ class DashboardScreen extends StatelessWidget {
   }
 
   Widget _managerStats(BuildContext context, AppState state) {
-    final occupancy = state.totalBeds == 0 ? 0 : (state.occupiedBeds / state.totalBeds * 100).round();
+    final pg = state.activePg;
+    final beds = pg?.beds ?? 0;
+    final occupied = pg?.occupied ?? 0;
+    final occupancy = beds == 0 ? 0 : (occupied / beds * 100).round();
     return LayoutBuilder(builder: (context, constraints) {
       final count = constraints.maxWidth > 680 ? 4 : 2;
       return GridView.count(
@@ -94,10 +99,10 @@ class DashboardScreen extends StatelessWidget {
         crossAxisSpacing: 12,
         childAspectRatio: constraints.maxWidth > 680 ? 1.25 : .92,
         children: [
-          StatCard(label: 'Occupancy', value: '$occupancy%', icon: Icons.bed_rounded, tint: primary, caption: '${state.occupiedBeds}/${state.totalBeds} beds'),
-          StatCard(label: 'Collected', value: inr(state.collectedAmount), icon: Icons.savings_outlined, tint: const Color(0xFF3478C7), caption: 'This month'),
-          StatCard(label: 'Outstanding', value: inr(state.dueAmount), icon: Icons.pending_actions, tint: coral, caption: '${state.payments.where((e) => e.status == PaymentStatus.due).length} dues'),
-          StatCard(label: 'Open requests', value: '${state.maintenance.where((e) => e.status != MaintenanceStatus.resolved).length}', icon: Icons.build_circle_outlined, tint: warning, caption: 'Needs attention'),
+          StatCard(label: 'Occupancy', value: '$occupancy%', icon: Icons.bed_rounded, tint: primary, caption: '$occupied/$beds beds'),
+          StatCard(label: 'Collected', value: inr(state.pgCollectedAmount), icon: Icons.savings_outlined, tint: const Color(0xFF3478C7), caption: 'This month'),
+          StatCard(label: 'Outstanding', value: inr(state.pgDueAmount), icon: Icons.pending_actions, tint: coral, caption: '${state.pgPayments.where((e) => e.status == PaymentStatus.due).length} dues'),
+          StatCard(label: 'Open requests', value: '${state.pgMaintenance.where((e) => e.status != MaintenanceStatus.resolved).length}', icon: Icons.build_circle_outlined, tint: warning, caption: 'Needs attention'),
         ],
       );
     });

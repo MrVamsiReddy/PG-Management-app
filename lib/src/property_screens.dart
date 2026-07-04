@@ -23,10 +23,18 @@ class PgListingsScreen extends StatelessWidget {
         itemBuilder: (context, index) {
           final pg = state.pgs[index];
           final occupancy = pg.beds == 0 ? 0 : (pg.occupied / pg.beds * 100).round();
+          final active = state.activePg?.id == pg.id;
           return Card(
             margin: const EdgeInsets.only(bottom: 16),
             clipBehavior: Clip.antiAlias,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            child: InkWell(
+              onTap: active
+                  ? null
+                  : () {
+                      state.selectPg(pg.id);
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Now managing ${pg.name}')));
+                    },
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Container(
                 height: 140,
                 decoration: const BoxDecoration(gradient: LinearGradient(colors: [Color(0xFF195F59), Color(0xFF45A497)])),
@@ -50,10 +58,14 @@ class PgListingsScreen extends StatelessWidget {
                   const SizedBox(height: 7),
                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('$occupancy% occupied', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)), Text('${pg.occupied} of ${pg.beds} beds', style: const TextStyle(fontSize: 12))]),
                   const Divider(height: 26),
-                  Text(pg.amenities, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                  Row(children: [
+                    Expanded(child: Text(pg.amenities, style: const TextStyle(fontSize: 12, color: Colors.black54))),
+                    if (active) const StatusPill('Managing') else const Text('Tap to manage', style: TextStyle(fontSize: 11, color: primary, fontWeight: FontWeight.w700)),
+                  ]),
                 ]),
               ),
-            ]),
+              ]),
+            ),
           );
         },
       ),
@@ -115,9 +127,9 @@ class _RoomsScreenState extends State<RoomsScreen> {
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
-    final floors = state.rooms.map((r) => r.floor).toSet().toList()..sort();
+    final floors = state.pgRooms.map((r) => r.floor).toSet().toList()..sort();
     final selected = floors.contains(floor) ? floor : (floors.isEmpty ? 1 : floors.first);
-    final rooms = state.rooms.where((e) => e.floor == selected).toList();
+    final rooms = state.pgRooms.where((e) => e.floor == selected).toList();
     return Scaffold(
       appBar: AppBar(title: const Text('Rooms & beds')),
       floatingActionButton: FloatingActionButton.extended(onPressed: () => _addRoom(context, state), icon: const Icon(Icons.add), label: const Text('Add room')),
@@ -161,15 +173,16 @@ class _RoomsScreenState extends State<RoomsScreen> {
   }
 
   void _addRoom(BuildContext context, AppState state) {
-    if (state.pgs.isEmpty) return;
+    final pg = state.activePg;
+    if (pg == null) return;
     final number = TextEditingController();
     final rent = TextEditingController(text: '9000');
-    var pgId = state.pgs.first.id;
+    final pgId = pg.id;
     var roomFloor = floor;
     var beds = 2;
     showAppSheet(context, StatefulBuilder(builder: (context, setModalState) => SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       const SheetHandle(), Text('Add a room', style: Theme.of(context).textTheme.headlineMedium),
-      const FormLabel('Property'), DropdownButtonFormField<String>(initialValue: pgId, items: state.pgs.map((e) => DropdownMenuItem(value: e.id, child: Text(e.name))).toList(), onChanged: (v) => setModalState(() => pgId = v!)),
+      const SizedBox(height: 6), Text('In ${pg.name} — switch property from the top bar.', style: const TextStyle(fontSize: 12, color: Colors.black54)),
       const FormLabel('Room number'), TextField(controller: number, decoration: const InputDecoration(hintText: 'e.g. 204')),
       const FormLabel('Floor'), DropdownButtonFormField<int>(initialValue: roomFloor, items: [1, 2, 3, 4, 5].map((e) => DropdownMenuItem(value: e, child: Text('Floor $e'))).toList(), onChanged: (v) => setModalState(() => roomFloor = v!)),
       const FormLabel('Sharing type'), DropdownButtonFormField<int>(initialValue: beds, items: const [DropdownMenuItem(value: 1, child: Text('Single')), DropdownMenuItem(value: 2, child: Text('Double sharing')), DropdownMenuItem(value: 3, child: Text('Triple sharing'))], onChanged: (v) => setModalState(() => beds = v!)),
@@ -202,13 +215,13 @@ class _TenantsScreenState extends State<TenantsScreen> {
     final state = AppScope.of(context);
     final needle = query.trim().toLowerCase();
     final results = needle.isEmpty
-        ? state.tenants
-        : state.tenants.where((e) => '${e.name} ${state.tenantRoomLabel(e)} ${e.phone}'.toLowerCase().contains(needle)).toList();
+        ? state.pgTenants
+        : state.pgTenants.where((e) => '${e.name} ${state.tenantRoomLabel(e)} ${e.phone}'.toLowerCase().contains(needle)).toList();
     return Scaffold(
       appBar: AppBar(title: const Text('Tenants')),
       floatingActionButton: FloatingActionButton.extended(onPressed: () => _onboard(context, state), icon: const Icon(Icons.person_add_alt_1), label: const Text('Onboard')),
       body: ListView(padding: const EdgeInsets.fromLTRB(20, 10, 20, 100), children: [
-        PageHeader(title: '${state.tenants.length} active tenants', subtitle: '${state.tenants.where((e) => e.kyc == KycStatus.pending).length} KYC pending'),
+        PageHeader(title: '${state.pgTenants.length} active tenants', subtitle: '${state.pgTenants.where((e) => e.kyc == KycStatus.pending).length} KYC pending · ${state.activePg?.name ?? ''}'),
         const SizedBox(height: 18),
         TextField(onChanged: (value) => setState(() => query = value), decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search by name, room or phone')),
         const SizedBox(height: 14),
@@ -255,43 +268,51 @@ class _TenantsScreenState extends State<TenantsScreen> {
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text('Invite ${tenant.name.split(' ').first}'),
+        title: Text('Add ${tenant.name.split(' ').first} to the app'),
         content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('When they sign up with this email, they will see their own room, rent and requests from your PG.', style: TextStyle(fontSize: 13)),
+          const Text('Their login is created for you, with a one-time password they must replace at first sign-in.', style: TextStyle(fontSize: 13)),
           const SizedBox(height: 14),
           TextField(controller: email, autofocus: true, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Tenant email address', prefixIcon: Icon(Icons.mail_outline))),
           const SizedBox(height: 10),
-          const Text('No email is sent automatically — next you can share the invite by WhatsApp, SMS or email.', style: TextStyle(fontSize: 11, color: Colors.black45)),
+          const Text('Next, the message with the app link and their credentials opens in WhatsApp/SMS/email for you to send.', style: TextStyle(fontSize: 11, color: Colors.black45)),
         ]),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
           FilledButton.icon(onPressed: () async {
             final address = email.text.trim();
             if (!address.contains('@')) return;
-            final error = await state.inviteTenant(tenantId: tenant.id, email: address);
+            final result = await state.inviteTenant(tenantId: tenant.id, email: address);
             if (dialogContext.mounted) Navigator.pop(dialogContext);
-            if (error != null) {
-              messenger.showSnackBar(SnackBar(content: Text(error)));
+            if (result.error != null) {
+              messenger.showSnackBar(SnackBar(content: Text(result.error!)));
               return;
             }
-            await _shareInvite(messenger, state, tenant, address);
-          }, icon: const Icon(Icons.send_outlined), label: const Text('Save & share')),
+            await _shareInvite(messenger, state, tenant, address, result.tempPassword);
+          }, icon: const Icon(Icons.send_outlined), label: const Text('Create login & share')),
         ],
       ),
     );
   }
 
-  Future<void> _shareInvite(ScaffoldMessengerState messenger, AppState state, Tenant tenant, String email) async {
-    final message = 'Hi ${tenant.name.split(' ').first}! You are invited to ${state.pgNameForTenant(tenant.id)} on PG Management.\n\n'
-        'Create your account using this email address: $email\n'
-        'Open $appWebUrl or use the Android app.\n\n'
-        'You will see your room, rent and requests as soon as you sign in.';
+  Future<void> _shareInvite(ScaffoldMessengerState messenger, AppState state, Tenant tenant, String email, String? tempPassword) async {
+    final firstName = tenant.name.split(' ').first;
+    final pgName = state.pgNameForTenant(tenant.id);
+    final message = tempPassword != null
+        ? 'Hi $firstName! Your room at $pgName is now on PG Management.\n\n'
+            'Download the app: $apkDownloadUrl\n'
+            'Or use the web: $appWebUrl\n\n'
+            'Sign in with:\nEmail: $email\nTemporary password: $tempPassword\n\n'
+            'You will be asked to set your own password the first time you sign in.'
+        : 'Hi $firstName! Your account is now linked to $pgName on PG Management.\n\n'
+            'Sign in with this email: $email\n'
+            'App: $apkDownloadUrl\nWeb: $appWebUrl\n\n'
+            'You will see your room, rent and requests as soon as you sign in.';
     try {
-      await SharePlus.instance.share(ShareParams(text: message, subject: 'Your PG Management invite'));
+      await SharePlus.instance.share(ShareParams(text: message, subject: 'Your PG Management login'));
     } catch (_) {
       // Share sheet unavailable (e.g. desktop browser): copy instead.
       await Clipboard.setData(ClipboardData(text: message));
-      messenger.showSnackBar(const SnackBar(content: Text('Invite message copied — paste it into WhatsApp or email.')));
+      messenger.showSnackBar(const SnackBar(content: Text('Message with the login details copied — paste it into WhatsApp or email.')));
     }
   }
 
@@ -307,11 +328,14 @@ class _TenantsScreenState extends State<TenantsScreen> {
       );
 
   void _onboard(BuildContext context, AppState state) {
-    if (state.rooms.isEmpty) return;
+    if (state.pgRooms.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Add a room in ${state.activePg?.name ?? 'this property'} first.')));
+      return;
+    }
     final name = TextEditingController();
     final phone = TextEditingController();
     final bed = TextEditingController(text: 'A');
-    var roomId = state.rooms.first.id;
+    var roomId = state.pgRooms.first.id;
     String? kycDoc;
     showAppSheet(context, StatefulBuilder(builder: (context, setModalState) => SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       const SheetHandle(), Text('Onboard tenant', style: Theme.of(context).textTheme.headlineMedium),
@@ -321,7 +345,7 @@ class _TenantsScreenState extends State<TenantsScreen> {
       const FormLabel('Room'),
       DropdownButtonFormField<String>(
         initialValue: roomId,
-        items: state.rooms.map((r) => DropdownMenuItem(value: r.id, child: Text('Room ${r.number} · ${r.type} · ${r.beds - r.occupied} free'))).toList(),
+        items: state.pgRooms.map((r) => DropdownMenuItem(value: r.id, child: Text('Room ${r.number} · ${r.type} · ${r.beds - r.occupied} free'))).toList(),
         onChanged: (v) => setModalState(() => roomId = v!),
       ),
       const FormLabel('Bed label'), TextField(controller: bed, decoration: const InputDecoration(hintText: 'e.g. B')),

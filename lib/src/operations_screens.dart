@@ -18,7 +18,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
     final state = AppScope.of(context);
     final manager = state.role != UserRole.tenant;
     final myRoomId = state.currentTenant?.roomId;
-    final mine = manager ? state.maintenance : state.maintenance.where((e) => e.roomId == myRoomId).toList();
+    final mine = manager ? state.pgMaintenance : state.maintenance.where((e) => e.roomId == myRoomId).toList();
     final items = filter == 'All' ? mine : mine.where((e) => e.status.label == filter).toList();
     return Scaffold(
       appBar: AppBar(title: const Text('Maintenance')),
@@ -50,8 +50,9 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
   void _raiseIssue(BuildContext context, AppState state) {
     if (state.rooms.isEmpty) return;
     final manager = state.role != UserRole.tenant;
+    final scoped = manager && state.pgRooms.isNotEmpty ? state.pgRooms : state.rooms;
     final title = TextEditingController();
-    var roomId = manager ? state.rooms.first.id : (state.currentTenant?.roomId ?? state.rooms.first.id);
+    var roomId = manager ? scoped.first.id : (state.currentTenant?.roomId ?? state.rooms.first.id);
     var category = 'Plumbing';
     var priority = Priority.medium;
     String? photo;
@@ -62,7 +63,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
       if (manager)
         DropdownButtonFormField<String>(
           initialValue: roomId,
-          items: state.rooms.map((r) => DropdownMenuItem(value: r.id, child: Text('Room ${r.number} · Floor ${r.floor}'))).toList(),
+          items: scoped.map((r) => DropdownMenuItem(value: r.id, child: Text('Room ${r.number} · Floor ${r.floor}'))).toList(),
           onChanged: (v) => setModalState(() => roomId = v!),
         )
       else
@@ -137,7 +138,7 @@ class AttendanceScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     final tenant = state.role == UserRole.tenant;
-    final items = tenant ? state.attendance.where((e) => e.tenantId == state.currentTenantId).toList() : state.attendance;
+    final items = tenant ? state.attendance.where((e) => e.tenantId == state.currentTenantId).toList() : state.pgAttendance;
     final record = state.todayAttendance;
     final checkedIn = state.isCheckedIn;
     return Scaffold(
