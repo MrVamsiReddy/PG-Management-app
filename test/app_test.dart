@@ -206,6 +206,30 @@ void main() {
     expect(state.hasUnread, isFalse);
   });
 
+  test('monthly dues generation is idempotent over seeded data', () {
+    // Every seeded tenant already has a current-month payment.
+    expect(state.generateMonthlyDues(), isFalse);
+  });
+
+  test('a missing monthly due is generated at the room rent', () {
+    final now = DateTime.now();
+    state.payments.removeWhere((p) => p.tenantId == 't1' && p.period.year == now.year && p.period.month == now.month);
+    expect(state.generateMonthlyDues(), isTrue);
+
+    final due = state.payments.firstWhere((p) => p.id == 'pay-${now.year}-${now.month}-t1');
+    expect(due.amount, 9500); // room r1 rent
+    expect(due.status, PaymentStatus.due);
+    expect(state.generateMonthlyDues(), isFalse); // deterministic id → no duplicates
+  });
+
+  test('onboarding a tenant creates their first monthly due', () {
+    state.onboardTenant(name: 'Kiran Kumar', phone: '90000 00002', roomId: 'r4', bed: 'B');
+    final tenant = state.tenants.first;
+    final due = state.payments.firstWhere((p) => p.tenantId == tenant.id);
+    expect(due.amount, 10000); // room r4 rent
+    expect(due.status, PaymentStatus.due);
+  });
+
   test('demo sessions act as the default seeded tenant', () async {
     expect(state.currentTenantId, AppState.defaultTenantId);
     state.login(UserRole.tenant);

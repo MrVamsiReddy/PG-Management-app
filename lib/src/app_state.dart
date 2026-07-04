@@ -122,6 +122,9 @@ class AppState extends ChangeNotifier {
       _seed();
       await persistAll();
     }
+    if (role != UserRole.tenant && generateMonthlyDues()) {
+      await _persist({'payments'});
+    }
   }
 
   Future<void> _loadAll() async {
@@ -177,7 +180,11 @@ class AppState extends ChangeNotifier {
     role = selectedRole;
     isLoggedIn = true;
     box.put('sessionRole', role.name);
-    notifyListeners();
+    if (role != UserRole.tenant && generateMonthlyDues()) {
+      _persist({'payments'}); // also notifies
+    } else {
+      notifyListeners();
+    }
   }
 
   Future<void> logout() async {
@@ -322,6 +329,9 @@ class AppState extends ChangeNotifier {
       _seed();
       await persistAll();
     }
+    if (role != UserRole.tenant && generateMonthlyDues()) {
+      await _persist({'payments'});
+    }
     isLoggedIn = true;
     notifyListeners();
   }
@@ -460,11 +470,38 @@ class AppState extends ChangeNotifier {
         pgs[p] = pgs[p].copyWith(occupied: pgs[p].occupied + 1);
       }
     }
-    _persist({'tenants', 'rooms', 'pgs'});
+    // The new tenant's first due appears immediately in rent collection.
+    generateMonthlyDues();
+    _persist({'tenants', 'rooms', 'pgs', 'payments'});
   }
 
   Payment? get tenantDuePayment =>
       _firstOrNull(payments, (p) => p.tenantId == currentTenantId && p.status == PaymentStatus.due);
+
+  /// Creates this month's Due payment for every tenant who doesn't have one
+  /// (new tenants join at their room's full rent — no proration yet).
+  /// Deterministic ids make it idempotent. Returns true if anything was added.
+  bool generateMonthlyDues() {
+    final now = DateTime.now();
+    final period = DateTime(now.year, now.month);
+    final fifth = DateTime(now.year, now.month, 5);
+    final dueDate = now.isBefore(fifth) ? fifth : now.add(const Duration(days: 3));
+    var added = false;
+    for (final tenant in tenants) {
+      final exists = payments.any((p) =>
+          p.tenantId == tenant.id && p.period.year == period.year && p.period.month == period.month);
+      if (exists) continue;
+      final rent = roomById(tenant.roomId)?.rent ?? 0;
+      if (rent <= 0) continue;
+      payments.insert(0, Payment(
+        id: 'pay-${period.year}-${period.month}-${tenant.id}',
+        tenantId: tenant.id, period: period, amount: rent,
+        status: PaymentStatus.due, dueDate: dueDate,
+      ));
+      added = true;
+    }
+    return added;
+  }
 
   void payRent(String id, String method) {
     final i = payments.indexWhere((p) => p.id == id);
