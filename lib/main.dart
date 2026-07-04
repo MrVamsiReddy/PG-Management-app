@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -5,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'src/app_state.dart';
 import 'src/auth_screen.dart';
 import 'src/home_shell.dart';
+import 'src/push.dart';
 import 'src/supabase_config.dart';
 import 'src/theme.dart';
 
@@ -17,10 +20,16 @@ Future<void> main() async {
   } catch (_) {
     supabaseReady = false; // Offline or misconfigured: demo mode still works.
   }
+  await initPush();
   final box = await Hive.openBox<dynamic>('pg_management');
   final state = AppState(box);
   await state.init();
   await state.restoreCloudSession();
+  if (state.cloudMode) unawaited(registerPushToken());
+  supabaseOrNull?.auth.onAuthStateChange.listen((change) {
+    if (change.event == AuthChangeEvent.signedIn) unawaited(registerPushToken());
+  });
+  onPushWhileOpen(() => unawaited(state.refresh()));
   runApp(PgManagementApp(state: state));
 }
 

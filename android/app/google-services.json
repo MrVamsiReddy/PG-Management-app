@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1073402493134",
+    "project_id": "pg-management-1617a",
+    "storage_bucket": "pg-management-1617a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1073402493134:android:0f9a8eb57c3ba2d321b89f",
+        "android_client_info": {
+          "package_name": "com.example.nestora_pg"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBhSkQvo_PCgvMxuRRPjlZ9ExNXANbq__I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

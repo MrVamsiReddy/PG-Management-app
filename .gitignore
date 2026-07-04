@@ -22,6 +22,5 @@ android/key.properties
 ios/Flutter/ephemeral/
 macos/Flutter/ephemeral/
 firebase_options.dart
-google-services.json
 GoogleService-Info.plist
 service-account*.json

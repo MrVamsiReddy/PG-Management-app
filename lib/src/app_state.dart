@@ -68,6 +68,7 @@ class AppState extends ChangeNotifier {
   bool cloudMode = false;
   String? accountEmail;
   String? _cloudName;
+  String? _workspaceOwnerId;
 
   void _useHiveRepos() {
     _pgRepo = HiveRepository<Pg>(box, 'pgs', fromMap: Pg.fromMap, toMap: (e) => e.toMap());
@@ -195,6 +196,7 @@ class AppState extends ChangeNotifier {
       cloudMode = false;
       accountEmail = null;
       _cloudName = null;
+      _workspaceOwnerId = null;
       currentTenantId = defaultTenantId;
       _useHiveRepos();
       await _loadAll();
@@ -322,6 +324,7 @@ class AppState extends ChangeNotifier {
     _cloudName = user.userMetadata?['full_name'] as String?;
     accountEmail = user.email;
     cloudMode = true;
+    _workspaceOwnerId = workspaceOwnerId;
     _useSupabaseRepos(workspaceOwnerId);
     await _loadAll();
     // Seed only a brand-new private workspace — never an owner's shared one.
@@ -425,6 +428,20 @@ class AppState extends ChangeNotifier {
     notifications.insert(0, AppNotification(
       id: _id('n'), title: title, body: body, type: type, createdAt: DateTime.now(),
     ));
+    _pushToWorkspace(title, body);
+  }
+
+  /// Fire-and-forget push to everyone else in the workspace via the `push`
+  /// Edge Function. Push failures never block the action itself.
+  void _pushToWorkspace(String title, String body) {
+    final client = supabaseOrNull;
+    final owner = _workspaceOwnerId;
+    if (client == null || !cloudMode || owner == null) return;
+    client.functions.invoke('push', body: {
+      'workspaceOwnerId': owner,
+      'title': title,
+      'body': body,
+    }).ignore();
   }
 
   bool get hasUnread => notifications.any((n) => !n.read);
