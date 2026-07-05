@@ -3,10 +3,29 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
-import 'models.dart';
+import 'app_state.dart';
 import 'theme.dart';
 
 export 'format.dart';
+
+/// Route guard: renders [child] only for owner/admin sessions. Tenants who
+/// reach a management screen (deep link, stale navigation) get a polite
+/// dead end instead of the data.
+class ManagerOnly extends StatelessWidget {
+  const ManagerOnly({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (AppScope.of(context).role == UserRole.tenant) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Not available')),
+        body: const Center(child: EmptyState(icon: Icons.lock_outline, title: 'This area is for PG managers')),
+      );
+    }
+    return child;
+  }
+}
 
 /// Camera/gallery chooser → picked image compressed and returned as base64
 /// (small enough to store inline), or null if cancelled or unavailable.

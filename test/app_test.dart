@@ -6,6 +6,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:pg_management/main.dart';
 import 'package:pg_management/src/app_state.dart';
 import 'package:pg_management/src/format.dart';
+import 'package:pg_management/src/module_screens.dart';
 import 'package:pg_management/src/theme.dart';
 
 void main() {
@@ -285,6 +286,47 @@ void main() {
     expect(relativeTime(DateTime.now()), 'Just now');
     expect(relativeTime(DateTime.now().subtract(const Duration(minutes: 12))), '12 min ago');
     expect(relativeTime(DateTime.now().subtract(const Duration(hours: 3))), '3 hrs ago');
+  });
+
+  testWidgets('owner navigation shows the management tabs', (tester) async {
+    state.login(UserRole.owner);
+    await tester.pumpWidget(PgManagementApp(state: state));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Manage'), findsOneWidget);
+    expect(find.text('Requests'), findsOneWidget);
+    expect(find.text('My Rent'), findsNothing);
+    expect(find.text('My Requests'), findsNothing);
+  });
+
+  testWidgets('tenant navigation shows only tenant tabs', (tester) async {
+    state.login(UserRole.tenant);
+    await tester.pumpWidget(PgManagementApp(state: state));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('My Rent'), findsOneWidget);
+    expect(find.text('My Requests'), findsOneWidget);
+    expect(find.text('Visitors'), findsOneWidget);
+    expect(find.text('Manage'), findsNothing);
+    expect(find.text('Properties'), findsNothing);
+  });
+
+  testWidgets('admin navigation is property-centric', (tester) async {
+    state.login(UserRole.admin);
+    await tester.pumpWidget(PgManagementApp(state: state));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Properties'), findsOneWidget);
+    expect(find.text('Operations'), findsOneWidget);
+    expect(find.text('Manage'), findsNothing);
+  });
+
+  testWidgets('tenants are blocked from owner-only screens', (tester) async {
+    state.login(UserRole.tenant);
+    await tester.pumpWidget(AppScope(
+      notifier: state,
+      child: MaterialApp(theme: buildAppTheme(), home: const TenantsScreen()),
+    ));
+    await tester.pump();
+    expect(find.text('This area is for PG managers'), findsOneWidget);
+    expect(find.text('Onboard'), findsNothing);
   });
 
   testWidgets('signing in from the auth screen opens the home shell', (tester) async {

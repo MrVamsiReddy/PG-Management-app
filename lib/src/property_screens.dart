@@ -14,7 +14,7 @@ class PgListingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
-    return Scaffold(
+    return ManagerOnly(child: Scaffold(
       appBar: AppBar(title: const Text('PG properties')),
       floatingActionButton: FloatingActionButton.extended(onPressed: () => _editPg(context, state), icon: const Icon(Icons.add), label: const Text('Add PG')),
       body: ListView.builder(
@@ -69,7 +69,7 @@ class PgListingsScreen extends StatelessWidget {
           );
         },
       ),
-    );
+    ));
   }
 
   void _editPg(BuildContext context, AppState state, {Pg? existing}) {
@@ -130,7 +130,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
     final floors = state.pgRooms.map((r) => r.floor).toSet().toList()..sort();
     final selected = floors.contains(floor) ? floor : (floors.isEmpty ? 1 : floors.first);
     final rooms = state.pgRooms.where((e) => e.floor == selected).toList();
-    return Scaffold(
+    return ManagerOnly(child: Scaffold(
       appBar: AppBar(title: const Text('Rooms & beds')),
       floatingActionButton: FloatingActionButton.extended(onPressed: () => _addRoom(context, state), icon: const Icon(Icons.add), label: const Text('Add room')),
       body: ListView(padding: const EdgeInsets.fromLTRB(20, 10, 20, 100), children: [
@@ -169,7 +169,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
         )),
         if (rooms.isEmpty) const EmptyState(icon: Icons.meeting_room_outlined, title: 'No rooms on this floor'),
       ]),
-    );
+    ));
   }
 
   void _addRoom(BuildContext context, AppState state) {
@@ -217,7 +217,7 @@ class _TenantsScreenState extends State<TenantsScreen> {
     final results = needle.isEmpty
         ? state.pgTenants
         : state.pgTenants.where((e) => '${e.name} ${state.tenantRoomLabel(e)} ${e.phone}'.toLowerCase().contains(needle)).toList();
-    return Scaffold(
+    return ManagerOnly(child: Scaffold(
       appBar: AppBar(title: const Text('Tenants')),
       floatingActionButton: FloatingActionButton.extended(onPressed: () => _onboard(context, state), icon: const Icon(Icons.person_add_alt_1), label: const Text('Onboard')),
       body: ListView(padding: const EdgeInsets.fromLTRB(20, 10, 20, 100), children: [
@@ -252,7 +252,7 @@ class _TenantsScreenState extends State<TenantsScreen> {
           ),
         )),
       ]),
-    );
+    ));
   }
 
   Widget _detail(IconData icon, String label, String value) => Padding(padding: const EdgeInsets.symmetric(vertical: 5), child: Row(children: [Icon(icon, size: 17, color: Colors.black45), const SizedBox(width: 8), Text('$label: ', style: const TextStyle(fontSize: 12)), Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700))]));

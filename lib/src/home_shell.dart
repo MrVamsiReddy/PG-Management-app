@@ -17,24 +17,44 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
-    final pages = <Widget>[
-      const DashboardScreen(),
-      const ModulesHubScreen(),
-      const PaymentsScreen(),
-      const MaintenanceScreen(),
-      const ProfileScreen(),
-    ];
-    const destinations = [
-      NavigationDestination(icon: Icon(Icons.space_dashboard_outlined), selectedIcon: Icon(Icons.space_dashboard_rounded), label: 'Home'),
-      NavigationDestination(icon: Icon(Icons.grid_view_outlined), selectedIcon: Icon(Icons.grid_view_rounded), label: 'Manage'),
-      NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), selectedIcon: Icon(Icons.account_balance_wallet), label: 'Rent'),
-      NavigationDestination(icon: Icon(Icons.build_outlined), selectedIcon: Icon(Icons.build), label: 'Requests'),
-      NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
-    ];
+    // Each role gets its own navigation: tenants never see management
+    // surfaces, admins get a property-centric layout.
+    final (pages, destinations) = switch (state.role) {
+      UserRole.tenant => (
+          const <Widget>[DashboardScreen(), PaymentsScreen(), MaintenanceScreen(), VisitorsScreen(), ProfileScreen()],
+          const <NavigationDestination>[
+            NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'Home'),
+            NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), selectedIcon: Icon(Icons.account_balance_wallet), label: 'My Rent'),
+            NavigationDestination(icon: Icon(Icons.build_outlined), selectedIcon: Icon(Icons.build), label: 'My Requests'),
+            NavigationDestination(icon: Icon(Icons.badge_outlined), selectedIcon: Icon(Icons.badge), label: 'Visitors'),
+            NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
+          ],
+        ),
+      UserRole.admin => (
+          const <Widget>[DashboardScreen(), PgListingsScreen(), ModulesHubScreen(), PaymentsScreen(), ProfileScreen()],
+          const <NavigationDestination>[
+            NavigationDestination(icon: Icon(Icons.space_dashboard_outlined), selectedIcon: Icon(Icons.space_dashboard_rounded), label: 'Dashboard'),
+            NavigationDestination(icon: Icon(Icons.apartment_outlined), selectedIcon: Icon(Icons.apartment_rounded), label: 'Properties'),
+            NavigationDestination(icon: Icon(Icons.grid_view_outlined), selectedIcon: Icon(Icons.grid_view_rounded), label: 'Operations'),
+            NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), selectedIcon: Icon(Icons.account_balance_wallet), label: 'Rent'),
+            NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
+          ],
+        ),
+      UserRole.owner => (
+          const <Widget>[DashboardScreen(), ModulesHubScreen(), PaymentsScreen(), MaintenanceScreen(), ProfileScreen()],
+          const <NavigationDestination>[
+            NavigationDestination(icon: Icon(Icons.space_dashboard_outlined), selectedIcon: Icon(Icons.space_dashboard_rounded), label: 'Dashboard'),
+            NavigationDestination(icon: Icon(Icons.grid_view_outlined), selectedIcon: Icon(Icons.grid_view_rounded), label: 'Manage'),
+            NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), selectedIcon: Icon(Icons.account_balance_wallet), label: 'Rent'),
+            NavigationDestination(icon: Icon(Icons.build_outlined), selectedIcon: Icon(Icons.build), label: 'Requests'),
+            NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
+          ],
+        ),
+    };
     final wide = MediaQuery.sizeOf(context).width >= 900;
     final content = AnimatedSwitcher(
       duration: const Duration(milliseconds: 220),
-      child: KeyedSubtree(key: ValueKey(index), child: pages[index]),
+      child: KeyedSubtree(key: ValueKey('${state.role.name}-$index'), child: pages[index]),
     );
     return Scaffold(
       appBar: AppBar(
