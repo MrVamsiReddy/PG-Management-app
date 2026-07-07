@@ -154,7 +154,7 @@ class StatusPill extends StatelessWidget {
         ? primary
         : lower.contains('overdue') || lower.contains('high') || lower.contains('declined')
             ? const Color(0xFFD44B47)
-            : lower.contains('progress') || lower.contains('inside') || lower.contains('medium')
+            : lower.contains('progress') || lower.contains('inside') || lower.contains('medium') || lower.contains('partial')
                 ? const Color(0xFF3478C7)
                 : const Color(0xFFB7791F);
     return Container(

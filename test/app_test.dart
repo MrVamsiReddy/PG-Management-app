@@ -113,17 +113,58 @@ void main() {
     expect(state.notifications.any((n) => n.title == 'Rent received' && n.type == NotificationType.payment), isTrue);
   });
 
-  test('recordPayment inserts a paid entry for the current month', () {
+  test('recordPayment settles a matching current-month due in place', () {
     final collectedBefore = state.collectedAmount;
+    final before = state.payments.length;
+    final due = state.payments.firstWhere((p) => p.tenantId == 't2' && p.status == PaymentStatus.due);
 
-    state.recordPayment(tenantId: 't2', amount: 9500, method: 'Cash');
+    state.recordPayment(tenantId: 't2', amount: due.amount, method: 'Cash');
 
-    final entry = state.payments.first;
-    expect(entry.tenantId, 't2');
-    expect(entry.status, PaymentStatus.paid);
-    expect(entry.method, 'Cash');
-    expect(state.collectedAmount, collectedBefore + 9500);
+    // No duplicate row — the existing due was updated.
+    expect(state.payments.length, before);
+    final settled = state.payments.firstWhere((p) => p.id == due.id);
+    expect(settled.status, PaymentStatus.paid);
+    expect(settled.method, 'Cash');
+    expect(settled.balance, 0);
+    expect(state.collectedAmount, collectedBefore + due.amount);
     expect(state.notifications.any((n) => n.title == 'Payment recorded'), isTrue);
+  });
+
+  test('recordPayment below the due amount marks it partial', () {
+    final due = state.payments.firstWhere((p) => p.tenantId == 't2' && p.status == PaymentStatus.due);
+    final before = state.payments.length;
+
+    state.recordPayment(tenantId: 't2', amount: 2000, method: 'Cash');
+
+    expect(state.payments.length, before); // still no new row
+    final partial = state.payments.firstWhere((p) => p.id == due.id);
+    expect(partial.status, PaymentStatus.partial);
+    expect(partial.collected, 2000);
+    expect(partial.balance, due.amount - 2000);
+    expect(partial.displayStatus, 'Partial');
+    expect(state.notifications.any((n) => n.title == 'Part payment recorded'), isTrue);
+
+    // A follow-up payment covering the rest settles it.
+    state.recordPayment(tenantId: 't2', amount: due.amount - 2000, method: 'UPI');
+    final done = state.payments.firstWhere((p) => p.id == due.id);
+    expect(done.status, PaymentStatus.paid);
+    expect(done.balance, 0);
+    expect(state.payments.length, before);
+  });
+
+  test('recordPayment with no matching due creates a standalone advance row', () {
+    // t2's current-month due settled first, so the next payment has no match.
+    final due = state.payments.firstWhere((p) => p.tenantId == 't2' && p.status == PaymentStatus.due);
+    state.recordPayment(tenantId: 't2', amount: due.amount, method: 'Cash');
+    final after = state.payments.length;
+
+    state.recordPayment(tenantId: 't2', amount: 5000, method: 'UPI');
+
+    expect(state.payments.length, after + 1); // advance row added
+    final advance = state.payments.first;
+    expect(advance.tenantId, 't2');
+    expect(advance.status, PaymentStatus.paid);
+    expect(advance.amount, 5000);
   });
 
   test('monthlyRevenue aggregates paid rent per month for the chart', () {
@@ -221,6 +262,32 @@ void main() {
     expect(due.amount, 9500); // room r1 rent
     expect(due.status, PaymentStatus.due);
     expect(state.generateMonthlyDues(), isFalse); // deterministic id → no duplicates
+  });
+
+  test('generateMonthlyDues never duplicates when a partial or paid row exists', () {
+    final now = DateTime.now();
+    // Turn t1's current due into a partial payment, then regenerate.
+    final i = state.payments.indexWhere((p) => p.tenantId == 't1' && p.period.year == now.year && p.period.month == now.month);
+    state.payments[i] = state.payments[i].copyWith(status: PaymentStatus.partial, paidAmount: 1000);
+
+    expect(state.generateMonthlyDues(), isFalse);
+    final t1ThisMonth = state.payments.where((p) => p.tenantId == 't1' && p.period.year == now.year && p.period.month == now.month);
+    expect(t1ThisMonth, hasLength(1)); // still exactly one row
+  });
+
+  test('startup materialises a tenant\'s own due without generating owner-wide rows', () {
+    final now = DateTime.now();
+    // Wipe every current-month due so there is something to generate.
+    state.payments.removeWhere((p) => p.period.year == now.year && p.period.month == now.month);
+
+    state.login(UserRole.tenant); // demo tenant t1
+
+    // t1's due exists in memory for display…
+    expect(state.tenantPayments.any((p) => p.status == PaymentStatus.due), isTrue);
+    // …but the tenant session did not generate other tenants' dues.
+    final others = state.payments.where((p) =>
+        p.tenantId != 't1' && p.period.year == now.year && p.period.month == now.month);
+    expect(others, isEmpty);
   });
 
   test('onboarding a tenant creates their first monthly due', () {
@@ -351,7 +418,7 @@ void main() {
   test('payments export as spreadsheet-ready CSV', () {
     final csv = state.paymentsCsv();
     final lines = csv.split('\n');
-    expect(lines.first, 'Receipt,Tenant,Month,Amount,Status,Due date,Paid date,Method');
+    expect(lines.first, 'Receipt,Tenant,Month,Amount,Collected,Balance,Status,Due date,Paid date,Method');
     expect(lines.length, state.payments.length + 1);
     expect(csv, contains('"Aarav Mehta"'));
     expect(csv, contains('"9500"'));

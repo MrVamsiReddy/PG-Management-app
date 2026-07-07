@@ -119,7 +119,7 @@ class DashboardScreen extends StatelessWidget {
             onTap: () => _open(context, const PaymentsScreen(initialFilter: 'Paid')),
           ),
           StatCard(
-            label: 'Outstanding', value: inr(state.pgDueAmount), icon: Icons.pending_actions, tint: coral, caption: '${state.pgPayments.where((e) => e.status == PaymentStatus.due).length} dues',
+            label: 'Outstanding', value: inr(state.pgDueAmount), icon: Icons.pending_actions, tint: coral, caption: '${state.pgPayments.where((e) => e.status != PaymentStatus.paid).length} dues',
             onTap: () => _open(context, const PaymentsScreen(initialFilter: 'Due')),
           ),
           StatCard(

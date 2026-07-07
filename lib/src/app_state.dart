@@ -130,9 +130,7 @@ class AppState extends ChangeNotifier {
       _seed();
       await persistAll();
     }
-    if (role != UserRole.tenant && generateMonthlyDues()) {
-      await _persist({'payments'});
-    }
+    await _ensureMonthlyDuesAtStartup();
   }
 
   Future<void> _loadAll() async {
@@ -188,11 +186,8 @@ class AppState extends ChangeNotifier {
     role = selectedRole;
     isLoggedIn = true;
     box.put('sessionRole', role.name);
-    if (role != UserRole.tenant && generateMonthlyDues()) {
-      _persist({'payments'}); // also notifies
-    } else {
-      notifyListeners();
-    }
+    notifyListeners();
+    _ensureMonthlyDuesAtStartup();
   }
 
   Future<void> logout() async {
@@ -344,9 +339,7 @@ class AppState extends ChangeNotifier {
       _seed();
       await persistAll();
     }
-    if (role != UserRole.tenant && generateMonthlyDues()) {
-      await _persist({'payments'});
-    }
+    await _ensureMonthlyDuesAtStartup();
     isLoggedIn = true;
     notifyListeners();
   }
@@ -456,13 +449,13 @@ class AppState extends ChangeNotifier {
     return attendance.where((a) => ids.contains(a.tenantId)).toList();
   }
 
-  int get pgDueAmount => pgPayments.where((e) => e.status == PaymentStatus.due).fold(0, (sum, e) => sum + e.amount);
+  int get pgDueAmount => pgPayments.fold(0, (sum, e) => sum + e.balance);
 
   int get pgCollectedAmount {
     final now = DateTime.now();
     return pgPayments
-        .where((e) => e.status == PaymentStatus.paid && e.period.year == now.year && e.period.month == now.month)
-        .fold(0, (sum, e) => sum + e.amount);
+        .where((e) => e.period.year == now.year && e.period.month == now.month)
+        .fold(0, (sum, e) => sum + e.collected);
   }
 
   String pgNameForTenant(String tenantId) {
@@ -480,13 +473,16 @@ class AppState extends ChangeNotifier {
 
   int get totalBeds => pgs.fold(0, (sum, e) => sum + e.beds);
   int get occupiedBeds => pgs.fold(0, (sum, e) => sum + e.occupied);
-  int get dueAmount => payments.where((e) => e.status == PaymentStatus.due).fold(0, (sum, e) => sum + e.amount);
+
+  /// Outstanding rent across all payments — includes the unpaid balance of
+  /// partially-settled dues, not just untouched ones.
+  int get dueAmount => payments.fold(0, (sum, e) => sum + e.balance);
 
   int get collectedAmount {
     final now = DateTime.now();
     return payments
-        .where((e) => e.status == PaymentStatus.paid && e.period.year == now.year && e.period.month == now.month)
-        .fold(0, (sum, e) => sum + e.amount);
+        .where((e) => e.period.year == now.year && e.period.month == now.month)
+        .fold(0, (sum, e) => sum + e.collected);
   }
 
   List<({DateTime month, int total})> monthlyRevenue({int months = 6, List<Payment>? source}) {
@@ -495,8 +491,8 @@ class AppState extends ChangeNotifier {
     return List.generate(months, (i) {
       final month = DateTime(now.year, now.month - (months - 1 - i));
       final total = pool
-          .where((e) => e.status == PaymentStatus.paid && e.period.year == month.year && e.period.month == month.month)
-          .fold(0, (sum, e) => sum + e.amount);
+          .where((e) => e.period.year == month.year && e.period.month == month.month)
+          .fold(0, (sum, e) => sum + e.collected);
       return (month: month, total: total);
     });
   }
@@ -618,8 +614,9 @@ class AppState extends ChangeNotifier {
     _persist({'tenants', 'rooms', 'pgs', 'payments'});
   }
 
+  /// The current tenant's next unsettled payment (due or partially paid).
   Payment? get tenantDuePayment =>
-      _firstOrNull(payments, (p) => p.tenantId == currentTenantId && p.status == PaymentStatus.due);
+      _firstOrNull(payments, (p) => p.tenantId == currentTenantId && p.status != PaymentStatus.paid);
 
   /// The signed-in tenant's own payments — never anyone else's.
   List<Payment> get tenantPayments =>
@@ -628,13 +625,15 @@ class AppState extends ChangeNotifier {
   /// Rent collection as spreadsheet-ready CSV (newest first, like the UI).
   String paymentsCsv() {
     String cell(String value) => '"${value.replaceAll('"', '""')}"';
-    final rows = <String>['Receipt,Tenant,Month,Amount,Status,Due date,Paid date,Method'];
+    final rows = <String>['Receipt,Tenant,Month,Amount,Collected,Balance,Status,Due date,Paid date,Method'];
     for (final p in payments) {
       rows.add([
         p.id,
         tenantName(p.tenantId),
         formatMonth(p.period),
         '${p.amount}',
+        '${p.collected}',
+        '${p.balance}',
         p.displayStatus,
         formatFullDate(p.dueDate),
         p.paidDate == null ? '' : formatFullDate(p.paidDate!),
@@ -644,16 +643,20 @@ class AppState extends ChangeNotifier {
     return rows.join('\n');
   }
 
-  /// Creates this month's Due payment for every tenant who doesn't have one
-  /// (new tenants join at their room's full rent — no proration yet).
-  /// Deterministic ids make it idempotent. Returns true if anything was added.
-  bool generateMonthlyDues() {
+  /// Creates this month's Due payment for tenants who don't already have a
+  /// payment row for the month (any status counts, so a partial or paid entry
+  /// blocks a duplicate). Deterministic ids keep it idempotent across devices.
+  /// Pass [onlyTenantId] to generate a single tenant's due (used for tenant
+  /// sessions, which display but don't persist owner-wide data).
+  /// Returns true if anything was added.
+  bool generateMonthlyDues({String? onlyTenantId}) {
     final now = DateTime.now();
     final period = DateTime(now.year, now.month);
     final fifth = DateTime(now.year, now.month, 5);
     final dueDate = now.isBefore(fifth) ? fifth : now.add(const Duration(days: 3));
     var added = false;
     for (final tenant in tenants) {
+      if (onlyTenantId != null && tenant.id != onlyTenantId) continue;
       final exists = payments.any((p) =>
           p.tenantId == tenant.id && p.period.year == period.year && p.period.month == period.month);
       if (exists) continue;
@@ -669,10 +672,23 @@ class AppState extends ChangeNotifier {
     return added;
   }
 
+  /// Ensures the current month's dues exist at app startup, for every role.
+  /// Managers own the data and persist it; a tenant session only materialises
+  /// its own due in memory (for display) and never writes owner-wide rows.
+  Future<void> _ensureMonthlyDuesAtStartup() async {
+    if (role == UserRole.tenant) {
+      if (generateMonthlyDues(onlyTenantId: currentTenantId)) notifyListeners();
+    } else if (generateMonthlyDues()) {
+      await _persist({'payments'});
+    }
+  }
+
   void payRent(String id, String method) {
     final i = payments.indexWhere((p) => p.id == id);
     if (i == -1) return;
-    final paid = payments[i] = payments[i].copyWith(status: PaymentStatus.paid, paidDate: DateTime.now(), method: method);
+    // Paying rent settles the whole balance (partial or not) in one go.
+    final paid = payments[i] = payments[i].copyWith(
+        status: PaymentStatus.paid, paidAmount: payments[i].amount, paidDate: DateTime.now(), method: method);
     final pgId = _pgIdForTenant(paid.tenantId);
     // Managers see the income; the paying tenant gets a private confirmation.
     _notify('Rent received', '${inr(paid.amount)} received from ${tenantName(paid.tenantId)}.', NotificationType.payment,
@@ -682,19 +698,58 @@ class AppState extends ChangeNotifier {
     _persist({'payments', 'notifications'});
   }
 
+  /// Records money received from a tenant. When an unsettled due exists for
+  /// the current month it is settled in place (fully -> paid, otherwise
+  /// -> partial), so no duplicate row is created. Only advance payments,
+  /// adjustments, or payments with no matching due create a new row.
   void recordPayment({required String tenantId, required int amount, required String method}) {
+    if (amount <= 0) return;
     final now = DateTime.now();
-    final payment = Payment(
-      id: _id('pay'), tenantId: tenantId, period: DateTime(now.year, now.month),
-      amount: amount, status: PaymentStatus.paid,
-      dueDate: DateTime(now.year, now.month, 5), paidDate: now, method: method,
-    );
-    payments.insert(0, payment);
+    final period = DateTime(now.year, now.month);
+    final i = payments.indexWhere((p) =>
+        p.tenantId == tenantId && p.status != PaymentStatus.paid &&
+        p.period.year == period.year && p.period.month == period.month);
+
+    final Payment payment;
+    final bool settled;
+    if (i != -1) {
+      final existing = payments[i];
+      final collected = existing.collected + amount;
+      settled = collected >= existing.amount;
+      payment = payments[i] = existing.copyWith(
+        status: settled ? PaymentStatus.paid : PaymentStatus.partial,
+        paidAmount: settled ? existing.amount : collected,
+        paidDate: now, method: method,
+      );
+    } else {
+      // Advance / adjustment / no matching due -> a new standalone paid row.
+      settled = true;
+      payment = Payment(
+        id: _id('pay'), tenantId: tenantId, period: period, amount: amount,
+        status: PaymentStatus.paid, paidAmount: amount,
+        dueDate: DateTime(now.year, now.month, 5), paidDate: now, method: method,
+      );
+      payments.insert(0, payment);
+    }
+
     final pgId = _pgIdForTenant(tenantId);
-    _notify('Payment recorded', '${inr(amount)} from ${tenantName(tenantId)} marked as received.', NotificationType.payment,
-        scope: NotificationScope.managers, pgId: pgId, tenantId: tenantId, relatedEntityId: payment.id);
-    _notify('Rent received', 'Your ${formatMonthName(payment.period)} rent of ${inr(amount)} was recorded.', NotificationType.payment,
-        scope: NotificationScope.tenant, tenantId: tenantId, pgId: pgId, relatedEntityId: payment.id);
+    final name = tenantName(tenantId);
+    _notify(
+      settled ? 'Payment recorded' : 'Part payment recorded',
+      settled
+          ? '${inr(amount)} from $name marked as received.'
+          : '${inr(amount)} from $name · ${inr(payment.balance)} balance remaining.',
+      NotificationType.payment,
+      scope: NotificationScope.managers, pgId: pgId, tenantId: tenantId, relatedEntityId: payment.id,
+    );
+    _notify(
+      settled ? 'Rent received' : 'Part payment received',
+      settled
+          ? 'Your ${formatMonthName(payment.period)} rent of ${inr(payment.amount)} is settled.'
+          : '${inr(amount)} received · ${inr(payment.balance)} still due.',
+      NotificationType.payment,
+      scope: NotificationScope.tenant, tenantId: tenantId, pgId: pgId, relatedEntityId: payment.id,
+    );
     _persist({'payments', 'notifications'});
   }
 

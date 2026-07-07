@@ -2,7 +2,7 @@
 /// to a document store later), linked by IDs — never by display strings.
 library;
 
-enum PaymentStatus { due, paid }
+enum PaymentStatus { due, partial, paid }
 
 enum MaintenanceStatus {
   open('Open'),
@@ -219,6 +219,7 @@ class Payment {
     required this.dueDate,
     this.paidDate,
     this.method,
+    this.paidAmount = 0,
   });
 
   final String id;
@@ -230,14 +231,33 @@ class Payment {
   final DateTime? paidDate;
   final String? method;
 
-  bool get isOverdue => status == PaymentStatus.due && DateTime.now().isAfter(dueDate);
-  String get displayStatus => status == PaymentStatus.paid ? 'Paid' : (isOverdue ? 'Overdue' : 'Due');
+  /// How much has been received when [status] is partial. For paid the full
+  /// [amount] is considered collected; for due, nothing.
+  final int paidAmount;
 
-  Payment copyWith({PaymentStatus? status, DateTime? paidDate, String? method}) => Payment(
+  /// Money actually received against this payment.
+  int get collected => switch (status) {
+        PaymentStatus.paid => amount,
+        PaymentStatus.partial => paidAmount,
+        PaymentStatus.due => 0,
+      };
+
+  /// Money still owed.
+  int get balance => amount - collected;
+
+  bool get isOverdue => status == PaymentStatus.due && DateTime.now().isAfter(dueDate);
+  String get displayStatus => switch (status) {
+        PaymentStatus.paid => 'Paid',
+        PaymentStatus.partial => 'Partial',
+        PaymentStatus.due => isOverdue ? 'Overdue' : 'Due',
+      };
+
+  Payment copyWith({PaymentStatus? status, DateTime? paidDate, String? method, int? paidAmount}) => Payment(
         id: id, tenantId: tenantId, period: period, amount: amount, dueDate: dueDate,
         status: status ?? this.status,
         paidDate: paidDate ?? this.paidDate,
         method: method ?? this.method,
+        paidAmount: paidAmount ?? this.paidAmount,
       );
 
   Map<String, dynamic> toMap() => {
@@ -245,6 +265,7 @@ class Payment {
         'amount': amount, 'status': status.name,
         'dueDate': dueDate.toIso8601String(),
         'paidDate': paidDate?.toIso8601String(), 'method': method,
+        'paidAmount': paidAmount,
       };
 
   static Payment fromMap(Map<String, dynamic> map) => Payment(
@@ -256,6 +277,7 @@ class Payment {
         dueDate: DateTime.parse(map['dueDate'] as String),
         paidDate: map['paidDate'] == null ? null : DateTime.parse(map['paidDate'] as String),
         method: map['method'] as String?,
+        paidAmount: map['paidAmount'] as int? ?? 0,
       );
 }
 

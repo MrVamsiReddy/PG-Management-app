@@ -25,7 +25,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
 
   bool _matches(Payment e) => switch (filter) {
         'Paid' => e.status == PaymentStatus.paid,
-        'Due' => e.status == PaymentStatus.due, // unpaid, overdue included
+        'Due' => e.status != PaymentStatus.paid, // any outstanding: due, overdue or partial
         'Overdue' => e.isOverdue,
         _ => true,
       };
@@ -60,12 +60,12 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
           Card(color: ink, child: Padding(padding: const EdgeInsets.all(22), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(due == null ? 'ALL CAUGHT UP' : 'NEXT PAYMENT', style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1)),
             const SizedBox(height: 10),
-            Text(inr(due?.amount ?? 0), style: Theme.of(context).textTheme.headlineLarge?.copyWith(color: Colors.white)),
+            Text(inr(due?.balance ?? 0), style: Theme.of(context).textTheme.headlineLarge?.copyWith(color: Colors.white)),
             const SizedBox(height: 4),
             Text(
               due == null
                   ? 'No dues pending · Room ${state.currentTenantRoomLabel}'
-                  : '${formatMonth(due.period)} · Due ${formatDay(due.dueDate)} · Room ${state.currentTenantRoomLabel}',
+                  : '${formatMonth(due.period)} · ${due.status == PaymentStatus.partial ? 'Balance after part payment' : 'Due ${formatDay(due.dueDate)}'} · Room ${state.currentTenantRoomLabel}',
               style: const TextStyle(color: Colors.white60),
             ),
           ]))),
@@ -110,7 +110,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
       const SheetHandle(),
       Row(children: [const Icon(Icons.shield_outlined, color: primary), const SizedBox(width: 8), Text('Secure payment', style: Theme.of(context).textTheme.titleLarge), const Spacer(), const Text('PG PAY', style: TextStyle(fontSize: 10, color: primary, fontWeight: FontWeight.w900))]),
       const SizedBox(height: 22),
-      Card(color: ink, child: Padding(padding: const EdgeInsets.all(17), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${formatMonthName(payment.period)} rent', style: const TextStyle(color: Colors.white60)), Text('Room ${state.currentTenantRoomLabel}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700))]), Text(inr(payment.amount), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 22))]))),
+      Card(color: ink, child: Padding(padding: const EdgeInsets.all(17), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${formatMonthName(payment.period)} rent', style: const TextStyle(color: Colors.white60)), Text('Room ${state.currentTenantRoomLabel}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700))]), Text(inr(payment.balance), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 22))]))),
       const FormLabel('Choose payment method'),
       RadioGroup<String>(
         groupValue: selected,
@@ -124,7 +124,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
         state.payRent(payment.id, selected);
         Navigator.pop(context);
         _success(state, payment.id);
-      }, icon: const Icon(Icons.lock_outline), label: Text('Pay ${inr(payment.amount)}')),
+      }, icon: const Icon(Icons.lock_outline), label: Text('Pay ${inr(payment.balance)}')),
       const SizedBox(height: 8), const Text('256-bit encrypted · Powered by demo payments', textAlign: TextAlign.center, style: TextStyle(fontSize: 10, color: Colors.black45)),
     ])));
   }
