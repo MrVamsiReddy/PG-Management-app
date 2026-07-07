@@ -181,12 +181,53 @@ void main() {
     final occupiedBefore = room.occupied;
     final pgBefore = state.pgById(room.pgId)!.occupied;
 
-    state.onboardTenant(name: 'Neha Verma', phone: '90000 00001', roomId: room.id, bed: 'B');
+    final error = state.onboardTenant(name: 'Neha Verma', phone: '90000 00001', roomId: room.id, bed: state.suggestBed(room.id));
 
+    expect(error, isNull);
     expect(state.tenants.first.name, 'Neha Verma');
     expect(state.tenants.first.kyc, KycStatus.pending);
     expect(state.roomById(room.id)!.occupied, occupiedBefore + 1);
     expect(state.pgById(room.pgId)!.occupied, pgBefore + 1);
+  });
+
+  test('onboarding into a full room is blocked and changes nothing', () {
+    final full = state.rooms.firstWhere((r) => r.occupied >= r.beds); // r1 (2/2)
+    final tenantsBefore = state.tenants.length;
+    final occupiedBefore = full.occupied;
+    final pgBefore = state.pgById(full.pgId)!.occupied;
+
+    final error = state.onboardTenant(name: 'Full Roomer', phone: '90000 12345', roomId: full.id, bed: 'C');
+
+    expect(error, isNotNull);
+    expect(error, contains('full'));
+    expect(state.tenants.length, tenantsBefore);
+    expect(state.roomById(full.id)!.occupied, occupiedBefore);
+    expect(state.pgById(full.pgId)!.occupied, pgBefore);
+  });
+
+  test('onboarding onto a taken bed label in the same room is blocked', () {
+    // r2 has Rohan (t3) on bed A and a free bed.
+    final error = state.onboardTenant(name: 'Bed Clash', phone: '90000 22222', roomId: 'r2', bed: 'a');
+    expect(error, isNotNull);
+    expect(error, contains('taken'));
+    expect(state.tenants.any((t) => t.name == 'Bed Clash'), isFalse);
+
+    // A different free bed in the same room succeeds.
+    final ok = state.onboardTenant(name: 'Bed Ok', phone: '90000 22223', roomId: 'r2', bed: state.suggestBed('r2'));
+    expect(ok, isNull);
+    expect(state.tenants.first.name, 'Bed Ok');
+  });
+
+  test('onboarding validates name and phone before touching data', () {
+    final before = state.tenants.length;
+    expect(state.onboardTenant(name: '   ', phone: '90000 00001', roomId: 'r4', bed: 'B'), contains('name'));
+    expect(state.onboardTenant(name: 'Shorty', phone: '12345', roomId: 'r4', bed: 'B'), contains('phone'));
+    expect(state.tenants.length, before); // nothing added on invalid input
+  });
+
+  test('suggestBed returns the first free bed and empty when the room is full', () {
+    expect(state.suggestBed('r2'), 'B'); // A taken by Rohan
+    expect(state.suggestBed('r1'), ''); // full
   });
 
   test('setVisitorStatus updates the visitor and raises a notification', () {

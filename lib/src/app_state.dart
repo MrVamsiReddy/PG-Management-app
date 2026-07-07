@@ -595,23 +595,61 @@ class AppState extends ChangeNotifier {
     _persist({'rooms'});
   }
 
-  void onboardTenant({required String name, required String phone, required String roomId, required String bed, String? kycDoc}) {
+  /// True when the room has a free bed.
+  bool roomHasVacancy(String roomId) {
+    final room = roomById(roomId);
+    return room != null && room.occupied < room.beds;
+  }
+
+  /// Bed labels already taken in a room (upper-cased for comparison).
+  Set<String> takenBeds(String roomId) =>
+      tenants.where((t) => t.roomId == roomId).map((t) => t.bed.trim().toUpperCase()).toSet();
+
+  /// The first free bed letter (A, B, C, …) for a room, or '' if none fit.
+  String suggestBed(String roomId) {
+    final room = roomById(roomId);
+    if (room == null) return '';
+    final taken = takenBeds(roomId);
+    for (var i = 0; i < room.beds; i++) {
+      final label = String.fromCharCode(65 + i); // A, B, C…
+      if (!taken.contains(label)) return label;
+    }
+    return '';
+  }
+
+  /// Onboards a tenant after validating the inputs. Returns a user-facing
+  /// error message, or null on success. Blocks full rooms and duplicate bed
+  /// labels, and keeps room/property occupancy in step.
+  String? onboardTenant({required String name, required String phone, required String roomId, required String bed, String? kycDoc}) {
+    final cleanName = name.trim();
+    final cleanPhone = phone.trim();
+    final cleanBed = bed.trim();
+    if (cleanName.isEmpty) return 'Enter the tenant\'s name.';
+    if (cleanPhone.replaceAll(RegExp(r'[^0-9]'), '').length < 10) return 'Enter a valid 10-digit phone number.';
+    if (cleanBed.isEmpty) return 'Enter a bed label.';
+
+    final i = rooms.indexWhere((r) => r.id == roomId);
+    if (i == -1) return 'Select a room.';
+    final room = rooms[i];
+    if (room.occupied >= room.beds) return 'Room ${room.number} is full.';
+    if (takenBeds(roomId).contains(cleanBed.toUpperCase())) {
+      return 'Bed $cleanBed is already taken in room ${room.number}.';
+    }
+
     tenants.insert(0, Tenant(
-      id: _id('t'), name: name, phone: phone, roomId: roomId, bed: bed,
+      id: _id('t'), name: cleanName, phone: cleanPhone, roomId: roomId, bed: cleanBed,
       kyc: KycStatus.pending, agreement: AgreementStatus.awaitingSign, joinDate: DateTime.now(),
       kycDoc: kycDoc,
     ));
-    final i = rooms.indexWhere((r) => r.id == roomId);
-    if (i != -1 && rooms[i].occupied < rooms[i].beds) {
-      rooms[i] = rooms[i].copyWith(occupied: rooms[i].occupied + 1);
-      final p = pgs.indexWhere((e) => e.id == rooms[i].pgId);
-      if (p != -1 && pgs[p].occupied < pgs[p].beds) {
-        pgs[p] = pgs[p].copyWith(occupied: pgs[p].occupied + 1);
-      }
+    rooms[i] = room.copyWith(occupied: room.occupied + 1);
+    final p = pgs.indexWhere((e) => e.id == room.pgId);
+    if (p != -1 && pgs[p].occupied < pgs[p].beds) {
+      pgs[p] = pgs[p].copyWith(occupied: pgs[p].occupied + 1);
     }
     // The new tenant's first due appears immediately in rent collection.
     generateMonthlyDues();
     _persist({'tenants', 'rooms', 'pgs', 'payments'});
+    return null;
   }
 
   /// The current tenant's next unsettled payment (due or partially paid).

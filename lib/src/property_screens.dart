@@ -328,43 +328,105 @@ class _TenantsScreenState extends State<TenantsScreen> {
       );
 
   void _onboard(BuildContext context, AppState state) {
+    final messenger = ScaffoldMessenger.of(context);
     if (state.pgRooms.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Add a room in ${state.activePg?.name ?? 'this property'} first.')));
+      messenger.showSnackBar(SnackBar(content: Text('Add a room in ${state.activePg?.name ?? 'this property'} first.')));
       return;
     }
+    final available = state.pgRooms.where((r) => r.occupied < r.beds).toList();
+    if (available.isEmpty) {
+      messenger.showSnackBar(SnackBar(content: Text('Every room in ${state.activePg?.name ?? 'this property'} is full. Add a room or free a bed first.')));
+      return;
+    }
+
+    final formKey = GlobalKey<FormState>();
     final name = TextEditingController();
     final phone = TextEditingController();
-    final bed = TextEditingController(text: 'A');
-    var roomId = state.pgRooms.first.id;
+    var roomId = available.first.id;
+    final bed = TextEditingController(text: state.suggestBed(roomId));
     String? kycDoc;
-    showAppSheet(context, StatefulBuilder(builder: (context, setModalState) => SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      const SheetHandle(), Text('Onboard tenant', style: Theme.of(context).textTheme.headlineMedium),
-      const SizedBox(height: 6), const Text('Capture details, verify KYC and send the rental agreement.'),
-      const FormLabel('Full name'), TextField(controller: name),
-      const FormLabel('Phone number'), TextField(controller: phone, keyboardType: TextInputType.phone),
-      const FormLabel('Room'),
-      DropdownButtonFormField<String>(
-        initialValue: roomId,
-        items: state.pgRooms.map((r) => DropdownMenuItem(value: r.id, child: Text('Room ${r.number} · ${r.type} · ${r.beds - r.occupied} free'))).toList(),
-        onChanged: (v) => setModalState(() => roomId = v!),
+
+    showAppSheet(context, StatefulBuilder(builder: (context, setModalState) => SingleChildScrollView(
+      child: Form(
+        key: formKey,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          const SheetHandle(), Text('Onboard tenant', style: Theme.of(context).textTheme.headlineMedium),
+          const SizedBox(height: 6), const Text('Capture details, verify KYC and send the rental agreement.'),
+          const FormLabel('Full name'),
+          TextFormField(
+            controller: name,
+            textCapitalization: TextCapitalization.words,
+            validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter the tenant\'s name' : null,
+          ),
+          const FormLabel('Phone number'),
+          TextFormField(
+            controller: phone,
+            keyboardType: TextInputType.phone,
+            validator: (v) => (v == null || v.replaceAll(RegExp(r'[^0-9]'), '').length < 10) ? 'Enter a valid 10-digit number' : null,
+          ),
+          const FormLabel('Room'),
+          DropdownButtonFormField<String>(
+            initialValue: roomId,
+            // Full rooms are shown but disabled so the owner sees the whole PG.
+            items: state.pgRooms.map((r) {
+              final free = r.beds - r.occupied;
+              final full = free <= 0;
+              return DropdownMenuItem(
+                value: r.id,
+                enabled: !full,
+                child: Text(
+                  'Room ${r.number} · ${r.type} · ${full ? 'Full' : '$free free'}',
+                  style: full ? const TextStyle(color: Colors.black38) : null,
+                ),
+              );
+            }).toList(),
+            onChanged: (v) => setModalState(() {
+              roomId = v!;
+              bed.text = state.suggestBed(roomId); // pre-fill the next free bed
+            }),
+          ),
+          const FormLabel('Bed label'),
+          TextFormField(
+            controller: bed,
+            textCapitalization: TextCapitalization.characters,
+            decoration: const InputDecoration(hintText: 'e.g. B'),
+            validator: (v) {
+              final b = (v ?? '').trim();
+              if (b.isEmpty) return 'Enter a bed label';
+              if (state.takenBeds(roomId).contains(b.toUpperCase())) return 'That bed is already taken in this room';
+              return null;
+            },
+          ),
+          const FormLabel('Identity document'),
+          OutlinedButton.icon(
+            onPressed: () async {
+              final picked = await pickImageBase64(context);
+              if (picked != null) setModalState(() => kycDoc = picked);
+            },
+            icon: Icon(kycDoc == null ? Icons.upload_file_outlined : Icons.check_circle_outline),
+            label: Text(kycDoc == null ? 'Upload Aadhaar / passport' : 'Document attached · tap to change'),
+          ),
+          const FormLabel('Rental agreement'),
+          SwitchListTile(contentPadding: EdgeInsets.zero, value: true, onChanged: (_) {}, title: const Text('Send e-sign request'), subtitle: const Text('Tenant receives a secure signing link')),
+          const SizedBox(height: 16),
+          FilledButton(onPressed: () {
+            if (!formKey.currentState!.validate()) return;
+            if (kycDoc == null) {
+              messenger.showSnackBar(const SnackBar(content: Text('Upload the identity document to continue.')));
+              return;
+            }
+            final error = state.onboardTenant(name: name.text, phone: phone.text, roomId: roomId, bed: bed.text, kycDoc: kycDoc);
+            if (error != null) {
+              messenger.showSnackBar(SnackBar(content: Text(error)));
+              return;
+            }
+            Navigator.pop(context);
+            messenger.showSnackBar(SnackBar(content: Text('${name.text.trim()} onboarded to room ${state.roomNumber(roomId)}.')));
+          }, child: const Text('Create & send agreement')),
+        ]),
       ),
-      const FormLabel('Bed label'), TextField(controller: bed, decoration: const InputDecoration(hintText: 'e.g. B')),
-      const FormLabel('Identity document'),
-      OutlinedButton.icon(
-        onPressed: () async {
-          final picked = await pickImageBase64(context);
-          if (picked != null) setModalState(() => kycDoc = picked);
-        },
-        icon: Icon(kycDoc == null ? Icons.upload_file_outlined : Icons.check_circle_outline),
-        label: Text(kycDoc == null ? 'Upload Aadhaar / passport' : 'Document attached · tap to change'),
-      ),
-      const FormLabel('Rental agreement'), SwitchListTile(contentPadding: EdgeInsets.zero, value: true, onChanged: (_) {}, title: const Text('Send e-sign request'), subtitle: const Text('Tenant receives a secure signing link')),
-      const SizedBox(height: 16), FilledButton(onPressed: () {
-        if (name.text.trim().isEmpty || phone.text.trim().isEmpty) return;
-        state.onboardTenant(name: name.text.trim(), phone: phone.text.trim(), roomId: roomId, bed: bed.text.trim().isEmpty ? 'A' : bed.text.trim(), kycDoc: kycDoc);
-        Navigator.pop(context);
-      }, child: const Text('Create & send agreement')),
-    ]))));
+    )));
   }
 
   void _agreement(BuildContext context, AppState state, Tenant tenant) => showAppSheet(context, Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
