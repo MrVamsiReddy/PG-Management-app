@@ -162,7 +162,6 @@ class ProfileScreen extends StatelessWidget {
           child: Column(children: [
             _profileTile(Icons.person_outline, 'Personal details', 'Name, phone, email'),
             _profileTile(Icons.verified_user_outlined, 'KYC & documents', state.role == UserRole.tenant ? 'Aadhaar ${state.currentTenant?.kyc.label.toLowerCase() ?? 'pending'}' : 'Business details'),
-            _profileTile(Icons.description_outlined, 'Rental agreement', state.role == UserRole.tenant ? (state.currentTenant?.agreement == AgreementStatus.signed ? 'Signed · View copy' : 'Awaiting signature') : 'Templates and e-signatures'),
             if (state.cloudMode)
               _profileTile(Icons.lock_outline, 'Change password', 'Update your account password', onTap: () => _changePassword(context, state)),
             _profileTile(Icons.settings_outlined, 'App settings', 'Notifications, security, language'),

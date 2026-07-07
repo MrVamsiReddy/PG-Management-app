@@ -179,19 +179,18 @@ class DashboardScreen extends StatelessWidget {
   }
 
   Widget _quickActions(BuildContext context, UserRole role) {
-    // Rent, requests and visitors are tenant tabs now, so the shortcuts
-    // surface the modules that no longer have their own tab.
+    // Shortcuts to the most common tasks per role.
     final actions = role == UserRole.tenant
         ? [
             ('Pay rent', Icons.account_balance_wallet_outlined, const PaymentsScreen()),
-            ('My bill', Icons.electric_meter_outlined, const UtilitiesScreen()),
+            ('Raise issue', Icons.build_outlined, const MaintenanceScreen()),
+            ('Add visitor', Icons.badge_outlined, const VisitorsScreen()),
             ('Updates', Icons.campaign_outlined, const AnnouncementsScreen()),
-            ('Check in', Icons.how_to_reg_outlined, const AttendanceScreen()),
           ]
         : [
             ('Add tenant', Icons.person_add_alt_1_outlined, const TenantsScreen()),
             ('Record rent', Icons.payments_outlined, const PaymentsScreen()),
-            ('Add reading', Icons.electric_meter_outlined, const UtilitiesScreen()),
+            ('Maintenance', Icons.build_outlined, const MaintenanceScreen()),
             ('Broadcast', Icons.campaign_outlined, const AnnouncementsScreen()),
           ];
     return Row(

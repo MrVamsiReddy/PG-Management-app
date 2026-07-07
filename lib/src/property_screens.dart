@@ -237,13 +237,13 @@ class _TenantsScreenState extends State<TenantsScreen> {
             children: [Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 16), child: Column(children: [
               const Divider(),
               _detail(Icons.calendar_today_outlined, 'Joined', formatFullDate(tenant.joinDate)),
-              _detail(Icons.description_outlined, 'Agreement', tenant.agreement.label),
+              _detail(Icons.verified_user_outlined, 'KYC', tenant.kyc.label),
               const SizedBox(height: 10),
               if (tenant.kycDoc != null) ...[
                 SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () => _viewKycDoc(context, tenant), icon: const Icon(Icons.badge_outlined), label: const Text('View KYC document'))),
                 const SizedBox(height: 8),
               ],
-              Row(children: [Expanded(child: OutlinedButton.icon(onPressed: () => _call(tenant.phone), icon: const Icon(Icons.call_outlined), label: const Text('Call'))), const SizedBox(width: 8), Expanded(child: FilledButton.icon(onPressed: () => _agreement(context, state, tenant), icon: const Icon(Icons.draw_outlined), label: const Text('Agreement')))]),
+              OutlinedButton.icon(onPressed: () => _call(tenant.phone), icon: const Icon(Icons.call_outlined), label: const Text('Call tenant')),
               if (state.cloudMode) ...[
                 const SizedBox(height: 8),
                 SizedBox(width: double.infinity, child: FilledButton.tonalIcon(onPressed: () => _invite(context, state, tenant), icon: const Icon(Icons.send_outlined), label: const Text('Invite to app'))),
@@ -352,7 +352,7 @@ class _TenantsScreenState extends State<TenantsScreen> {
         autovalidateMode: AutovalidateMode.onUserInteraction,
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           const SheetHandle(), Text('Onboard tenant', style: Theme.of(context).textTheme.headlineMedium),
-          const SizedBox(height: 6), const Text('Capture details, verify KYC and send the rental agreement.'),
+          const SizedBox(height: 6), const Text('Capture details and verify KYC to add a tenant to a room.'),
           const FormLabel('Full name'),
           TextFormField(
             controller: name,
@@ -407,8 +407,6 @@ class _TenantsScreenState extends State<TenantsScreen> {
             icon: Icon(kycDoc == null ? Icons.upload_file_outlined : Icons.check_circle_outline),
             label: Text(kycDoc == null ? 'Upload Aadhaar / passport' : 'Document attached · tap to change'),
           ),
-          const FormLabel('Rental agreement'),
-          SwitchListTile(contentPadding: EdgeInsets.zero, value: true, onChanged: (_) {}, title: const Text('Send e-sign request'), subtitle: const Text('Tenant receives a secure signing link')),
           const SizedBox(height: 16),
           FilledButton(onPressed: () {
             if (!formKey.currentState!.validate()) return;
@@ -423,19 +421,9 @@ class _TenantsScreenState extends State<TenantsScreen> {
             }
             Navigator.pop(context);
             messenger.showSnackBar(SnackBar(content: Text('${name.text.trim()} onboarded to room ${state.roomNumber(roomId)}.')));
-          }, child: const Text('Create & send agreement')),
+          }, child: const Text('Onboard tenant')),
         ]),
       ),
     )));
   }
-
-  void _agreement(BuildContext context, AppState state, Tenant tenant) => showAppSheet(context, Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-    const SheetHandle(),
-    const Icon(Icons.verified_outlined, color: primary, size: 54),
-    const SizedBox(height: 12), Text('Digital rental agreement', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineMedium),
-    const SizedBox(height: 8), Text('${tenant.name} · Room ${state.tenantRoomLabel(tenant)}', textAlign: TextAlign.center),
-    const SizedBox(height: 22),
-    const Card(child: Padding(padding: EdgeInsets.all(16), child: Row(children: [Icon(Icons.description_outlined), SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Rental_Agreement.pdf', style: TextStyle(fontWeight: FontWeight.w700)), Text('12 months · E-stamped')]))]))),
-    const SizedBox(height: 14), FilledButton.icon(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.draw_outlined), label: Text(tenant.agreement == AgreementStatus.signed ? 'View signed copy' : 'Send signing reminder')),
-  ]));
 }

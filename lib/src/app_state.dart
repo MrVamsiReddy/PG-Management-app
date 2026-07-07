@@ -434,19 +434,9 @@ class AppState extends ChangeNotifier {
     return maintenance.where((m) => ids.contains(m.roomId)).toList();
   }
 
-  List<UtilityBill> get pgUtilities {
-    final ids = _pgRoomIds;
-    return utilities.where((u) => ids.contains(u.roomId)).toList();
-  }
-
   List<Visitor> get pgVisitors {
     final ids = _pgTenantIds;
     return visitors.where((v) => ids.contains(v.tenantId)).toList();
-  }
-
-  List<AttendanceRecord> get pgAttendance {
-    final ids = _pgTenantIds;
-    return attendance.where((a) => ids.contains(a.tenantId)).toList();
   }
 
   int get pgDueAmount => pgPayments.fold(0, (sum, e) => sum + e.balance);
@@ -860,39 +850,10 @@ class AppState extends ChangeNotifier {
     _persist({'announcements', 'notifications'});
   }
 
-  void addUtilityBill({required String roomId, required int previous, required int current}) {
-    final bill = UtilityBill(
-      id: _id('u'), roomId: roomId, previous: previous, current: current,
-      rate: utilityRate, status: BillStatus.generated,
-    );
-    utilities.insert(0, bill);
-    // Each occupant of the room is told their bill is ready — no one else.
-    for (final tenant in _tenantsInRoom(roomId)) {
-      _notify('Electricity bill ready', 'Room ${roomNumber(roomId)} · your share is due with rent.', NotificationType.payment,
-          scope: NotificationScope.tenant, tenantId: tenant.id, pgId: _pgIdForRoom(roomId), relatedEntityId: bill.id);
-    }
-    _persist({'utilities', 'notifications'});
-  }
-
-  AttendanceRecord? get todayAttendance =>
-      _firstOrNull(attendance, (a) => a.tenantId == currentTenantId && isSameDay(a.checkIn, DateTime.now()));
-
-  bool get isCheckedIn => todayAttendance?.isIn ?? false;
-
-  void toggleCheckIn() {
-    final record = todayAttendance;
-    final checkingIn = record == null || !record.isIn;
-    if (checkingIn) {
-      attendance.insert(0, AttendanceRecord(id: _id('at'), tenantId: currentTenantId, checkIn: DateTime.now()));
-    } else {
-      final i = attendance.indexWhere((a) => a.id == record.id);
-      attendance[i] = record.copyWith(checkOut: DateTime.now());
-    }
-    // Managers keep an attendance log; tenants act, they don't need telling.
-    _notify('Attendance', '${tenantName(currentTenantId)} checked ${checkingIn ? 'in' : 'out'}.', NotificationType.attendance,
-        scope: NotificationScope.managers, pgId: _pgIdForTenant(currentTenantId), tenantId: currentTenantId);
-    _persist({'attendance', 'notifications'});
-  }
+  // Utility billing and attendance were removed from the product. Their data
+  // models, seed rows and repositories are retained internally (loaded and
+  // persisted) so existing stores keep working, but no UI or action exposes
+  // them and nothing new is written.
 
   // ---- Seed data ----
 

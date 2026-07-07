@@ -259,27 +259,6 @@ void main() {
     expect(state.notifications.first.type, NotificationType.announcement);
   });
 
-  test('toggleCheckIn records a check-in and then a check-out for today', () {
-    state.attendance.clear();
-    expect(state.todayAttendance, isNull);
-
-    state.toggleCheckIn();
-    expect(state.isCheckedIn, isTrue);
-    expect(state.todayAttendance!.checkOut, isNull);
-
-    state.toggleCheckIn();
-    expect(state.isCheckedIn, isFalse);
-    expect(state.todayAttendance!.checkOut, isNotNull);
-  });
-
-  test('utility bill amounts derive from units and the stored rate', () {
-    state.addUtilityBill(roomId: state.rooms.first.id, previous: 100, current: 150);
-    final bill = state.utilities.first;
-    expect(bill.units, 50);
-    expect(bill.amount, 50 * AppState.utilityRate);
-    expect(bill.status, BillStatus.generated);
-  });
-
   test('notifications can be marked read individually and in bulk', () {
     final unread = state.notifications.firstWhere((n) => !n.read);
     state.markNotificationRead(unread.id);
@@ -516,6 +495,34 @@ void main() {
     expect(find.text('Onboard'), findsNothing);
   });
 
+  testWidgets('utility billing and attendance are gone from the module grid', (tester) async {
+    state.login(UserRole.owner);
+    await tester.pumpWidget(AppScope(
+      notifier: state,
+      child: MaterialApp(theme: buildAppTheme(), home: const ModulesHubScreen()),
+    ));
+    await tester.pump();
+    expect(find.text('Utility billing'), findsNothing);
+    expect(find.text('Attendance'), findsNothing);
+    // Surviving modules still render.
+    expect(find.text('Maintenance'), findsOneWidget);
+    expect(find.text('Announcements'), findsOneWidget);
+  });
+
+  testWidgets('rental agreement is gone from the tenant details and profile', (tester) async {
+    state.login(UserRole.owner);
+    await tester.pumpWidget(AppScope(
+      notifier: state,
+      child: MaterialApp(theme: buildAppTheme(), home: const TenantsScreen()),
+    ));
+    await tester.pump();
+    await tester.tap(find.text('Aarav Mehta')); // expand the first tenant
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Agreement'), findsNothing);
+    expect(find.textContaining('e-sign'), findsNothing);
+    expect(find.text('Call tenant'), findsOneWidget);
+  });
+
   // Renders the dashboard alone under a real Navigator so tile taps can
   // push their destination screens.
   Widget dashboardHarness() => AppScope(
@@ -575,9 +582,9 @@ void main() {
     await tester.pageBack();
     await settle(tester);
 
-    await tester.tap(tileFor(find.text('My bill')));
+    await tester.tap(tileFor(find.text('Raise issue')));
     await settle(tester);
-    expect(find.text('Utility billing'), findsOneWidget);
+    expect(find.text('My requests'), findsOneWidget); // Maintenance (tenant)
   });
 
   testWidgets('signing in from the auth screen opens the home shell', (tester) async {

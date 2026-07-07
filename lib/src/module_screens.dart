@@ -23,13 +23,11 @@ class ModulesHubScreen extends StatelessWidget {
     final modules = <({String title, String subtitle, IconData icon, Widget page, Color color})>[
       if (manager) (title: 'PG properties', subtitle: 'Listings & amenities', icon: Icons.apartment_outlined, page: const PgListingsScreen(), color: primary),
       if (manager) (title: 'Rooms & beds', subtitle: 'Floors & occupancy', icon: Icons.bed_outlined, page: const RoomsScreen(), color: const Color(0xFF3478C7)),
-      if (manager) (title: 'Tenants', subtitle: 'KYC & agreements', icon: Icons.groups_outlined, page: const TenantsScreen(), color: const Color(0xFF7656B1)),
+      if (manager) (title: 'Tenants', subtitle: 'KYC & details', icon: Icons.groups_outlined, page: const TenantsScreen(), color: const Color(0xFF7656B1)),
       (title: 'Rent & payments', subtitle: manager ? 'Collections & dues' : 'Pay rent & receipts', icon: Icons.account_balance_wallet_outlined, page: const PaymentsScreen(), color: coral),
       (title: 'Maintenance', subtitle: 'Requests & tracking', icon: Icons.build_outlined, page: const MaintenanceScreen(), color: warning),
       (title: 'Visitors', subtitle: 'Logs & approvals', icon: Icons.badge_outlined, page: const VisitorsScreen(), color: const Color(0xFF2B9A91)),
       (title: 'Announcements', subtitle: manager ? 'Broadcast updates' : 'Community updates', icon: Icons.campaign_outlined, page: const AnnouncementsScreen(), color: const Color(0xFFB65B87)),
-      (title: 'Attendance', subtitle: 'Daily check-in/out', icon: Icons.how_to_reg_outlined, page: const AttendanceScreen(), color: const Color(0xFF3E7B50)),
-      (title: 'Utility billing', subtitle: 'Meters & split bills', icon: Icons.electric_meter_outlined, page: const UtilitiesScreen(), color: const Color(0xFFCF7D28)),
       (title: 'Notifications', subtitle: 'All recent activity', icon: Icons.notifications_none, page: const NotificationsScreen(), color: const Color(0xFF536179)),
     ];
     return ListView(
