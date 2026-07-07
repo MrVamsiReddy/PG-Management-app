@@ -1,12 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'src/app_state.dart';
 import 'src/auth_screen.dart';
 import 'src/home_shell.dart';
+import 'src/l10n.dart';
 import 'src/push.dart';
 import 'src/supabase_config.dart';
 import 'src/theme.dart';
@@ -42,13 +44,23 @@ class PgManagementApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppScope(
       notifier: state,
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: 'PG Management',
-        theme: buildAppTheme(),
-        home: AnimatedBuilder(
-          animation: state,
-          builder: (context, _) => !state.isLoggedIn
+      // Rebuild the whole MaterialApp on state changes so the chosen locale
+      // takes effect app-wide.
+      child: AnimatedBuilder(
+        animation: state,
+        builder: (context, _) => MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: 'PG Management',
+          theme: buildAppTheme(),
+          locale: state.locale,
+          supportedLocales: AppLocalizations.supportedLocales,
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          home: !state.isLoggedIn
               ? const AuthScreen()
               : state.mustChangePassword
                   ? const SetPasswordScreen()

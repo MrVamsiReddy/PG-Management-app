@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 
 import 'app_state.dart';
 import 'dashboard_screen.dart';
+import 'l10n.dart';
 import 'module_screens.dart';
+import 'settings_screen.dart';
 import 'theme.dart';
+import 'widgets.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
@@ -17,37 +20,38 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
+    final l = AppLocalizations.of(context);
     // Each role gets its own navigation: tenants never see management
     // surfaces, admins get a property-centric layout.
     final (pages, destinations) = switch (state.role) {
       UserRole.tenant => (
           const <Widget>[DashboardScreen(), PaymentsScreen(), MaintenanceScreen(), VisitorsScreen(), ProfileScreen()],
-          const <NavigationDestination>[
-            NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'Home'),
-            NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), selectedIcon: Icon(Icons.account_balance_wallet), label: 'My Rent'),
-            NavigationDestination(icon: Icon(Icons.build_outlined), selectedIcon: Icon(Icons.build), label: 'My Requests'),
-            NavigationDestination(icon: Icon(Icons.badge_outlined), selectedIcon: Icon(Icons.badge), label: 'Visitors'),
-            NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
+          <NavigationDestination>[
+            NavigationDestination(icon: const Icon(Icons.home_outlined), selectedIcon: const Icon(Icons.home_rounded), label: l.t('nav.home')),
+            NavigationDestination(icon: const Icon(Icons.account_balance_wallet_outlined), selectedIcon: const Icon(Icons.account_balance_wallet), label: l.t('nav.myRent')),
+            NavigationDestination(icon: const Icon(Icons.build_outlined), selectedIcon: const Icon(Icons.build), label: l.t('nav.myRequests')),
+            NavigationDestination(icon: const Icon(Icons.badge_outlined), selectedIcon: const Icon(Icons.badge), label: l.t('nav.visitors')),
+            NavigationDestination(icon: const Icon(Icons.person_outline), selectedIcon: const Icon(Icons.person), label: l.t('nav.profile')),
           ],
         ),
       UserRole.admin => (
           const <Widget>[DashboardScreen(), PgListingsScreen(), ModulesHubScreen(), PaymentsScreen(), ProfileScreen()],
-          const <NavigationDestination>[
-            NavigationDestination(icon: Icon(Icons.space_dashboard_outlined), selectedIcon: Icon(Icons.space_dashboard_rounded), label: 'Dashboard'),
-            NavigationDestination(icon: Icon(Icons.apartment_outlined), selectedIcon: Icon(Icons.apartment_rounded), label: 'Properties'),
-            NavigationDestination(icon: Icon(Icons.grid_view_outlined), selectedIcon: Icon(Icons.grid_view_rounded), label: 'Operations'),
-            NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), selectedIcon: Icon(Icons.account_balance_wallet), label: 'Rent'),
-            NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
+          <NavigationDestination>[
+            NavigationDestination(icon: const Icon(Icons.space_dashboard_outlined), selectedIcon: const Icon(Icons.space_dashboard_rounded), label: l.t('nav.dashboard')),
+            NavigationDestination(icon: const Icon(Icons.apartment_outlined), selectedIcon: const Icon(Icons.apartment_rounded), label: l.t('nav.properties')),
+            NavigationDestination(icon: const Icon(Icons.grid_view_outlined), selectedIcon: const Icon(Icons.grid_view_rounded), label: l.t('nav.operations')),
+            NavigationDestination(icon: const Icon(Icons.account_balance_wallet_outlined), selectedIcon: const Icon(Icons.account_balance_wallet), label: l.t('nav.rent')),
+            NavigationDestination(icon: const Icon(Icons.person_outline), selectedIcon: const Icon(Icons.person), label: l.t('nav.profile')),
           ],
         ),
       UserRole.owner => (
           const <Widget>[DashboardScreen(), ModulesHubScreen(), PaymentsScreen(), MaintenanceScreen(), ProfileScreen()],
-          const <NavigationDestination>[
-            NavigationDestination(icon: Icon(Icons.space_dashboard_outlined), selectedIcon: Icon(Icons.space_dashboard_rounded), label: 'Dashboard'),
-            NavigationDestination(icon: Icon(Icons.grid_view_outlined), selectedIcon: Icon(Icons.grid_view_rounded), label: 'Manage'),
-            NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), selectedIcon: Icon(Icons.account_balance_wallet), label: 'Rent'),
-            NavigationDestination(icon: Icon(Icons.build_outlined), selectedIcon: Icon(Icons.build), label: 'Requests'),
-            NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
+          <NavigationDestination>[
+            NavigationDestination(icon: const Icon(Icons.space_dashboard_outlined), selectedIcon: const Icon(Icons.space_dashboard_rounded), label: l.t('nav.dashboard')),
+            NavigationDestination(icon: const Icon(Icons.grid_view_outlined), selectedIcon: const Icon(Icons.grid_view_rounded), label: l.t('nav.manage')),
+            NavigationDestination(icon: const Icon(Icons.account_balance_wallet_outlined), selectedIcon: const Icon(Icons.account_balance_wallet), label: l.t('nav.rent')),
+            NavigationDestination(icon: const Icon(Icons.build_outlined), selectedIcon: const Icon(Icons.build), label: l.t('nav.requests')),
+            NavigationDestination(icon: const Icon(Icons.person_outline), selectedIcon: const Icon(Icons.person), label: l.t('nav.profile')),
           ],
         ),
     };
@@ -141,6 +145,8 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
+    final l = AppLocalizations.of(context);
+    final tenant = state.role == UserRole.tenant;
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
       children: [
@@ -154,29 +160,33 @@ class ProfileScreen extends StatelessWidget {
         Center(child: Text(state.displayName, style: Theme.of(context).textTheme.titleLarge)),
         if (state.accountEmail != null)
           Center(child: Text(state.accountEmail!, style: const TextStyle(fontSize: 12, color: Colors.black45))),
-        Center(child: Text(state.role == UserRole.tenant
+        Center(child: Text(tenant
             ? '${state.role.label} · Room ${state.currentTenantRoomLabel} · ${state.pgNameForTenant(state.currentTenantId)}'
             : '${state.role.label} · ${state.pgs.isEmpty ? 'PG Management' : state.pgs.first.name}')),
         const SizedBox(height: 28),
         Card(
+          clipBehavior: Clip.antiAlias,
           child: Column(children: [
-            _profileTile(Icons.person_outline, 'Personal details', 'Name, phone, email'),
-            _profileTile(Icons.verified_user_outlined, 'KYC & documents', state.role == UserRole.tenant ? 'Aadhaar ${state.currentTenant?.kyc.label.toLowerCase() ?? 'pending'}' : 'Business details'),
-            if (state.cloudMode)
-              _profileTile(Icons.lock_outline, 'Change password', 'Update your account password', onTap: () => _changePassword(context, state)),
-            _profileTile(Icons.settings_outlined, 'App settings', 'Notifications, security, language'),
-            _profileTile(Icons.help_outline, 'Help & support', 'FAQs and contact support'),
+            _profileTile(Icons.person_outline, l.t('profile.personal'), state.profilePhone ?? l.t('profile.personalSub'),
+                onTap: () => _editPersonal(context, state, l)),
+            _profileTile(Icons.verified_user_outlined, l.t('profile.kyc'),
+                tenant ? 'Aadhaar ${state.currentTenant?.kyc.label.toLowerCase() ?? 'pending'}' : l.t('profile.businessDetails'),
+                onTap: tenant ? () => _kyc(context, state, l) : null),
+            _profileTile(Icons.settings_outlined, l.t('profile.settings'), l.t('profile.settingsSub'),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()))),
+            _profileTile(Icons.help_outline, l.t('profile.help'), l.t('profile.helpSub'),
+                onTap: () => _help(context, l)),
           ]),
         ),
         const SizedBox(height: 18),
         OutlinedButton.icon(
           onPressed: state.logout,
           icon: const Icon(Icons.logout),
-          label: const Text('Sign out'),
+          label: Text(l.t('common.signOut')),
           style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFFC94444), padding: const EdgeInsets.all(15)),
         ),
         const SizedBox(height: 16),
-        const Center(child: Text('PG Management v1.0 · Local demo', style: TextStyle(fontSize: 11, color: Colors.black38))),
+        const Center(child: Text('PG Management v3.0', style: TextStyle(fontSize: 11, color: Colors.black38))),
       ],
     );
   }
@@ -186,32 +196,82 @@ class ProfileScreen extends StatelessWidget {
         leading: Container(padding: const EdgeInsets.all(9), decoration: BoxDecoration(color: primarySoft, borderRadius: BorderRadius.circular(10)), child: Icon(icon, color: primary, size: 21)),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
         subtitle: Text(subtitle),
-        trailing: const Icon(Icons.chevron_right),
+        trailing: onTap == null ? null : const Icon(Icons.chevron_right),
       );
 
-  void _changePassword(BuildContext context, AppState state) {
-    final password = TextEditingController();
+  void _editPersonal(BuildContext context, AppState state, AppLocalizations l) {
+    final tenant = state.role == UserRole.tenant;
+    final name = TextEditingController(text: state.displayName);
+    final phone = TextEditingController(text: state.profilePhone ?? '');
     final messenger = ScaffoldMessenger.of(context);
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Change password'),
-        content: TextField(
-          controller: password,
-          obscureText: true,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: 'New password (6+ characters)'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
-          FilledButton(onPressed: () async {
-            if (password.text.length < 6) return;
-            final error = await state.changePassword(password.text);
-            if (dialogContext.mounted) Navigator.pop(dialogContext);
-            messenger.showSnackBar(SnackBar(content: Text(error ?? 'Password updated.')));
-          }, child: const Text('Update')),
-        ],
+    showAppSheet(context, StatefulBuilder(builder: (context, _) => Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const SheetHandle(),
+      Text(l.t('profile.personal'), style: Theme.of(context).textTheme.headlineMedium),
+      const FormLabel('Full name'), TextField(controller: name, textCapitalization: TextCapitalization.words),
+      if (tenant) ...[
+        const FormLabel('Phone number'), TextField(controller: phone, keyboardType: TextInputType.phone),
+      ],
+      if (state.accountEmail != null) ...[
+        const FormLabel('Email'), TextField(controller: TextEditingController(text: state.accountEmail), enabled: false),
+      ],
+      const SizedBox(height: 20),
+      FilledButton(onPressed: () async {
+        final error = await state.updatePersonalDetails(name: name.text, phone: tenant ? phone.text : null);
+        if (context.mounted) Navigator.pop(context);
+        messenger.showSnackBar(SnackBar(content: Text(error ?? l.t('settings.saved'))));
+      }, child: Text(l.t('common.save'))),
+    ])));
+  }
+
+  void _kyc(BuildContext context, AppState state, AppLocalizations l) {
+    final doc = state.currentTenant?.kycDoc;
+    final messenger = ScaffoldMessenger.of(context);
+    showAppSheet(context, StatefulBuilder(builder: (context, setSheet) => Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const SheetHandle(),
+      Text(l.t('profile.kyc'), style: Theme.of(context).textTheme.headlineMedium),
+      const SizedBox(height: 8),
+      Text('Aadhaar ${state.currentTenant?.kyc.label.toLowerCase() ?? 'pending'}', style: const TextStyle(color: Colors.black54)),
+      const SizedBox(height: 14),
+      if (doc != null) ...[
+        ClipRRect(borderRadius: BorderRadius.circular(14), child: base64Image(doc, height: 180)),
+        const SizedBox(height: 12),
+      ] else
+        const EmptyState(icon: Icons.badge_outlined, title: 'No document uploaded yet'),
+      OutlinedButton.icon(
+        onPressed: () async {
+          final picked = await pickImageBase64(context);
+          if (picked == null) return;
+          await state.updateKycDoc(picked);
+          if (context.mounted) Navigator.pop(context);
+          messenger.showSnackBar(SnackBar(content: Text(l.t('settings.saved'))));
+        },
+        icon: Icon(doc == null ? Icons.upload_file_outlined : Icons.cached),
+        label: Text(doc == null ? 'Upload document' : 'Replace document'),
       ),
-    );
+    ])));
+  }
+
+  void _help(BuildContext context, AppLocalizations l) {
+    showAppSheet(context, Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const SheetHandle(),
+      Text(l.t('help.title'), style: Theme.of(context).textTheme.headlineMedium),
+      const SizedBox(height: 8),
+      Text(l.t('help.intro'), style: const TextStyle(color: Colors.black54)),
+      const SizedBox(height: 16),
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.mail_outline, color: primary),
+        title: Text(l.t('help.email')),
+        subtitle: const Text('support@pgmanagement.app'),
+      ),
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.call_outlined, color: primary),
+        title: Text(l.t('help.call')),
+        subtitle: const Text('+91 98765 43210'),
+      ),
+      const SizedBox(height: 12),
+      FilledButton(onPressed: () => Navigator.pop(context), child: Text(l.t('common.close'))),
+    ]));
   }
 }

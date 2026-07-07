@@ -3,10 +3,12 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show AuthException, PostgrestException, User, UserAttributes;
 
 import 'format.dart';
+import 'l10n.dart';
 import 'models.dart';
 import 'repositories.dart';
 import 'supabase_config.dart';
 
+export 'l10n.dart' show AppLanguage;
 export 'models.dart';
 
 enum UserRole { owner, tenant, admin }
@@ -76,6 +78,12 @@ class AppState extends ChangeNotifier {
 
   String? _activePgId;
 
+  /// User preferences (persisted locally, survive sign-out).
+  AppLanguage language = AppLanguage.english;
+  bool pushEnabled = true;
+
+  Locale get locale => language.locale;
+
   void _useHiveRepos() {
     _pgRepo = HiveRepository<Pg>(box, 'pgs', fromMap: Pg.fromMap, toMap: (e) => e.toMap());
     _roomRepo = HiveRepository<Room>(box, 'rooms', fromMap: Room.fromMap, toMap: (e) => e.toMap());
@@ -125,6 +133,8 @@ class AppState extends ChangeNotifier {
       isLoggedIn = true;
     }
     _activePgId = box.get('activePgId') as String?;
+    language = AppLanguage.fromCode(box.get('language') as String?);
+    pushEnabled = box.get('pushEnabled') as bool? ?? true;
     await _loadAll();
     if (pgs.isEmpty) {
       _seed();
@@ -410,6 +420,20 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ---- Preferences ----
+
+  void setLanguage(AppLanguage lang) {
+    language = lang;
+    box.put('language', lang.code);
+    notifyListeners();
+  }
+
+  void setPushEnabled(bool value) {
+    pushEnabled = value;
+    box.put('pushEnabled', value);
+    notifyListeners();
+  }
+
   List<Room> get pgRooms {
     final pg = activePg;
     return pg == null ? rooms : rooms.where((r) => r.pgId == pg.id).toList();
@@ -454,10 +478,50 @@ class AppState extends ChangeNotifier {
   }
 
   String get displayName {
+    if (role == UserRole.tenant) return currentTenant?.name ?? _cloudName ?? 'Tenant';
     if (cloudMode) return _cloudName ?? accountEmail?.split('@').first ?? 'Account';
-    return role == UserRole.tenant ? (currentTenant?.name ?? 'Tenant') : ownerName;
+    return box.get('ownerName') as String? ?? ownerName;
   }
   String get initials => displayName.split(' ').where((e) => e.isNotEmpty).map((e) => e[0]).take(2).join();
+
+  /// The phone shown on the profile (tenants have one; managers may not).
+  String? get profilePhone => role == UserRole.tenant ? currentTenant?.phone : null;
+
+  /// Updates the signed-in person's name (and a tenant's phone). Returns a
+  /// user-facing error, or null on success.
+  Future<String?> updatePersonalDetails({required String name, String? phone}) async {
+    final cleanName = name.trim();
+    if (cleanName.isEmpty) return 'Enter your name.';
+    if (role == UserRole.tenant) {
+      final i = tenants.indexWhere((t) => t.id == currentTenantId);
+      if (i != -1) {
+        tenants[i] = tenants[i].copyWith(name: cleanName, phone: (phone ?? tenants[i].phone).trim());
+        _cloudName = cleanName;
+        await _persist({'tenants'});
+        return null;
+      }
+      notifyListeners();
+      return null;
+    }
+    if (cloudMode) {
+      try {
+        await supabaseOrNull!.auth.updateUser(UserAttributes(data: {'full_name': cleanName}));
+      } catch (_) {}
+      _cloudName = cleanName;
+    } else {
+      box.put('ownerName', cleanName);
+    }
+    notifyListeners();
+    return null;
+  }
+
+  /// Attaches/updates the current tenant's KYC document image.
+  Future<void> updateKycDoc(String base64) async {
+    final i = tenants.indexWhere((t) => t.id == currentTenantId);
+    if (i == -1) return;
+    tenants[i] = tenants[i].copyWith(kycDoc: base64);
+    await _persist({'tenants'});
+  }
 
   // ---- Aggregates ----
 
@@ -506,12 +570,13 @@ class AppState extends ChangeNotifier {
     String? tenantId,
     String? pgId,
     String? relatedEntityId,
+    bool push = true,
   }) {
     notifications.insert(0, AppNotification(
       id: _id('n'), title: title, body: body, type: type, createdAt: DateTime.now(),
       roleScope: scope, tenantId: tenantId, pgId: pgId, relatedEntityId: relatedEntityId,
     ));
-    _pushToWorkspace(title, body, scope: scope, tenantId: tenantId);
+    if (push) _pushToWorkspace(title, body, scope: scope, tenantId: tenantId);
   }
 
   /// Fire-and-forget push via the `push` Edge Function. Scope and tenant are
@@ -520,7 +585,7 @@ class AppState extends ChangeNotifier {
   void _pushToWorkspace(String title, String body, {required NotificationScope scope, String? tenantId}) {
     final client = supabaseOrNull;
     final owner = _workspaceOwnerId;
-    if (client == null || !cloudMode || owner == null) return;
+    if (client == null || !cloudMode || owner == null || !pushEnabled) return;
     client.functions.invoke('push', body: {
       'workspaceOwnerId': owner,
       'title': title,
@@ -838,16 +903,30 @@ class AppState extends ChangeNotifier {
     _persist({'visitors', 'notifications'});
   }
 
-  void publishAnnouncement(String title, String body) {
+  /// Publishes an announcement. [pgId] null targets every property (all
+  /// tenants); a value targets that property only. [sendPush] and the global
+  /// [pushEnabled] preference together decide whether a push is attempted.
+  void publishAnnouncement(String title, String body, {String? pgId, bool sendPush = true}) {
     final announcement = Announcement(
       id: _id('a'), title: title, body: body,
-      author: '$ownerName, ${role.label}', postedAt: DateTime.now(),
+      author: '$ownerName, ${role.label}', postedAt: DateTime.now(), pgId: pgId,
     );
     announcements.insert(0, announcement);
-    // Announcements are for the whole workspace.
     _notify('New announcement', title, NotificationType.announcement,
-        scope: NotificationScope.everyone, relatedEntityId: announcement.id);
+        scope: NotificationScope.everyone, pgId: pgId, relatedEntityId: announcement.id,
+        push: sendPush);
     _persist({'announcements', 'notifications'});
+  }
+
+  /// Announcements the current session may see: workspace-wide ones plus any
+  /// targeted at the relevant property. Tenants only ever see their own PG's.
+  List<Announcement> get visibleAnnouncements {
+    if (role == UserRole.tenant) {
+      final myPg = roomById(currentTenant?.roomId ?? '')?.pgId;
+      return announcements.where((a) => a.pgId == null || a.pgId == myPg).toList();
+    }
+    final pgId = activePg?.id;
+    return announcements.where((a) => a.pgId == null || a.pgId == pgId).toList();
   }
 
   // Utility billing and attendance were removed from the product. Their data

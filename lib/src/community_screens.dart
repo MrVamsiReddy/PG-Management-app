@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
+import 'l10n.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -70,36 +71,88 @@ class AnnouncementsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
+    final l = AppLocalizations.of(context);
     final manager = state.role != UserRole.tenant;
+    final items = state.visibleAnnouncements;
     return Scaffold(
-      appBar: AppBar(title: const Text('Announcements')),
-      floatingActionButton: manager ? FloatingActionButton.extended(onPressed: () => _broadcast(context, state), icon: const Icon(Icons.campaign_outlined), label: const Text('Broadcast')) : null,
+      appBar: AppBar(title: Text(l.t('ann.title'))),
+      floatingActionButton: manager ? FloatingActionButton.extended(onPressed: () => _broadcast(context, state, l), icon: const Icon(Icons.campaign_outlined), label: Text(l.t('ann.broadcast'))) : null,
       body: ListView(padding: const EdgeInsets.fromLTRB(20, 10, 20, 100), children: [
-        const PageHeader(title: 'Community updates', subtitle: 'Important notices from your PG.'), const SizedBox(height: 18),
-        ...state.announcements.map((item) => Card(margin: const EdgeInsets.only(bottom: 12), child: Padding(padding: const EdgeInsets.all(18), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [Container(padding: const EdgeInsets.all(9), decoration: BoxDecoration(color: const Color(0xFFF9E8F0), borderRadius: BorderRadius.circular(11)), child: const Icon(Icons.campaign_outlined, color: Color(0xFFB65B87))), const Spacer(), Text(relativeTime(item.postedAt), style: const TextStyle(fontSize: 11, color: Colors.black45))]),
-          const SizedBox(height: 13), Text(item.title, style: Theme.of(context).textTheme.titleLarge), const SizedBox(height: 6), Text(item.body),
-          const Divider(height: 25), Text('Posted by ${item.author}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11, color: primary)),
-        ])))),
+        PageHeader(title: l.t('ann.title'), subtitle: l.t('ann.communitySub')), const SizedBox(height: 18),
+        if (items.isEmpty) EmptyState(icon: Icons.campaign_outlined, title: l.t('ann.empty')),
+        ...items.map((item) => Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => _detail(context, state, l, item),
+            child: Padding(padding: const EdgeInsets.all(18), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Container(padding: const EdgeInsets.all(9), decoration: BoxDecoration(color: const Color(0xFFF9E8F0), borderRadius: BorderRadius.circular(11)), child: const Icon(Icons.campaign_outlined, color: Color(0xFFB65B87))),
+                const Spacer(),
+                if (item.pgId != null) ...[
+                  Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: primarySoft, borderRadius: BorderRadius.circular(8)), child: Text(state.pgById(item.pgId!)?.name ?? '', style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: primary))),
+                  const SizedBox(width: 8),
+                ],
+                Text(relativeTime(item.postedAt), style: const TextStyle(fontSize: 11, color: Colors.black45)),
+              ]),
+              const SizedBox(height: 13), Text(item.title, style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 6), Text(item.body, maxLines: 2, overflow: TextOverflow.ellipsis),
+              const Divider(height: 25), Text('${l.t('ann.postedBy')} ${item.author}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11, color: primary)),
+            ])),
+          ),
+        )),
       ]),
     );
   }
 
-  void _broadcast(BuildContext context, AppState state) {
+  void _detail(BuildContext context, AppState state, AppLocalizations l, Announcement item) {
+    showAppSheet(context, SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const SheetHandle(),
+      Row(children: [
+        Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: const Color(0xFFF9E8F0), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.campaign_outlined, color: Color(0xFFB65B87))),
+        const SizedBox(width: 12),
+        Expanded(child: Text(item.title, style: Theme.of(context).textTheme.headlineMedium)),
+      ]),
+      const SizedBox(height: 6),
+      Text('${item.pgId == null ? l.t('ann.audienceAll') : state.pgById(item.pgId!)?.name ?? ''} · ${relativeTime(item.postedAt)}', style: const TextStyle(fontSize: 12, color: Colors.black45)),
+      const SizedBox(height: 16), Text(item.body, style: const TextStyle(height: 1.4)),
+      const Divider(height: 30), Text('${l.t('ann.postedBy')} ${item.author}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: primary)),
+      const SizedBox(height: 16), FilledButton(onPressed: () => Navigator.pop(context), child: Text(l.t('common.close'))),
+    ])));
+  }
+
+  void _broadcast(BuildContext context, AppState state, AppLocalizations l) {
     final title = TextEditingController();
     final body = TextEditingController();
-    showAppSheet(context, SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      const SheetHandle(), Text('New announcement', style: Theme.of(context).textTheme.headlineMedium),
-      const FormLabel('Title'), TextField(controller: title, decoration: const InputDecoration(hintText: 'Keep it clear and brief')),
-      const FormLabel('Message'), TextField(controller: body, maxLines: 5, decoration: const InputDecoration(hintText: 'Write the update for your tenants...')),
-      const FormLabel('Audience'), DropdownButtonFormField<String>(initialValue: 'All tenants', items: ['All tenants', ...state.pgs.map((e) => '${e.name} only')].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(), onChanged: (_) {}),
-      const SizedBox(height: 16), SwitchListTile(contentPadding: EdgeInsets.zero, value: true, onChanged: (_) {}, title: const Text('Send push notification'), subtitle: const Text('Notify tenants immediately')),
+    final messenger = ScaffoldMessenger.of(context);
+    // Audience: null = all tenants, or a specific property id.
+    String? audience;
+    var sendPush = true;
+    showAppSheet(context, StatefulBuilder(builder: (context, setSheet) => SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const SheetHandle(), Text(l.t('ann.new'), style: Theme.of(context).textTheme.headlineMedium),
+      FormLabel(l.t('ann.titleLabel')), TextField(controller: title, decoration: const InputDecoration(hintText: 'Keep it clear and brief')),
+      FormLabel(l.t('ann.messageLabel')), TextField(controller: body, maxLines: 5, decoration: const InputDecoration(hintText: 'Write the update for your tenants...')),
+      FormLabel(l.t('ann.audience')),
+      DropdownButtonFormField<String?>(
+        initialValue: audience,
+        items: [
+          DropdownMenuItem(value: null, child: Text(l.t('ann.audienceAll'))),
+          ...state.pgs.map((e) => DropdownMenuItem(value: e.id, child: Text('${e.name} only'))),
+        ],
+        onChanged: (v) => setSheet(() => audience = v),
+      ),
+      const SizedBox(height: 8),
+      SwitchListTile(contentPadding: EdgeInsets.zero, value: sendPush, onChanged: (v) => setSheet(() => sendPush = v), title: Text(l.t('ann.sendPush')), subtitle: Text(l.t('ann.sendPushSub'))),
       const SizedBox(height: 12), FilledButton.icon(onPressed: () {
-        if (title.text.trim().isEmpty || body.text.trim().isEmpty) return;
-        state.publishAnnouncement(title.text.trim(), body.text.trim());
+        if (title.text.trim().isEmpty || body.text.trim().isEmpty) {
+          messenger.showSnackBar(SnackBar(content: Text(l.t('ann.validation'))));
+          return;
+        }
+        state.publishAnnouncement(title.text.trim(), body.text.trim(), pgId: audience, sendPush: sendPush);
         Navigator.pop(context);
-      }, icon: const Icon(Icons.send_outlined), label: const Text('Publish announcement')),
-    ])));
+        messenger.showSnackBar(SnackBar(content: Text(l.t('ann.published'))));
+      }, icon: const Icon(Icons.send_outlined), label: Text(l.t('ann.publish'))),
+    ]))));
   }
 }
 

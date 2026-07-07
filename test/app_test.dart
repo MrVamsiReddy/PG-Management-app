@@ -1,12 +1,15 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:pg_management/main.dart';
 import 'package:pg_management/src/app_state.dart';
 import 'package:pg_management/src/dashboard_screen.dart';
 import 'package:pg_management/src/format.dart';
+import 'package:pg_management/src/home_shell.dart';
+import 'package:pg_management/src/l10n.dart';
 import 'package:pg_management/src/module_screens.dart';
 import 'package:pg_management/src/theme.dart';
 
@@ -507,6 +510,86 @@ void main() {
     // Surviving modules still render.
     expect(find.text('Maintenance'), findsOneWidget);
     expect(find.text('Announcements'), findsOneWidget);
+  });
+
+  test('language preference persists across restarts', () async {
+    expect(state.language, AppLanguage.english);
+    state.setLanguage(AppLanguage.telugu);
+    expect(box.get('language'), 'te');
+
+    final restored = AppState(box);
+    await restored.init();
+    expect(restored.language, AppLanguage.telugu);
+    expect(restored.locale.languageCode, 'te');
+  });
+
+  test('push preference gates and persists', () async {
+    expect(state.pushEnabled, isTrue);
+    state.setPushEnabled(false);
+    expect(box.get('pushEnabled'), isFalse);
+
+    final restored = AppState(box);
+    await restored.init();
+    expect(restored.pushEnabled, isFalse);
+  });
+
+  test('announcement audience filtering respects property and tenant', () {
+    // A property-specific announcement for p1, and a workspace-wide one.
+    state.publishAnnouncement('HSR only', 'For HSR tenants', pgId: 'p1');
+    state.publishAnnouncement('Everyone', 'For all tenants');
+
+    // Owner on p1 sees both; switching to p2 hides the p1-only one.
+    state.login(UserRole.owner);
+    state.selectPg('p1');
+    expect(state.visibleAnnouncements.any((a) => a.title == 'HSR only'), isTrue);
+    expect(state.visibleAnnouncements.any((a) => a.title == 'Everyone'), isTrue);
+    state.selectPg('p2');
+    expect(state.visibleAnnouncements.any((a) => a.title == 'HSR only'), isFalse);
+    expect(state.visibleAnnouncements.any((a) => a.title == 'Everyone'), isTrue);
+
+    // Tenant t1 lives in p1, so sees both.
+    state.login(UserRole.tenant);
+    expect(state.visibleAnnouncements.any((a) => a.title == 'HSR only'), isTrue);
+    expect(state.visibleAnnouncements.any((a) => a.title == 'Everyone'), isTrue);
+  });
+
+  test('updatePersonalDetails edits a tenant record', () async {
+    state.login(UserRole.tenant);
+    final error = await state.updatePersonalDetails(name: 'Aarav M', phone: '90000 99999');
+    expect(error, isNull);
+    expect(state.currentTenant?.name, 'Aarav M');
+    expect(state.currentTenant?.phone, '90000 99999');
+    expect(state.displayName, 'Aarav M');
+  });
+
+  testWidgets('navigation labels localize to the selected language', (tester) async {
+    state.login(UserRole.owner);
+    state.setLanguage(AppLanguage.hindi);
+    await tester.pumpWidget(PgManagementApp(state: state));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('प्रबंधन'), findsOneWidget); // Manage
+    expect(find.text('किराया'), findsOneWidget); // Rent
+    expect(find.text('Manage'), findsNothing);
+  });
+
+  testWidgets('profile personal-details row opens an editable sheet', (tester) async {
+    state.login(UserRole.tenant);
+    await tester.pumpWidget(AppScope(
+      notifier: state,
+      child: MaterialApp(
+        theme: buildAppTheme(),
+        locale: state.locale,
+        localizationsDelegates: const [AppLocalizations.delegate, GlobalMaterialLocalizations.delegate, GlobalWidgetsLocalizations.delegate],
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: const Scaffold(body: ProfileScreen()),
+      ),
+    ));
+    await tester.pump();
+    await tester.tap(find.text('Personal details'));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Full name'), findsOneWidget);
+    expect(find.text('Phone number'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Save'), findsOneWidget);
   });
 
   testWidgets('rental agreement is gone from the tenant details and profile', (tester) async {

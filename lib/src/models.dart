@@ -181,11 +181,12 @@ class Tenant {
 
   String get initials => name.split(' ').where((e) => e.isNotEmpty).map((e) => e[0]).take(2).join();
 
-  Tenant copyWith({KycStatus? kyc, AgreementStatus? agreement, String? kycDoc}) => Tenant(
-        id: id, name: name, phone: phone, roomId: roomId, bed: bed,
+  Tenant copyWith({String? name, String? phone, KycStatus? kyc, AgreementStatus? agreement, String? kycDoc}) => Tenant(
+        id: id, roomId: roomId, bed: bed, joinDate: joinDate,
+        name: name ?? this.name,
+        phone: phone ?? this.phone,
         kyc: kyc ?? this.kyc,
         agreement: agreement ?? this.agreement,
-        joinDate: joinDate,
         kycDoc: kycDoc ?? this.kycDoc,
       );
 
@@ -375,6 +376,7 @@ class Announcement {
     required this.body,
     required this.author,
     required this.postedAt,
+    this.pgId,
   });
 
   final String id;
@@ -383,9 +385,12 @@ class Announcement {
   final String author;
   final DateTime postedAt;
 
+  /// Target property; null means every property (all tenants).
+  final String? pgId;
+
   Map<String, dynamic> toMap() => {
         'id': id, 'title': title, 'body': body, 'author': author,
-        'postedAt': postedAt.toIso8601String(),
+        'postedAt': postedAt.toIso8601String(), 'pgId': pgId,
       };
 
   static Announcement fromMap(Map<String, dynamic> map) => Announcement(
@@ -394,6 +399,7 @@ class Announcement {
         body: map['body'] as String,
         author: map['author'] as String,
         postedAt: DateTime.parse(map['postedAt'] as String),
+        pgId: map['pgId'] as String?,
       );
 }
 
