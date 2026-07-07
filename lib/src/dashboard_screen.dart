@@ -41,8 +41,10 @@ class DashboardScreen extends StatelessWidget {
           ]),
           const SizedBox(height: 8),
           Card(
+            clipBehavior: Clip.antiAlias,
             child: Column(
               children: state.notifications.take(3).map((n) => ListTile(
+                onTap: () => _open(context, const NotificationsScreen()),
                 leading: CircleAvatar(backgroundColor: primarySoft, child: Icon(notificationIcon(n.type), color: primary, size: 20)),
                 title: Text(n.title, style: const TextStyle(fontWeight: FontWeight.w700)),
                 subtitle: Text(n.body, maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -99,10 +101,22 @@ class DashboardScreen extends StatelessWidget {
         crossAxisSpacing: 12,
         childAspectRatio: constraints.maxWidth > 680 ? 1.25 : .92,
         children: [
-          StatCard(label: 'Occupancy', value: '$occupancy%', icon: Icons.bed_rounded, tint: primary, caption: '$occupied/$beds beds'),
-          StatCard(label: 'Collected', value: inr(state.pgCollectedAmount), icon: Icons.savings_outlined, tint: const Color(0xFF3478C7), caption: 'This month'),
-          StatCard(label: 'Outstanding', value: inr(state.pgDueAmount), icon: Icons.pending_actions, tint: coral, caption: '${state.pgPayments.where((e) => e.status == PaymentStatus.due).length} dues'),
-          StatCard(label: 'Open requests', value: '${state.pgMaintenance.where((e) => e.status != MaintenanceStatus.resolved).length}', icon: Icons.build_circle_outlined, tint: warning, caption: 'Needs attention'),
+          StatCard(
+            label: 'Occupancy', value: '$occupancy%', icon: Icons.bed_rounded, tint: primary, caption: '$occupied/$beds beds',
+            onTap: () => _open(context, const RoomsScreen()),
+          ),
+          StatCard(
+            label: 'Collected', value: inr(state.pgCollectedAmount), icon: Icons.savings_outlined, tint: const Color(0xFF3478C7), caption: 'This month',
+            onTap: () => _open(context, const PaymentsScreen(initialFilter: 'Paid')),
+          ),
+          StatCard(
+            label: 'Outstanding', value: inr(state.pgDueAmount), icon: Icons.pending_actions, tint: coral, caption: '${state.pgPayments.where((e) => e.status == PaymentStatus.due).length} dues',
+            onTap: () => _open(context, const PaymentsScreen(initialFilter: 'Due')),
+          ),
+          StatCard(
+            label: 'Open requests', value: '${state.pgMaintenance.where((e) => e.status != MaintenanceStatus.resolved).length}', icon: Icons.build_circle_outlined, tint: warning, caption: 'Needs attention',
+            onTap: () => _open(context, const MaintenanceScreen(initialFilter: 'Open')),
+          ),
         ],
       );
     });
@@ -120,28 +134,32 @@ class DashboardScreen extends StatelessWidget {
     final paid = latest.status == PaymentStatus.paid;
     return Card(
       color: ink,
-      child: Padding(
-        padding: const EdgeInsets.all(22),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text('${formatMonthName(latest.period).toUpperCase()} RENT', style: const TextStyle(color: Colors.white54, letterSpacing: 1.2, fontWeight: FontWeight.w700, fontSize: 11)),
-            StatusPill(latest.displayStatus),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _open(context, const PaymentsScreen()),
+        child: Padding(
+          padding: const EdgeInsets.all(22),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Text('${formatMonthName(latest.period).toUpperCase()} RENT', style: const TextStyle(color: Colors.white54, letterSpacing: 1.2, fontWeight: FontWeight.w700, fontSize: 11)),
+              StatusPill(latest.displayStatus),
+            ]),
+            const SizedBox(height: 14),
+            Text(inr(latest.amount), style: Theme.of(context).textTheme.headlineLarge?.copyWith(color: Colors.white)),
+            const SizedBox(height: 4),
+            Text(
+              paid ? 'Paid on ${formatDay(latest.paidDate!)} · Room ${state.currentTenantRoomLabel}' : 'Due by ${formatDay(latest.dueDate)} · Room ${state.currentTenantRoomLabel}',
+              style: const TextStyle(color: Colors.white60),
+            ),
+            const SizedBox(height: 18),
+            OutlinedButton.icon(
+              onPressed: () => _open(context, const PaymentsScreen()),
+              icon: Icon(paid ? Icons.receipt_long_outlined : Icons.lock_outline),
+              label: Text(paid ? 'View receipt' : 'Pay now'),
+              style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white30)),
+            ),
           ]),
-          const SizedBox(height: 14),
-          Text(inr(latest.amount), style: Theme.of(context).textTheme.headlineLarge?.copyWith(color: Colors.white)),
-          const SizedBox(height: 4),
-          Text(
-            paid ? 'Paid on ${formatDay(latest.paidDate!)} · Room ${state.currentTenantRoomLabel}' : 'Due by ${formatDay(latest.dueDate)} · Room ${state.currentTenantRoomLabel}',
-            style: const TextStyle(color: Colors.white60),
-          ),
-          const SizedBox(height: 18),
-          OutlinedButton.icon(
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PaymentsScreen())),
-            icon: Icon(paid ? Icons.receipt_long_outlined : Icons.lock_outline),
-            label: Text(paid ? 'View receipt' : 'Pay now'),
-            style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white30)),
-          ),
-        ]),
+        ),
       ),
     );
   }
@@ -195,6 +213,9 @@ class DashboardScreen extends StatelessWidget {
     final hour = DateTime.now().hour;
     return hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   }
+
+  static void _open(BuildContext context, Widget screen) =>
+      Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
 }
 
 class RevenueChart extends StatelessWidget {

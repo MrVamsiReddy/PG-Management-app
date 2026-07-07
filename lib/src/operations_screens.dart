@@ -5,13 +5,17 @@ import 'theme.dart';
 import 'widgets.dart';
 
 class MaintenanceScreen extends StatefulWidget {
-  const MaintenanceScreen({super.key});
+  const MaintenanceScreen({super.key, this.initialFilter = 'All'});
+
+  /// One of 'All', 'Open', 'In progress', 'Resolved'.
+  final String initialFilter;
+
   @override
   State<MaintenanceScreen> createState() => _MaintenanceScreenState();
 }
 
 class _MaintenanceScreenState extends State<MaintenanceScreen> {
-  String filter = 'All';
+  late String filter = widget.initialFilter;
 
   @override
   Widget build(BuildContext context) {

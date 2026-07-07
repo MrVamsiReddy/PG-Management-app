@@ -91,6 +91,7 @@ class StatCard extends StatelessWidget {
     required this.icon,
     required this.tint,
     this.caption,
+    this.onTap,
   });
   final String label;
   final String value;
@@ -98,32 +99,47 @@ class StatCard extends StatelessWidget {
   final Color tint;
   final String? caption;
 
+  /// When set, the whole tile is tappable (ripple + a chevron affordance).
+  final VoidCallback? onTap;
+
   @override
-  Widget build(BuildContext context) => Card(
-        child: Padding(
-          padding: const EdgeInsets.all(17),
-          // Grid cells vary with screen width; scale down rather than overflow.
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.topLeft,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-              Container(
-                padding: const EdgeInsets.all(9),
-                decoration: BoxDecoration(color: tint.withValues(alpha: .13), borderRadius: BorderRadius.circular(11)),
-                child: Icon(icon, color: tint, size: 21),
-              ),
-              const SizedBox(height: 16),
-              Text(value, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontSize: 25)),
-              const SizedBox(height: 3),
-              Text(label, style: Theme.of(context).textTheme.bodyMedium),
-              if (caption != null) ...[
-                const SizedBox(height: 8),
-                Text(caption!, style: const TextStyle(color: primary, fontWeight: FontWeight.w700, fontSize: 12)),
-              ],
-            ]),
-          ),
-        ),
-      );
+  Widget build(BuildContext context) {
+    final content = Padding(
+      padding: const EdgeInsets.all(17),
+      // Grid cells vary with screen width; scale down rather than overflow.
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.topLeft,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          Row(children: [
+            Container(
+              padding: const EdgeInsets.all(9),
+              decoration: BoxDecoration(color: tint.withValues(alpha: .13), borderRadius: BorderRadius.circular(11)),
+              child: Icon(icon, color: tint, size: 21),
+            ),
+            if (onTap != null) ...[
+              const SizedBox(width: 40),
+              const Icon(Icons.chevron_right, size: 18, color: Colors.black26),
+            ],
+          ]),
+          const SizedBox(height: 16),
+          Text(value, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontSize: 25)),
+          const SizedBox(height: 3),
+          Text(label, style: Theme.of(context).textTheme.bodyMedium),
+          if (caption != null) ...[
+            const SizedBox(height: 8),
+            Text(caption!, style: const TextStyle(color: primary, fontWeight: FontWeight.w700, fontSize: 12)),
+          ],
+        ]),
+      ),
+    );
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: onTap == null
+          ? content
+          : InkWell(onTap: onTap, child: content),
+    );
+  }
 }
 
 class StatusPill extends StatelessWidget {

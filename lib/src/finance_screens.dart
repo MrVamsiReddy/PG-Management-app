@@ -10,13 +10,25 @@ import 'theme.dart';
 import 'widgets.dart';
 
 class PaymentsScreen extends StatefulWidget {
-  const PaymentsScreen({super.key});
+  const PaymentsScreen({super.key, this.initialFilter = 'All'});
+
+  /// One of 'All', 'Paid', 'Due', 'Overdue'. 'Due' covers every unpaid
+  /// payment (including overdue); 'Overdue' is the past-due subset.
+  final String initialFilter;
+
   @override
   State<PaymentsScreen> createState() => _PaymentsScreenState();
 }
 
 class _PaymentsScreenState extends State<PaymentsScreen> {
-  String filter = 'All';
+  late String filter = widget.initialFilter;
+
+  bool _matches(Payment e) => switch (filter) {
+        'Paid' => e.status == PaymentStatus.paid,
+        'Due' => e.status == PaymentStatus.due, // unpaid, overdue included
+        'Overdue' => e.isOverdue,
+        _ => true,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +36,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     final tenant = state.role == UserRole.tenant;
     final due = state.tenantDuePayment;
     var items = tenant ? state.payments.where((e) => e.tenantId == state.currentTenantId).toList() : state.pgPayments;
-    if (filter != 'All') items = items.where((e) => e.displayStatus == filter).toList();
+    if (filter != 'All') items = items.where(_matches).toList();
     return Scaffold(
       appBar: AppBar(
         title: Text(tenant ? 'My rent' : 'Rent collection'),

@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:pg_management/main.dart';
 import 'package:pg_management/src/app_state.dart';
+import 'package:pg_management/src/dashboard_screen.dart';
 import 'package:pg_management/src/format.dart';
 import 'package:pg_management/src/module_screens.dart';
 import 'package:pg_management/src/theme.dart';
@@ -327,6 +328,70 @@ void main() {
     await tester.pump();
     expect(find.text('This area is for PG managers'), findsOneWidget);
     expect(find.text('Onboard'), findsNothing);
+  });
+
+  // Renders the dashboard alone under a real Navigator so tile taps can
+  // push their destination screens.
+  Widget dashboardHarness() => AppScope(
+        notifier: state,
+        child: MaterialApp(theme: buildAppTheme(), home: const Scaffold(body: DashboardScreen())),
+      );
+
+  Future<void> settle(WidgetTester tester) async {
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 700));
+  }
+
+  // Stat/label text sits inside a FittedBox transform, so tap the enclosing
+  // full-tile InkWell rather than the scaled text.
+  Finder tileFor(Finder label) => find.ancestor(of: label, matching: find.byType(InkWell)).first;
+
+  testWidgets('owner stat tiles navigate to their scoped screens', (tester) async {
+    state.login(UserRole.owner);
+    await tester.pumpWidget(dashboardHarness());
+    await settle(tester);
+
+    await tester.tap(tileFor(find.text('Occupancy')));
+    await settle(tester);
+    expect(find.text('Bed occupancy'), findsOneWidget); // Rooms & Beds
+    await tester.pageBack();
+    await settle(tester);
+
+    await tester.tap(tileFor(find.text('Collected')));
+    await settle(tester);
+    expect(find.text('Rent collection'), findsOneWidget);
+    expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Paid')).selected, isTrue);
+    await tester.pageBack();
+    await settle(tester);
+
+    await tester.tap(tileFor(find.text('Outstanding')));
+    await settle(tester);
+    expect(find.text('Rent collection'), findsOneWidget);
+    expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Due')).selected, isTrue);
+    await tester.pageBack();
+    await settle(tester);
+
+    await tester.tap(tileFor(find.text('Open requests')));
+    await settle(tester);
+    expect(find.text('Service desk'), findsOneWidget); // Maintenance
+    expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Open')).selected, isTrue);
+  });
+
+  testWidgets('tenant rent card and quick cards navigate to tenant screens', (tester) async {
+    state.login(UserRole.tenant);
+    await tester.pumpWidget(dashboardHarness());
+    await settle(tester);
+
+    // The rent hero card is tappable via its enclosing InkWell.
+    await tester.tap(tileFor(find.textContaining('RENT')));
+    await settle(tester);
+    expect(find.text('My rent'), findsOneWidget);
+    await tester.pageBack();
+    await settle(tester);
+
+    await tester.tap(tileFor(find.text('My bill')));
+    await settle(tester);
+    expect(find.text('Utility billing'), findsOneWidget);
   });
 
   testWidgets('signing in from the auth screen opens the home shell', (tester) async {
