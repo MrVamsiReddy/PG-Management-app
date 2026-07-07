@@ -40,18 +40,27 @@ class DashboardScreen extends StatelessWidget {
             TextButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen())), child: const Text('See all')),
           ]),
           const SizedBox(height: 8),
-          Card(
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: state.notifications.take(3).map((n) => ListTile(
-                onTap: () => _open(context, const NotificationsScreen()),
-                leading: CircleAvatar(backgroundColor: primarySoft, child: Icon(notificationIcon(n.type), color: primary, size: 20)),
-                title: Text(n.title, style: const TextStyle(fontWeight: FontWeight.w700)),
-                subtitle: Text(n.body, maxLines: 1, overflow: TextOverflow.ellipsis),
-                trailing: Text(relativeTime(n.createdAt), style: const TextStyle(fontSize: 10, color: Colors.black45)),
-              )).toList(),
-            ),
-          ),
+          Builder(builder: (context) {
+            final recent = state.visibleNotifications.take(3).toList();
+            if (recent.isEmpty) {
+              return const Card(
+                clipBehavior: Clip.antiAlias,
+                child: EmptyState(icon: Icons.notifications_none_rounded, title: 'Nothing new yet'),
+              );
+            }
+            return Card(
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: recent.map((n) => ListTile(
+                  onTap: () => _open(context, const NotificationsScreen()),
+                  leading: CircleAvatar(backgroundColor: primarySoft, child: Icon(notificationIcon(n.type), color: primary, size: 20)),
+                  title: Text(n.title, style: const TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: Text(n.body, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  trailing: Text(relativeTime(n.createdAt), style: const TextStyle(fontSize: 10, color: Colors.black45)),
+                )).toList(),
+              ),
+            );
+          }),
         ],
       ),
     );
@@ -165,10 +174,8 @@ class DashboardScreen extends StatelessWidget {
   }
 
   Payment? _latestTenantPayment(AppState state) {
-    for (final payment in state.payments) {
-      if (payment.tenantId == state.currentTenantId) return payment;
-    }
-    return null;
+    final mine = state.tenantPayments;
+    return mine.isEmpty ? null : mine.first;
   }
 
   Widget _quickActions(BuildContext context, UserRole role) {

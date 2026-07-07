@@ -66,7 +66,7 @@ async function fcmAccessToken(): Promise<string> {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
-    const { workspaceOwnerId, title, body } = await req.json();
+    const { workspaceOwnerId, title, body, scope, tenantId } = await req.json();
     if (!workspaceOwnerId || !title) return new Response("bad request", { status: 400, headers: corsHeaders });
 
     const admin = createClient(
@@ -92,13 +92,35 @@ Deno.serve(async (req) => {
       if (!membership) return new Response("forbidden", { status: 403, headers: corsHeaders });
     }
 
-    // Recipients: the owner's devices + every invited member's devices.
+    // Recipients depend on the notification's scope so banners respect the
+    // same privacy as the in-app list:
+    //   managers -> the owner's devices only
+    //   tenant   -> the invited member whose tenant_id matches
+    //   everyone -> the owner + every invited member
     const { data: members } = await admin.from("members")
-      .select("member_email").eq("owner_id", workspaceOwnerId);
-    const emails = (members ?? []).map((m: { member_email: string }) => m.member_email);
-    const filter = `user_id.eq.${workspaceOwnerId}${emails.length ? `,email.in.(${emails.join(",")})` : ""}`;
+      .select("member_email, tenant_id").eq("owner_id", workspaceOwnerId);
+    const allMembers = members ?? [];
+
+    let ownerIds: string[] = [];
+    let emails: string[] = [];
+    if (scope === "managers") {
+      ownerIds = [workspaceOwnerId];
+    } else if (scope === "tenant") {
+      emails = allMembers
+        .filter((m: { tenant_id: string }) => m.tenant_id === tenantId)
+        .map((m: { member_email: string }) => m.member_email);
+    } else {
+      ownerIds = [workspaceOwnerId];
+      emails = allMembers.map((m: { member_email: string }) => m.member_email);
+    }
+
+    const clauses: string[] = [];
+    for (const id of ownerIds) clauses.push(`user_id.eq.${id}`);
+    if (emails.length) clauses.push(`email.in.(${emails.join(",")})`);
+    if (clauses.length === 0) return Response.json({ sent: 0 }, { headers: corsHeaders });
+
     const { data: tokens } = await admin.from("push_tokens")
-      .select("token, user_id").or(filter);
+      .select("token, user_id").or(clauses.join(","));
     const targets = (tokens ?? []).filter((t: { user_id: string }) => t.user_id !== caller.id);
     if (targets.length === 0) return Response.json({ sent: 0 }, { headers: corsHeaders });
 

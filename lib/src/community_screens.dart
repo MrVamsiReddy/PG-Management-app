@@ -108,14 +108,19 @@ class NotificationsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
+    // Tenants see only their own + workspace notifications; managers see the
+    // active property's managerial and workspace notifications.
+    final items = state.visibleNotifications;
     return Scaffold(
       appBar: AppBar(title: const Text('Notifications'), actions: [TextButton(onPressed: state.markAllNotificationsRead, child: const Text('Mark all read'))]),
-      body: ListView.separated(
+      body: items.isEmpty
+          ? const EmptyState(icon: Icons.notifications_none_rounded, title: 'No notifications yet')
+          : ListView.separated(
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 40),
-        itemCount: state.notifications.length,
+        itemCount: items.length,
         separatorBuilder: (_, __) => const SizedBox(height: 9),
         itemBuilder: (context, index) {
-          final item = state.notifications[index];
+          final item = items[index];
           return Card(color: item.read ? Colors.white : primarySoft.withValues(alpha: .55), child: ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
             leading: CircleAvatar(backgroundColor: Colors.white, child: Icon(notificationIcon(item.type), color: primary, size: 21)),

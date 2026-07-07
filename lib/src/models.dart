@@ -56,7 +56,12 @@ enum BillStatus {
   final String label;
 }
 
-enum NotificationType { payment, visitor, maintenance, announcement }
+enum NotificationType { payment, visitor, maintenance, announcement, attendance }
+
+/// Who a notification is for. [managers] = owner/admin only; [tenant] = the
+/// single tenant named by [AppNotification.tenantId]; [everyone] = all in the
+/// workspace (announcements).
+enum NotificationScope { managers, tenant, everyone }
 
 class Pg {
   const Pg({
@@ -447,6 +452,10 @@ class AppNotification {
     required this.type,
     required this.createdAt,
     this.read = false,
+    this.roleScope = NotificationScope.managers,
+    this.tenantId,
+    this.pgId,
+    this.relatedEntityId,
   });
 
   final String id;
@@ -456,14 +465,29 @@ class AppNotification {
   final DateTime createdAt;
   final bool read;
 
+  /// Audience. Combined with [tenantId] and [pgId] this decides who may see it.
+  final NotificationScope roleScope;
+
+  /// The tenant this notification is addressed to (for [NotificationScope.tenant]).
+  final String? tenantId;
+
+  /// The property this notification belongs to; null means workspace-wide.
+  final String? pgId;
+
+  /// The payment/request/visitor/bill this notification refers to.
+  final String? relatedEntityId;
+
   AppNotification copyWith({bool? read}) => AppNotification(
         id: id, title: title, body: body, type: type, createdAt: createdAt,
+        roleScope: roleScope, tenantId: tenantId, pgId: pgId, relatedEntityId: relatedEntityId,
         read: read ?? this.read,
       );
 
   Map<String, dynamic> toMap() => {
         'id': id, 'title': title, 'body': body, 'type': type.name,
         'createdAt': createdAt.toIso8601String(), 'read': read,
+        'roleScope': roleScope.name, 'tenantId': tenantId, 'pgId': pgId,
+        'relatedEntityId': relatedEntityId,
       };
 
   static AppNotification fromMap(Map<String, dynamic> map) => AppNotification(
@@ -473,5 +497,13 @@ class AppNotification {
         type: NotificationType.values.byName(map['type'] as String),
         createdAt: DateTime.parse(map['createdAt'] as String),
         read: map['read'] as bool,
+        // Legacy rows (pre-privacy) default to managers-only — fail closed so
+        // tenants never inherit visibility into old workspace notifications.
+        roleScope: map['roleScope'] == null
+            ? NotificationScope.managers
+            : NotificationScope.values.byName(map['roleScope'] as String),
+        tenantId: map['tenantId'] as String?,
+        pgId: map['pgId'] as String?,
+        relatedEntityId: map['relatedEntityId'] as String?,
       );
 }

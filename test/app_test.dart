@@ -110,8 +110,7 @@ void main() {
     expect(paid.paidDate, isNotNull);
     expect(state.tenantDuePayment, isNull);
     expect(state.collectedAmount, collectedBefore + due.amount);
-    expect(state.notifications.first.type, NotificationType.payment);
-    expect(state.notifications.first.title, 'Rent received');
+    expect(state.notifications.any((n) => n.title == 'Rent received' && n.type == NotificationType.payment), isTrue);
   });
 
   test('recordPayment inserts a paid entry for the current month', () {
@@ -124,7 +123,7 @@ void main() {
     expect(entry.status, PaymentStatus.paid);
     expect(entry.method, 'Cash');
     expect(state.collectedAmount, collectedBefore + 9500);
-    expect(state.notifications.first.title, 'Payment recorded');
+    expect(state.notifications.any((n) => n.title == 'Payment recorded'), isTrue);
   });
 
   test('monthlyRevenue aggregates paid rent per month for the chart', () {
@@ -268,6 +267,85 @@ void main() {
     expect(state.mustChangePassword, isFalse);
     state.login(UserRole.owner);
     expect(state.mustChangePassword, isFalse);
+  });
+
+  test('a tenant cannot see other tenants notifications or manager activity', () {
+    state.login(UserRole.tenant); // demo tenant is t1
+    final visible = state.visibleNotifications;
+
+    // Never a manager-scoped notification, and never one addressed to another tenant.
+    expect(visible.every((n) => n.roleScope != NotificationScope.managers), isTrue);
+    expect(visible.every((n) => n.roleScope != NotificationScope.tenant || n.tenantId == 't1'), isTrue);
+
+    // The seeded "Rent received from Ishita Rao" (manager, t4) is hidden.
+    expect(visible.any((n) => n.body.contains('Ishita Rao')), isFalse);
+    // The workspace announcement and the tenant's own reminder are visible.
+    expect(visible.any((n) => n.roleScope == NotificationScope.everyone), isTrue);
+    expect(visible.any((n) => n.tenantId == 't1'), isTrue);
+  });
+
+  test('an owner sees managerial and workspace notifications for the active PG', () {
+    state.login(UserRole.owner);
+    final visible = state.visibleNotifications;
+
+    expect(visible.any((n) => n.body.contains('Ishita Rao')), isTrue); // manager notification
+    expect(visible.any((n) => n.roleScope == NotificationScope.everyone), isTrue); // announcement
+    // A tenant's private reminder is never in a manager's list.
+    expect(visible.any((n) => n.roleScope == NotificationScope.tenant), isFalse);
+  });
+
+  test('a tenant only ever sees their own payments', () {
+    state.login(UserRole.tenant);
+    expect(state.tenantPayments, isNotEmpty);
+    expect(state.tenantPayments.every((p) => p.tenantId == 't1'), isTrue);
+    // Other tenants' payments exist in the workspace but are not exposed.
+    expect(state.payments.any((p) => p.tenantId != 't1'), isTrue);
+    expect(state.tenantPayments.any((p) => p.tenantId != 't1'), isFalse);
+  });
+
+  test('paying rent notifies managers and the payer separately', () {
+    state.login(UserRole.tenant);
+    final due = state.tenantDuePayment!;
+    state.payRent(due.id, 'UPI');
+
+    final managerNote = state.notifications.firstWhere((n) => n.title == 'Rent received');
+    expect(managerNote.roleScope, NotificationScope.managers);
+    expect(managerNote.tenantId, 't1');
+    expect(managerNote.pgId, 'p1');
+
+    final tenantNote = state.notifications.firstWhere((n) => n.title == 'Payment successful');
+    expect(tenantNote.roleScope, NotificationScope.tenant);
+    expect(tenantNote.tenantId, 't1');
+
+    // The tenant does not see the manager-facing "Rent received" note.
+    expect(state.visibleNotifications.any((n) => n.title == 'Rent received'), isFalse);
+    expect(state.visibleNotifications.any((n) => n.title == 'Payment successful'), isTrue);
+  });
+
+  test('maintenance updates reach only tenants in that room', () {
+    state.login(UserRole.owner);
+    final open = state.maintenance.firstWhere((m) => m.roomId == 'r2'); // Rohan (t3) lives in r2
+    state.setMaintenanceStatus(open.id, MaintenanceStatus.inProgress, assignee: 'Ravi');
+
+    final note = state.notifications.firstWhere((n) => n.title == 'Maintenance updated');
+    expect(note.roleScope, NotificationScope.tenant);
+    expect(note.tenantId, 't3'); // the room's occupant, not t1
+
+    // t1 (a different room) must not see it.
+    state.login(UserRole.tenant);
+    expect(state.visibleNotifications.any((n) => n.title == 'Maintenance updated'), isFalse);
+  });
+
+  testWidgets('tenant notification centre hides other tenants activity', (tester) async {
+    state.login(UserRole.tenant);
+    await tester.pumpWidget(AppScope(
+      notifier: state,
+      child: MaterialApp(theme: buildAppTheme(), home: const NotificationsScreen()),
+    ));
+    await tester.pump();
+    expect(find.textContaining('Ishita Rao'), findsNothing); // another tenant's rent
+    expect(find.textContaining('Maya Singh'), findsNothing); // another tenant's visitor
+    expect(find.text('Rent reminder'), findsOneWidget); // the tenant's own
   });
 
   test('payments export as spreadsheet-ready CSV', () {

@@ -57,6 +57,7 @@ IconData notificationIcon(NotificationType type) => switch (type) {
       NotificationType.visitor => Icons.badge_outlined,
       NotificationType.announcement => Icons.campaign_outlined,
       NotificationType.maintenance => Icons.build_outlined,
+      NotificationType.attendance => Icons.how_to_reg_outlined,
     };
 
 class PageHeader extends StatelessWidget {

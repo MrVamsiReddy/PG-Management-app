@@ -35,7 +35,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     final state = AppScope.of(context);
     final tenant = state.role == UserRole.tenant;
     final due = state.tenantDuePayment;
-    var items = tenant ? state.payments.where((e) => e.tenantId == state.currentTenantId).toList() : state.pgPayments;
+    var items = tenant ? state.tenantPayments : state.pgPayments;
     if (filter != 'All') items = items.where(_matches).toList();
     return Scaffold(
       appBar: AppBar(

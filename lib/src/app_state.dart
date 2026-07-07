@@ -38,7 +38,7 @@ class AppState extends ChangeNotifier {
     _useHiveRepos();
   }
 
-  static const schemaVersion = 2;
+  static const schemaVersion = 3;
   static const utilityRate = 8; // ₹ per unit
 
   /// Demo/unlinked accounts act as this seeded tenant; a linked tenant
@@ -515,16 +515,23 @@ class AppState extends ChangeNotifier {
 
   String _id(String prefix) => '$prefix${DateTime.now().microsecondsSinceEpoch}';
 
-  void _notify(String title, String body, NotificationType type) {
+  void _notify(String title, String body, NotificationType type, {
+    NotificationScope scope = NotificationScope.managers,
+    String? tenantId,
+    String? pgId,
+    String? relatedEntityId,
+  }) {
     notifications.insert(0, AppNotification(
       id: _id('n'), title: title, body: body, type: type, createdAt: DateTime.now(),
+      roleScope: scope, tenantId: tenantId, pgId: pgId, relatedEntityId: relatedEntityId,
     ));
-    _pushToWorkspace(title, body);
+    _pushToWorkspace(title, body, scope: scope, tenantId: tenantId);
   }
 
-  /// Fire-and-forget push to everyone else in the workspace via the `push`
-  /// Edge Function. Push failures never block the action itself.
-  void _pushToWorkspace(String title, String body) {
+  /// Fire-and-forget push via the `push` Edge Function. Scope and tenant are
+  /// passed so the function can target the right devices; push failures never
+  /// block the action itself.
+  void _pushToWorkspace(String title, String body, {required NotificationScope scope, String? tenantId}) {
     final client = supabaseOrNull;
     final owner = _workspaceOwnerId;
     if (client == null || !cloudMode || owner == null) return;
@@ -532,10 +539,36 @@ class AppState extends ChangeNotifier {
       'workspaceOwnerId': owner,
       'title': title,
       'body': body,
+      'scope': scope.name,
+      if (tenantId != null) 'tenantId': tenantId,
     }).ignore();
   }
 
-  bool get hasUnread => notifications.any((n) => !n.read);
+  // Which property a tenant/room belongs to — used to scope notifications.
+  String? _pgIdForTenant(String tenantId) => roomById(tenantById(tenantId)?.roomId ?? '')?.pgId;
+  String? _pgIdForRoom(String roomId) => roomById(roomId)?.pgId;
+  List<Tenant> _tenantsInRoom(String roomId) => tenants.where((t) => t.roomId == roomId).toList();
+
+  /// Notifications the current session is allowed to see. Tenants get only
+  /// their own personal notifications plus workspace-wide announcements;
+  /// owners/admins get managerial and workspace notifications scoped to the
+  /// property they are currently managing.
+  List<AppNotification> get visibleNotifications {
+    if (role == UserRole.tenant) {
+      final id = currentTenantId;
+      return notifications.where((n) =>
+          n.roleScope == NotificationScope.everyone ||
+          (n.roleScope == NotificationScope.tenant && n.tenantId == id)).toList();
+    }
+    final pgId = activePg?.id;
+    return notifications.where((n) {
+      if (n.roleScope == NotificationScope.tenant) return false; // personal to a tenant
+      if (n.pgId != null && pgId != null && n.pgId != pgId) return false; // another property
+      return true;
+    }).toList();
+  }
+
+  bool get hasUnread => visibleNotifications.any((n) => !n.read);
 
   void markNotificationRead(String id) {
     final i = notifications.indexWhere((n) => n.id == id);
@@ -545,7 +578,9 @@ class AppState extends ChangeNotifier {
   }
 
   void markAllNotificationsRead() {
-    notifications = notifications.map((n) => n.copyWith(read: true)).toList();
+    // Only clear the ones this session can actually see.
+    final visibleIds = visibleNotifications.map((n) => n.id).toSet();
+    notifications = notifications.map((n) => visibleIds.contains(n.id) ? n.copyWith(read: true) : n).toList();
     _persist({'notifications'});
   }
 
@@ -585,6 +620,10 @@ class AppState extends ChangeNotifier {
 
   Payment? get tenantDuePayment =>
       _firstOrNull(payments, (p) => p.tenantId == currentTenantId && p.status == PaymentStatus.due);
+
+  /// The signed-in tenant's own payments — never anyone else's.
+  List<Payment> get tenantPayments =>
+      payments.where((p) => p.tenantId == currentTenantId).toList();
 
   /// Rent collection as spreadsheet-ready CSV (newest first, like the UI).
   String paymentsCsv() {
@@ -633,46 +672,70 @@ class AppState extends ChangeNotifier {
   void payRent(String id, String method) {
     final i = payments.indexWhere((p) => p.id == id);
     if (i == -1) return;
-    payments[i] = payments[i].copyWith(status: PaymentStatus.paid, paidDate: DateTime.now(), method: method);
-    _notify('Rent received', '${inr(payments[i].amount)} received from ${tenantName(payments[i].tenantId)}.', NotificationType.payment);
+    final paid = payments[i] = payments[i].copyWith(status: PaymentStatus.paid, paidDate: DateTime.now(), method: method);
+    final pgId = _pgIdForTenant(paid.tenantId);
+    // Managers see the income; the paying tenant gets a private confirmation.
+    _notify('Rent received', '${inr(paid.amount)} received from ${tenantName(paid.tenantId)}.', NotificationType.payment,
+        scope: NotificationScope.managers, pgId: pgId, tenantId: paid.tenantId, relatedEntityId: paid.id);
+    _notify('Payment successful', 'Your ${formatMonthName(paid.period)} rent of ${inr(paid.amount)} is paid.', NotificationType.payment,
+        scope: NotificationScope.tenant, tenantId: paid.tenantId, pgId: pgId, relatedEntityId: paid.id);
     _persist({'payments', 'notifications'});
   }
 
   void recordPayment({required String tenantId, required int amount, required String method}) {
     final now = DateTime.now();
-    payments.insert(0, Payment(
+    final payment = Payment(
       id: _id('pay'), tenantId: tenantId, period: DateTime(now.year, now.month),
       amount: amount, status: PaymentStatus.paid,
       dueDate: DateTime(now.year, now.month, 5), paidDate: now, method: method,
-    ));
-    _notify('Payment recorded', '${inr(amount)} from ${tenantName(tenantId)} marked as received.', NotificationType.payment);
+    );
+    payments.insert(0, payment);
+    final pgId = _pgIdForTenant(tenantId);
+    _notify('Payment recorded', '${inr(amount)} from ${tenantName(tenantId)} marked as received.', NotificationType.payment,
+        scope: NotificationScope.managers, pgId: pgId, tenantId: tenantId, relatedEntityId: payment.id);
+    _notify('Rent received', 'Your ${formatMonthName(payment.period)} rent of ${inr(amount)} was recorded.', NotificationType.payment,
+        scope: NotificationScope.tenant, tenantId: tenantId, pgId: pgId, relatedEntityId: payment.id);
     _persist({'payments', 'notifications'});
   }
 
   void addMaintenanceRequest({required String title, required String roomId, required String category, required Priority priority, String? photo}) {
-    maintenance.insert(0, MaintenanceRequest(
+    final request = MaintenanceRequest(
       id: _id('m'), roomId: roomId, title: title, category: category,
       status: MaintenanceStatus.open, priority: priority, createdAt: DateTime.now(),
       photo: photo,
-    ));
-    _persist({'maintenance'});
+    );
+    maintenance.insert(0, request);
+    // Managers are alerted to the new request; it also appears in the raising
+    // tenant's own "My requests" list.
+    _notify('New maintenance request', '$title · Room ${roomNumber(roomId)}', NotificationType.maintenance,
+        scope: NotificationScope.managers, pgId: _pgIdForRoom(roomId), relatedEntityId: request.id);
+    _persist({'maintenance', 'notifications'});
   }
 
   void setMaintenanceStatus(String id, MaintenanceStatus status, {String? assignee}) {
     final i = maintenance.indexWhere((e) => e.id == id);
     if (i == -1) return;
     final trimmed = assignee?.trim();
-    maintenance[i] = maintenance[i].copyWith(status: status, assignee: (trimmed?.isEmpty ?? true) ? null : trimmed);
-    _notify('Maintenance updated', '${maintenance[i].title} is now ${status.label.toLowerCase()}.', NotificationType.maintenance);
+    final request = maintenance[i] = maintenance[i].copyWith(status: status, assignee: (trimmed?.isEmpty ?? true) ? null : trimmed);
+    final pgId = _pgIdForRoom(request.roomId);
+    // Notify each tenant living in that room — and only them.
+    for (final tenant in _tenantsInRoom(request.roomId)) {
+      _notify('Maintenance updated', '${request.title} is now ${status.label.toLowerCase()}.', NotificationType.maintenance,
+          scope: NotificationScope.tenant, tenantId: tenant.id, pgId: pgId, relatedEntityId: request.id);
+    }
     _persist({'maintenance', 'notifications'});
   }
 
   void addVisitor({required String name, required String tenantId, required String purpose}) {
-    visitors.insert(0, Visitor(
+    final visitor = Visitor(
       id: _id('v'), tenantId: tenantId, name: name, purpose: purpose,
       status: VisitorStatus.awaitingApproval, expectedAt: DateTime.now(),
-    ));
-    _persist({'visitors'});
+    );
+    visitors.insert(0, visitor);
+    // Managers are alerted to approve; the visit is private to this tenant.
+    _notify('Visitor awaiting approval', '$name · $purpose visit for ${tenantName(tenantId)}.', NotificationType.visitor,
+        scope: NotificationScope.managers, pgId: _pgIdForTenant(tenantId), tenantId: tenantId, relatedEntityId: visitor.id);
+    _persist({'visitors', 'notifications'});
   }
 
   void setVisitorStatus(String id, VisitorStatus status) {
@@ -686,25 +749,36 @@ class AppState extends ChangeNotifier {
       VisitorStatus.declined => 'Visitor declined',
       VisitorStatus.awaitingApproval => 'Visitor updated',
     };
-    _notify(title, '${visitor.name} · ${visitor.purpose} visit for ${tenantName(visitor.tenantId)}.', NotificationType.visitor);
+    // Only the host tenant is told about their own visitor.
+    _notify(title, '${visitor.name} · ${visitor.purpose} visit.', NotificationType.visitor,
+        scope: NotificationScope.tenant, tenantId: visitor.tenantId, pgId: _pgIdForTenant(visitor.tenantId), relatedEntityId: visitor.id);
     _persist({'visitors', 'notifications'});
   }
 
   void publishAnnouncement(String title, String body) {
-    announcements.insert(0, Announcement(
+    final announcement = Announcement(
       id: _id('a'), title: title, body: body,
       author: '$ownerName, ${role.label}', postedAt: DateTime.now(),
-    ));
-    _notify('New announcement', title, NotificationType.announcement);
+    );
+    announcements.insert(0, announcement);
+    // Announcements are for the whole workspace.
+    _notify('New announcement', title, NotificationType.announcement,
+        scope: NotificationScope.everyone, relatedEntityId: announcement.id);
     _persist({'announcements', 'notifications'});
   }
 
   void addUtilityBill({required String roomId, required int previous, required int current}) {
-    utilities.insert(0, UtilityBill(
+    final bill = UtilityBill(
       id: _id('u'), roomId: roomId, previous: previous, current: current,
       rate: utilityRate, status: BillStatus.generated,
-    ));
-    _persist({'utilities'});
+    );
+    utilities.insert(0, bill);
+    // Each occupant of the room is told their bill is ready — no one else.
+    for (final tenant in _tenantsInRoom(roomId)) {
+      _notify('Electricity bill ready', 'Room ${roomNumber(roomId)} · your share is due with rent.', NotificationType.payment,
+          scope: NotificationScope.tenant, tenantId: tenant.id, pgId: _pgIdForRoom(roomId), relatedEntityId: bill.id);
+    }
+    _persist({'utilities', 'notifications'});
   }
 
   AttendanceRecord? get todayAttendance =>
@@ -714,13 +788,17 @@ class AppState extends ChangeNotifier {
 
   void toggleCheckIn() {
     final record = todayAttendance;
-    if (record == null || !record.isIn) {
+    final checkingIn = record == null || !record.isIn;
+    if (checkingIn) {
       attendance.insert(0, AttendanceRecord(id: _id('at'), tenantId: currentTenantId, checkIn: DateTime.now()));
     } else {
       final i = attendance.indexWhere((a) => a.id == record.id);
       attendance[i] = record.copyWith(checkOut: DateTime.now());
     }
-    _persist({'attendance'});
+    // Managers keep an attendance log; tenants act, they don't need telling.
+    _notify('Attendance', '${tenantName(currentTenantId)} checked ${checkingIn ? 'in' : 'out'}.', NotificationType.attendance,
+        scope: NotificationScope.managers, pgId: _pgIdForTenant(currentTenantId), tenantId: currentTenantId);
+    _persist({'attendance', 'notifications'});
   }
 
   // ---- Seed data ----
@@ -793,9 +871,13 @@ class AppState extends ChangeNotifier {
       const UtilityBill(id: 'u3', roomId: 'r3', previous: 740, current: 807, rate: utilityRate, status: BillStatus.pendingReading),
     ];
     notifications = [
-      AppNotification(id: 'n1', title: 'Rent received', body: '₹14,500 received from Ishita Rao.', type: NotificationType.payment, createdAt: now.subtract(const Duration(minutes: 12))),
-      AppNotification(id: 'n2', title: 'Visitor awaiting approval', body: 'Maya Singh is waiting at the reception.', type: NotificationType.visitor, createdAt: now.subtract(const Duration(hours: 1))),
-      AppNotification(id: 'n3', title: 'Maintenance updated', body: 'Bathroom tap issue is now in progress.', type: NotificationType.maintenance, createdAt: now.subtract(const Duration(hours: 3)), read: true),
+      // Manager-facing (owner/admin of HSR Layout PG only).
+      AppNotification(id: 'n1', title: 'Rent received', body: '₹14,500 received from Ishita Rao.', type: NotificationType.payment, createdAt: now.subtract(const Duration(minutes: 12)), roleScope: NotificationScope.managers, pgId: 'p1', tenantId: 't4', relatedEntityId: 'pay1'),
+      AppNotification(id: 'n2', title: 'Visitor awaiting approval', body: 'Maya Singh is waiting at the reception.', type: NotificationType.visitor, createdAt: now.subtract(const Duration(hours: 1)), roleScope: NotificationScope.managers, pgId: 'p1', tenantId: 't2', relatedEntityId: 'v2'),
+      // Workspace-wide announcement (everyone).
+      AppNotification(id: 'n3', title: 'Water tank cleaning', body: 'Water supply paused 10 AM–12 PM this Sunday.', type: NotificationType.announcement, createdAt: now.subtract(const Duration(hours: 3)), roleScope: NotificationScope.everyone, relatedEntityId: 'a1'),
+      // Personal to the demo tenant (t1) — only they see it.
+      AppNotification(id: 'n4', title: 'Rent reminder', body: 'Your rent of ₹9,500 is due soon.', type: NotificationType.payment, createdAt: now.subtract(const Duration(hours: 5)), roleScope: NotificationScope.tenant, tenantId: 't1', pgId: 'p1'),
     ];
   }
 }
