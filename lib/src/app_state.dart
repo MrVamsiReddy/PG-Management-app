@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show AuthException, PostgrestException, User, UserAttributes;
 
+import 'access.dart';
 import 'format.dart';
 import 'l10n.dart';
 import 'models.dart';
 import 'repositories.dart';
 import 'supabase_config.dart';
 
+export 'access.dart' show LoginPortal;
 export 'l10n.dart' show AppLanguage;
 export 'models.dart';
 
@@ -71,6 +73,11 @@ class AppState extends ChangeNotifier {
   String? accountEmail;
   String? _cloudName;
   String? _workspaceOwnerId;
+  String? _resolvedCustomerId;
+
+  /// A message to show on the login screen after a blocked/rejected sign-in
+  /// (disabled customer, wrong portal, session revoked). Cleared on success.
+  String? authNotice;
 
   /// True right after signing in with a temporary password: the app blocks
   /// on the set-password screen until a permanent one is chosen.
@@ -122,24 +129,23 @@ class AppState extends ChangeNotifier {
   List<UtilityBill> utilities = [];
   List<AppNotification> notifications = [];
 
+  /// Test-only: lets the test harness seed the local box with demo data.
+  /// Never set in production — new customers start empty and there is no
+  /// mock seed path outside tests.
+  static bool debugSeedDemoData = false;
+
   Future<void> init() async {
     if (box.get('schemaVersion') != schemaVersion) {
       await box.clear();
       await box.put('schemaVersion', schemaVersion);
     }
-    final savedRole = box.get('sessionRole') as String?;
-    if (savedRole != null) {
-      role = UserRole.values.firstWhere((e) => e.name == savedRole);
-      isLoggedIn = true;
-    }
+    // No local session restore: the only way to be signed in is a valid
+    // Supabase session resolved through restoreCloudSession.
     _activePgId = box.get('activePgId') as String?;
     language = AppLanguage.fromCode(box.get('language') as String?);
     pushEnabled = box.get('pushEnabled') as bool? ?? true;
     await _loadAll();
-    // Demo-only seed: init runs against the LOCAL Hive box (cloud repos are
-    // attached later by restoreCloudSession), so this can never put mock data
-    // into a production customer's workspace.
-    if (pgs.isEmpty) {
+    if (pgs.isEmpty && debugSeedDemoData) {
       _seed();
       await persistAll();
     }
@@ -183,9 +189,19 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Pull-to-refresh: re-read from the backing store (picks up changes made
-  /// on other devices in cloud mode). Keeps current data if offline.
   Future<void> refresh() async {
+    if (cloudMode) {
+      final user = supabaseOrNull?.auth.currentUser;
+      if (user != null) {
+        final gate = await _fetchAccessGate(user);
+        if (gate.error != null) {
+          await logout();
+          authNotice = gate.error;
+          notifyListeners();
+          return;
+        }
+      }
+    }
     try {
       await _loadAll();
     } catch (_) {}
@@ -194,11 +210,10 @@ class AppState extends ChangeNotifier {
 
   // ---- Session ----
 
-  /// Local demo session: no account, data stays in the on-device Hive box.
+  @visibleForTesting
   void login(UserRole selectedRole) {
     role = selectedRole;
     isLoggedIn = true;
-    box.put('sessionRole', role.name);
     notifyListeners();
     _ensureMonthlyDuesAtStartup();
   }
@@ -207,11 +222,12 @@ class AppState extends ChangeNotifier {
     if (cloudMode) {
       try {
         await supabaseOrNull?.auth.signOut();
-      } catch (_) {} // Signing out while offline still logs out locally.
+      } catch (_) {}
       cloudMode = false;
       accountEmail = null;
       _cloudName = null;
       _workspaceOwnerId = null;
+      _resolvedCustomerId = null;
       mustChangePassword = false;
       currentTenantId = defaultTenantId;
       _useHiveRepos();
@@ -224,38 +240,20 @@ class AppState extends ChangeNotifier {
 
   // ---- Cloud accounts (Supabase) ----
 
-  /// Returns a user-facing error message, or null on success.
-  Future<String?> signUpCloud({required String name, required String email, required String password, required UserRole selectedRole}) async {
+  Future<String?> signInCloud({required String email, required String password, required LoginPortal portal}) async {
     final client = supabaseOrNull;
-    if (client == null) return 'Cloud accounts are unavailable right now — try demo mode.';
-    try {
-      final result = await client.auth.signUp(
-        email: email,
-        password: password,
-        data: {'full_name': name, 'role': selectedRole.name},
-      );
-      if (result.session == null) {
-        return 'Account created — confirm the link sent to $email, then sign in.';
-      }
-      await _enterCloud(result.session!.user);
-      return null;
-    } on AuthException catch (e) {
-      return e.message;
-    } on PostgrestException catch (e) {
-      return 'Signed in, but the database rejected the request: ${e.message}. '
-          'If this mentions app_data, run supabase/schema.sql in the Supabase SQL Editor.';
-    } catch (_) {
-      return 'Could not reach the server. Check your connection and try again.';
+    if (client == null) {
+      return 'Cannot reach the server. Check your connection and try again.';
     }
-  }
-
-  /// Returns a user-facing error message, or null on success.
-  Future<String?> signInCloud({required String email, required String password}) async {
-    final client = supabaseOrNull;
-    if (client == null) return 'Cloud accounts are unavailable right now — try demo mode.';
     try {
       final result = await client.auth.signInWithPassword(email: email, password: password);
-      await _enterCloud(result.user!);
+      final error = await _enterCloud(result.user!, portal: portal);
+      if (error != null) {
+        try {
+          await client.auth.signOut();
+        } catch (_) {}
+        return error;
+      }
       return null;
     } on AuthException catch (e) {
       return e.message;
@@ -263,7 +261,7 @@ class AppState extends ChangeNotifier {
       return 'Signed in, but the database rejected the request: ${e.message}. '
           'If this mentions app_data, run supabase/schema.sql in the Supabase SQL Editor.';
     } catch (_) {
-      return 'Could not reach the server. Check your connection and try again.';
+      return 'Cannot reach the server. Check your connection and try again.';
     }
   }
 
@@ -298,23 +296,52 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Restores a previously signed-in cloud session at app start, if any.
   Future<void> restoreCloudSession() async {
     final user = supabaseOrNull?.auth.currentSession?.user;
     if (user == null) return;
     try {
-      await _enterCloud(user);
-    } catch (_) {
-      // Offline at startup with a cloud session: stay signed out; demo mode
-      // remains available from the auth screen.
-    }
+      final error = await _enterCloud(user);
+      if (error != null) {
+        authNotice = error;
+        try {
+          await supabaseOrNull?.auth.signOut();
+        } catch (_) {}
+        notifyListeners();
+      }
+    } catch (_) {}
   }
 
-  Future<void> _enterCloud(User user) async {
+  Future<AccessGate> _fetchAccessGate(User user) async {
+    final client = supabaseOrNull;
+    if (client == null) return (role: null, customerId: null, error: null);
+    Map<String, dynamic>? profile;
+    Map<String, dynamic>? customer;
+    try {
+      profile = await client
+          .from('profiles')
+          .select('role, customer_id, platform_admin')
+          .eq('id', user.id)
+          .maybeSingle();
+      final linkedCustomer = profile?['customer_id'] as String?;
+      if (linkedCustomer != null) {
+        customer = await client
+            .from('customers')
+            .select('status')
+            .eq('id', linkedCustomer)
+            .maybeSingle();
+      }
+    } catch (_) {
+      return (role: null, customerId: null, error: null);
+    }
+    return evaluateProfileAccess(profile: profile, customer: customer);
+  }
+
+  Future<String?> _enterCloud(User user, {LoginPortal? portal}) async {
     final client = supabaseOrNull!;
 
-    // A membership row means an owner invited this email: attach to that
-    // owner's workspace as the linked tenant instead of a private workspace.
+    final gate = await _fetchAccessGate(user);
+    if (gate.error != null) return gate.error;
+
     String workspaceOwnerId = user.id;
     String? linkedTenantId;
     try {
@@ -328,30 +355,37 @@ class AppState extends ChangeNotifier {
         workspaceOwnerId = membership['owner_id'] as String;
         linkedTenantId = membership['tenant_id'] as String;
       }
-    } catch (_) {
-      // members table missing or unreachable: fall back to a private workspace.
-    }
+    } catch (_) {}
 
+    UserRole resolvedRole;
     if (linkedTenantId != null) {
-      role = UserRole.tenant;
-      currentTenantId = linkedTenantId;
+      resolvedRole = UserRole.tenant;
     } else {
       final metaRole = user.userMetadata?['role'] as String?;
-      role = UserRole.values.firstWhere((e) => e.name == metaRole, orElse: () => UserRole.owner);
-      currentTenantId = defaultTenantId;
+      resolvedRole = UserRole.values.firstWhere((e) => e.name == metaRole, orElse: () => UserRole.owner);
     }
+    if (gate.role != null) resolvedRole = gate.role!;
+
+    if (portal != null) {
+      final mismatch = portalError(resolvedRole, portal);
+      if (mismatch != null) return mismatch;
+    }
+
+    role = resolvedRole;
+    currentTenantId = linkedTenantId ?? defaultTenantId;
     _cloudName = user.userMetadata?['full_name'] as String?;
     accountEmail = user.email;
     mustChangePassword = user.userMetadata?['must_change_password'] == true;
     cloudMode = true;
+    authNotice = null;
     _workspaceOwnerId = workspaceOwnerId;
+    _resolvedCustomerId = gate.customerId;
     _useSupabaseRepos(workspaceOwnerId);
     await _loadAll();
-    // SaaS rule: new customers start EMPTY. Cloud workspaces are never seeded
-    // with demo/mock data — only the local, offline demo box seeds (in init).
     await _ensureMonthlyDuesAtStartup();
     isLoggedIn = true;
     notifyListeners();
+    return null;
   }
 
   /// Creates the tenant's login (temporary password, forced change on first
@@ -407,10 +441,9 @@ class AppState extends ChangeNotifier {
     return tenant == null ? '—' : tenantRoomLabel(tenant);
   }
 
-  /// SaaS scope stamped onto every record this session creates. Interim
-  /// mapping until the relational backend lands: in cloud mode the workspace
-  /// owner doubles as the customer; the local demo uses the 'demo' sentinel.
-  String get customerId => cloudMode ? (_workspaceOwnerId ?? 'demo') : 'demo';
+  /// SaaS scope stamped onto every record this session creates: the resolved
+  /// customer when known, else the workspace owner (interim), else 'demo'.
+  String get customerId => _resolvedCustomerId ?? (cloudMode ? (_workspaceOwnerId ?? 'demo') : 'demo');
 
   // ---- Active property (multi-PG owners work one property at a time) ----
 

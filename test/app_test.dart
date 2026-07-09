@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:pg_management/main.dart';
+import 'package:pg_management/src/access.dart';
 import 'package:pg_management/src/app_state.dart';
 import 'package:pg_management/src/dashboard_screen.dart';
 import 'package:pg_management/src/format.dart';
@@ -26,6 +27,7 @@ void main() {
     final tempDir = await Directory.systemTemp.createTemp('pg_test');
     Hive.init(tempDir.path);
     box = await Hive.openBox<dynamic>('pg_test_${testRun++}');
+    AppState.debugSeedDemoData = true;
     state = AppState(box);
     await state.init();
   });
@@ -71,16 +73,80 @@ void main() {
     expect(AttendanceRecord.fromMap(record.toMap()).toMap(), record.toMap());
   });
 
-  test('login persists the session role and logout clears it', () async {
+  test('there is no local session restore across restarts', () async {
     state.login(UserRole.tenant);
-    expect(box.get('sessionRole'), 'tenant');
+    expect(state.isLoggedIn, isTrue);
+
     final restored = AppState(box);
     await restored.init();
-    expect(restored.isLoggedIn, isTrue);
-    expect(restored.role, UserRole.tenant);
+    expect(restored.isLoggedIn, isFalse);
+  });
 
-    await state.logout();
-    expect(box.get('sessionRole'), isNull);
+  test('evaluateProfileAccess resolves role, customer and status', () {
+    final owner = evaluateProfileAccess(
+      profile: {'role': 'owner', 'customer_id': 'c1', 'platform_admin': false},
+      customer: {'status': 'enabled'},
+    );
+    expect(owner.role, UserRole.owner);
+    expect(owner.customerId, 'c1');
+    expect(owner.error, isNull);
+
+    final tenant = evaluateProfileAccess(
+      profile: {'role': 'tenant', 'customer_id': 'c1', 'platform_admin': false},
+      customer: {'status': 'enabled'},
+    );
+    expect(tenant.role, UserRole.tenant);
+
+    final admin = evaluateProfileAccess(
+      profile: {'role': 'admin', 'customer_id': null, 'platform_admin': true},
+      customer: null,
+    );
+    expect(admin.role, UserRole.admin);
+    expect(admin.error, isNull);
+
+    final unlinked = evaluateProfileAccess(
+      profile: {'role': 'owner', 'customer_id': null, 'platform_admin': false},
+      customer: null,
+    );
+    expect(unlinked.role, isNull);
+    expect(unlinked.error, isNotNull);
+
+    final legacy = evaluateProfileAccess(profile: null, customer: null);
+    expect(legacy.role, isNull);
+    expect(legacy.error, isNull);
+  });
+
+  test('a disabled customer blocks its owner and tenant', () {
+    final disabledOwner = evaluateProfileAccess(
+      profile: {'role': 'owner', 'customer_id': 'c1', 'platform_admin': false},
+      customer: {'status': 'disabled'},
+    );
+    expect(disabledOwner.role, isNull);
+    expect(disabledOwner.error, contains('disabled'));
+
+    final disabledTenant = evaluateProfileAccess(
+      profile: {'role': 'tenant', 'customer_id': 'c1', 'platform_admin': false},
+      customer: {'status': 'disabled'},
+    );
+    expect(disabledTenant.role, isNull);
+    expect(disabledTenant.error, contains('disabled'));
+  });
+
+  test('each portal accepts only its own role', () {
+    expect(portalError(UserRole.owner, LoginPortal.owner), isNull);
+    expect(portalError(UserRole.tenant, LoginPortal.tenant), isNull);
+    expect(portalError(UserRole.admin, LoginPortal.admin), isNull);
+    expect(portalError(UserRole.owner, LoginPortal.tenant), isNotNull);
+    expect(portalError(UserRole.tenant, LoginPortal.owner), isNotNull);
+    expect(portalError(UserRole.admin, LoginPortal.owner), isNotNull);
+    expect(portalError(UserRole.tenant, LoginPortal.admin), isNotNull);
+  });
+
+  test('offline sign-in never creates a local session', () async {
+    final error = await state.signInCloud(email: 'a@b.c', password: 'password', portal: LoginPortal.owner);
+    expect(error, isNotNull);
+    expect(state.isLoggedIn, isFalse);
+    expect(state.cloudMode, isFalse);
   });
 
   test('payments are linked to real tenants and rooms by id', () {
@@ -750,19 +816,19 @@ void main() {
     expect(find.text('My requests'), findsOneWidget); // Maintenance (tenant)
   });
 
-  testWidgets('signing in from the auth screen opens the home shell', (tester) async {
+  testWidgets('auth screen shows role portals and no demo or sign-up', (tester) async {
     await tester.pumpWidget(PgManagementApp(state: state));
-    expect(find.text('Welcome back'), findsOneWidget);
-
-    await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
-    // Bounded pumps instead of pumpAndSettle: pending Hive writes never
-    // settle inside the fake-async zone.
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
 
-    expect(state.isLoggedIn, isTrue);
-    // Owners see the property switcher as the title.
-    expect(find.text('HSR Layout PG'), findsWidgets);
-    expect(find.text('Quick actions'), findsOneWidget);
+    expect(find.text('Owner login'), findsOneWidget);
+    expect(find.text('Tenant login'), findsOneWidget);
+    expect(find.text('Admin login'), findsOneWidget);
+    expect(find.textContaining('demo', findRichText: true), findsNothing);
+    expect(find.text('Create account'), findsNothing);
+
+    await tester.tap(find.text('Owner login'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(FilledButton, 'Sign in'), findsOneWidget);
+    expect(find.text('Forgot password?'), findsOneWidget);
   });
 }

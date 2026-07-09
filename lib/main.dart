@@ -20,7 +20,7 @@ Future<void> main() async {
     await Supabase.initialize(url: supabaseUrl, publishableKey: supabasePublishableKey);
     supabaseReady = true;
   } catch (_) {
-    supabaseReady = false; // Offline or misconfigured: demo mode still works.
+    supabaseReady = false;
   }
   await initPush();
   final box = await Hive.openBox<dynamic>('pg_management');
