@@ -13,7 +13,6 @@ import 'package:pg_management/src/home_shell.dart';
 import 'package:pg_management/src/l10n.dart';
 import 'package:pg_management/src/module_screens.dart';
 import 'package:pg_management/src/owner_app.dart';
-import 'package:pg_management/src/saas_models.dart';
 import 'package:pg_management/src/tenant_app.dart';
 import 'package:pg_management/src/theme.dart';
 
@@ -915,5 +914,45 @@ void main() {
     await tester.tap(find.text('Owner login'));
     await tester.pumpAndSettle();
     expect(find.text('Set up a platform admin'), findsNothing);
+  });
+
+  test('the create-customer function is admin-only and seeds no data', () {
+    final fn = File('supabase/functions/create-customer/index.ts').readAsStringSync();
+    expect(fn, contains('platform_admin'));
+    expect(fn, contains('"code:not_admin"'));
+    expect(fn, contains('from("customers").insert'));
+    expect(fn, contains('role: "owner"'));
+    expect(fn, contains('customer_id: customer.id'));
+    expect(fn, contains('must_change_password: true'));
+    expect(fn.contains('.from("pgs")'), isFalse, reason: 'new customers must start empty');
+    expect(fn.contains('.from("rooms")'), isFalse);
+    expect(fn.contains('.from("tenants")'), isFalse);
+  });
+
+  test('customer admin actions fail closed without a server', () async {
+    expect(await state.loadCustomers(), isEmpty);
+    final created = await state.createCustomer(businessName: 'B', ownerName: 'O', ownerEmail: 'o@b.c', phone: '9');
+    expect(created.error, isNotNull);
+    expect(await state.setCustomerStatus('c1', false), isNotNull);
+  });
+
+  testWidgets('a platform admin sees customer management, not PG screens', (tester) async {
+    state.login(UserRole.admin);
+    await tester.pumpWidget(OwnerAdminApp(state: state));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Customers'), findsOneWidget);
+    expect(find.text('New customer'), findsOneWidget);
+    expect(find.text('Manage'), findsNothing);
+    expect(find.text('Properties'), findsNothing);
+  });
+
+  testWidgets('a new owner with no PGs sees an empty-state prompt', (tester) async {
+    state.login(UserRole.owner);
+    state.pgs.clear();
+    await tester.pumpWidget(OwnerAdminApp(state: state));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Add a property'), findsOneWidget);
   });
 }

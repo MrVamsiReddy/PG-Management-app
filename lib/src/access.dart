@@ -53,6 +53,9 @@ String adminSetupMessage(String? code) => switch (code) {
       'code:weak_password' => 'Use at least 8 characters for the password.',
       'code:missing_fields' => 'Please fill in all fields.',
       'code:create_failed' => 'Could not create the admin account. The email may already be in use.',
+      'code:not_admin' => 'Only a platform admin can do this.',
+      'code:email_in_use' => 'That owner email is already in use.',
+      'code:unauthorized' => 'Please sign in again.',
       _ => 'Something went wrong. Please try again.',
     };
 

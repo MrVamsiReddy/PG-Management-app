@@ -150,9 +150,9 @@ class StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lower = text.toLowerCase();
-    final color = lower.contains('paid') || lower.contains('resolved') || lower.contains('verified') || lower == 'in' || lower.contains('signed') || lower.contains('generated')
+    final color = lower.contains('paid') || lower.contains('resolved') || lower.contains('verified') || lower == 'in' || lower.contains('signed') || lower.contains('generated') || lower.contains('enabled')
         ? primary
-        : lower.contains('overdue') || lower.contains('high') || lower.contains('declined')
+        : lower.contains('overdue') || lower.contains('high') || lower.contains('declined') || lower.contains('disabled')
             ? const Color(0xFFD44B47)
             : lower.contains('progress') || lower.contains('inside') || lower.contains('medium') || lower.contains('partial')
                 ? const Color(0xFF3478C7)

@@ -67,6 +67,16 @@ Security:
 - Rotation: set a new `ADMIN_SETUP_KEY`; to allow a grace period, keep the old value in `ADMIN_SETUP_KEY_PREVIOUS` — both are accepted until you remove it.
 - Expiry: set `ADMIN_SETUP_KEY_EXPIRES_AT`; after that time every attempt fails.
 
+## Customer management (platform admin)
+
+Signed in as a platform admin (owner/admin app), you manage customers, not PGs directly:
+
+- Create a customer — enters business name, owner name/email, phone. This calls the `create-customer` Edge Function, which creates the customer row and its owner login (temporary password, forced change at first sign-in) and returns the credentials to share. New customers start empty (no PGs, rooms or tenants).
+- Enable / disable a customer — a disabled customer immediately blocks its owner and tenants (enforced by RLS).
+- View a customer's PGs.
+
+Deploy the function: Edge Functions → Deploy → name it exactly `create-customer` → paste `supabase/functions/create-customer/index.ts`. It requires the caller to be a platform admin.
+
 ## Cloud accounts (Supabase)
 
 The app supports two modes side by side:

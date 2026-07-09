@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+import 'admin_customers.dart';
 import 'app_state.dart';
 import 'auth_screen.dart';
 import 'home_shell.dart';
@@ -39,6 +40,7 @@ class OwnerAdminApp extends StatelessWidget {
     if (!state.isLoggedIn) return const AuthScreen(portals: [LoginPortal.owner, LoginPortal.admin]);
     if (state.mustChangePassword) return const SetPasswordScreen();
     if (state.role == UserRole.tenant) return const _WrongApp();
+    if (state.role == UserRole.admin) return const CustomerManagementScreen();
     return const HomeShell();
   }
 }

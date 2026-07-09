@@ -7,11 +7,13 @@ import 'format.dart';
 import 'l10n.dart';
 import 'models.dart';
 import 'repositories.dart';
+import 'saas_models.dart';
 import 'supabase_config.dart';
 
 export 'access.dart' show LoginPortal, adminSetupMessage;
 export 'l10n.dart' show AppLanguage;
 export 'models.dart';
+export 'saas_models.dart';
 
 enum UserRole { owner, tenant, admin }
 
@@ -284,6 +286,76 @@ class AppState extends ChangeNotifier {
       return adminSetupMessage(details is Map ? details['error'] as String? : null);
     } catch (_) {
       return adminSetupMessage(null);
+    }
+  }
+
+  Customer _customerFromRow(Map<String, dynamic> r) => Customer(
+        id: r['id'] as String,
+        businessName: r['business_name'] as String? ?? '',
+        ownerName: r['owner_name'] as String? ?? '',
+        ownerEmail: r['owner_email'] as String? ?? '',
+        phone: r['phone'] as String? ?? '',
+        status: CustomerStatus.fromWire(r['status'] as String?),
+        plan: r['plan'] as String? ?? 'free',
+        createdAt: DateTime.tryParse(r['created_at'] as String? ?? '') ?? DateTime.now(),
+        disabledAt: r['disabled_at'] == null ? null : DateTime.tryParse(r['disabled_at'] as String),
+      );
+
+  Future<List<Customer>> loadCustomers() async {
+    final client = supabaseOrNull;
+    if (client == null) return [];
+    try {
+      final rows = await client.from('customers').select().order('created_at', ascending: false);
+      return (rows as List).map((r) => _customerFromRow(Map<String, dynamic>.from(r as Map))).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<({String? error, String? tempPassword})> createCustomer({required String businessName, required String ownerName, required String ownerEmail, required String phone, String plan = 'free'}) async {
+    final client = supabaseOrNull;
+    if (client == null) return (error: 'Cannot reach the server. Check your connection.', tempPassword: null);
+    try {
+      final result = await client.functions.invoke('create-customer', body: {
+        'businessName': businessName.trim(),
+        'ownerName': ownerName.trim(),
+        'ownerEmail': ownerEmail.trim(),
+        'phone': phone.trim(),
+        'plan': plan,
+      });
+      final data = result.data;
+      if (data is Map && data['ok'] == true) return (error: null, tempPassword: data['tempPassword'] as String?);
+      return (error: adminSetupMessage(data is Map ? data['error'] as String? : null), tempPassword: null);
+    } on FunctionException catch (e) {
+      final details = e.details;
+      return (error: adminSetupMessage(details is Map ? details['error'] as String? : null), tempPassword: null);
+    } catch (_) {
+      return (error: 'Something went wrong. Please try again.', tempPassword: null);
+    }
+  }
+
+  Future<String?> setCustomerStatus(String id, bool enabled) async {
+    final client = supabaseOrNull;
+    if (client == null) return 'Cannot reach the server. Check your connection.';
+    try {
+      await client.from('customers').update({
+        'status': enabled ? 'enabled' : 'disabled',
+        'disabled_at': enabled ? null : DateTime.now().toIso8601String(),
+      }).eq('id', id);
+      return null;
+    } catch (_) {
+      return 'Could not update the customer.';
+    }
+  }
+
+  Future<List<String>> loadCustomerPgNames(String customerId) async {
+    final client = supabaseOrNull;
+    if (client == null) return [];
+    try {
+      final rows = await client.from('pgs').select('name').eq('customer_id', customerId);
+      return (rows as List).map((r) => r['name'] as String).toList();
+    } catch (_) {
+      return [];
     }
   }
 

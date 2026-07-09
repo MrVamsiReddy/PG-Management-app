@@ -11,6 +11,7 @@ class DashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
+    if (state.role != UserRole.tenant && state.pgs.isEmpty) return _ownerEmpty(context, state);
     return RefreshIndicator(
       onRefresh: state.refresh,
       child: ListView(
@@ -214,6 +215,23 @@ class DashboardScreen extends StatelessWidget {
       )).toList(),
     );
   }
+
+  Widget _ownerEmpty(BuildContext context, AppState state) => ListView(
+        padding: const EdgeInsets.fromLTRB(20, 60, 20, 40),
+        children: [
+          const Icon(Icons.apartment_outlined, size: 56, color: Colors.black26),
+          const SizedBox(height: 16),
+          Text('Welcome, ${state.displayName.split(' ').first}', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineMedium),
+          const SizedBox(height: 8),
+          const Text('Your workspace is empty. Add your first PG property to get started.', textAlign: TextAlign.center, style: TextStyle(color: Colors.black54)),
+          const SizedBox(height: 22),
+          FilledButton.icon(
+            onPressed: () => _open(context, const PgListingsScreen()),
+            icon: const Icon(Icons.add),
+            label: const Text('Add a property'),
+          ),
+        ],
+      );
 
   String _greeting() {
     final hour = DateTime.now().hour;
