@@ -947,12 +947,64 @@ void main() {
     expect(find.text('Properties'), findsNothing);
   });
 
-  testWidgets('a new owner with no PGs sees an empty-state prompt', (tester) async {
+  testWidgets('a new owner with no PGs is guided into the setup wizard', (tester) async {
     state.login(UserRole.owner);
     state.pgs.clear();
     await tester.pumpWidget(OwnerAdminApp(state: state));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('Add a property'), findsOneWidget);
+    expect(find.text('Set up your PG'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Set up your PG'));
+    await tester.pumpAndSettle();
+    expect(find.text('Property details'), findsOneWidget);
+    expect(find.text('Rent by sharing'), findsOneWidget);
+  });
+
+  test('createProperty builds the PG with floors, rooms, beds and rent', () {
+    final pgsBefore = state.pgs.length;
+    final error = state.createProperty(
+      name: 'Indiranagar PG', address: 'X', amenities: 'Wi-Fi',
+      specs: [
+        (number: '101', floor: 1, beds: 2, rent: 9500),
+        (number: '102', floor: 1, beds: 3, rent: 7800),
+        (number: '201', floor: 2, beds: 1, rent: 14000),
+      ],
+    );
+    expect(error, isNull);
+    expect(state.pgs.length, pgsBefore + 1);
+    final pg = state.pgs.first;
+    expect(pg.name, 'Indiranagar PG');
+    expect(pg.beds, 6);
+    expect(state.activePg?.id, pg.id);
+
+    final made = state.rooms.where((r) => r.pgId == pg.id).toList();
+    expect(made, hasLength(3));
+    expect(made.map((r) => r.floor).toSet(), {1, 2});
+    expect(made.firstWhere((r) => r.number == '102').rent, 7800);
+    expect(made.every((r) => r.customerId == state.customerId), isTrue);
+  });
+
+  test('changing a room rent never rewrites existing payments', () {
+    final room = state.rooms.firstWhere((r) => r.id == 'r1'); // rent 9500
+    final due = state.payments.firstWhere((p) => p.tenantId == 't1' && p.status == PaymentStatus.due);
+    final originalAmount = due.amount;
+
+    expect(state.setRoomRent(room.id, 12000), isNull);
+    expect(state.roomById(room.id)!.rent, 12000);
+    expect(state.payments.firstWhere((p) => p.id == due.id).amount, originalAmount);
+  });
+
+  test('structure reduction is blocked when beds are occupied', () {
+    final occupied = state.rooms.firstWhere((r) => r.id == 'r1'); // 2 beds, occupied
+    expect(state.removeRoom(occupied.id), contains('active tenants'));
+    expect(state.setRoomBeds(occupied.id, 1), contains('below occupied'));
+    expect(state.rooms.any((r) => r.id == occupied.id), isTrue);
+
+    state.createProperty(name: 'Fresh', address: 'X', amenities: '', specs: [(number: '901', floor: 9, beds: 3, rent: 5000)]);
+    final empty = state.rooms.firstWhere((r) => r.number == '901');
+    expect(state.setRoomBeds(empty.id, 1), isNull);
+    expect(state.removeRoom(empty.id), isNull);
+    expect(state.rooms.any((r) => r.id == empty.id), isFalse);
   });
 }

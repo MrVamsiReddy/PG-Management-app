@@ -783,6 +783,55 @@ class AppState extends ChangeNotifier {
     _persist({'rooms'});
   }
 
+  String? createProperty({required String name, required String address, required String amenities, required List<({String number, int floor, int beds, int rent})> specs}) {
+    final cleanName = name.trim();
+    if (cleanName.isEmpty) return 'Enter a property name.';
+    if (specs.isEmpty) return 'Add at least one room.';
+    final pgId = 'p${DateTime.now().microsecondsSinceEpoch}';
+    final totalBeds = specs.fold(0, (s, e) => s + e.beds);
+    pgs.insert(0, Pg(id: pgId, name: cleanName, address: address.trim(), beds: totalBeds, occupied: 0, amenities: amenities.trim(), rating: 0, customerId: customerId));
+    var seq = 0;
+    for (final s in specs) {
+      rooms.add(Room(id: 'r${DateTime.now().microsecondsSinceEpoch}-${seq++}', pgId: pgId, number: s.number, floor: s.floor, beds: s.beds, occupied: 0, rent: s.rent, customerId: customerId));
+    }
+    _activePgId = pgId;
+    box.put('activePgId', pgId);
+    _persist({'pgs', 'rooms'});
+    return null;
+  }
+
+  int _roomOccupancy(Room room) {
+    final tenantCount = tenants.where((t) => t.roomId == room.id).length;
+    return tenantCount > room.occupied ? tenantCount : room.occupied;
+  }
+
+  String? removeRoom(String roomId) {
+    final i = rooms.indexWhere((r) => r.id == roomId);
+    if (i == -1) return 'Room not found.';
+    if (_roomOccupancy(rooms[i]) > 0) return 'Cannot remove a room with active tenants.';
+    rooms.removeAt(i);
+    _persist({'rooms'});
+    return null;
+  }
+
+  String? setRoomBeds(String roomId, int beds) {
+    final i = rooms.indexWhere((r) => r.id == roomId);
+    if (i == -1) return 'Room not found.';
+    if (beds < _roomOccupancy(rooms[i])) return 'Cannot reduce beds below occupied beds.';
+    final r = rooms[i];
+    rooms[i] = Room(id: r.id, pgId: r.pgId, number: r.number, floor: r.floor, beds: beds, occupied: r.occupied, rent: r.rent, customerId: r.customerId);
+    _persist({'rooms'});
+    return null;
+  }
+
+  String? setRoomRent(String roomId, int rent) {
+    final i = rooms.indexWhere((r) => r.id == roomId);
+    if (i == -1) return 'Room not found.';
+    rooms[i] = rooms[i].copyWith(rent: rent);
+    _persist({'rooms'});
+    return null;
+  }
+
   /// True when the room has a free bed.
   bool roomHasVacancy(String roomId) {
     final room = roomById(roomId);

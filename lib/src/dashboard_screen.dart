@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app_state.dart';
 import 'module_screens.dart';
+import 'pg_wizard.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -223,12 +224,12 @@ class DashboardScreen extends StatelessWidget {
           const SizedBox(height: 16),
           Text('Welcome, ${state.displayName.split(' ').first}', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 8),
-          const Text('Your workspace is empty. Add your first PG property to get started.', textAlign: TextAlign.center, style: TextStyle(color: Colors.black54)),
+          const Text('Your workspace is empty. Set up your first PG to get started.', textAlign: TextAlign.center, style: TextStyle(color: Colors.black54)),
           const SizedBox(height: 22),
           FilledButton.icon(
-            onPressed: () => _open(context, const PgListingsScreen()),
+            onPressed: () => _open(context, const PgSetupWizard()),
             icon: const Icon(Icons.add),
-            label: const Text('Add a property'),
+            label: const Text('Set up your PG'),
           ),
         ],
       );
