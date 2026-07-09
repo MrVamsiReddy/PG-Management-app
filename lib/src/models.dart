@@ -73,6 +73,7 @@ class Pg {
     required this.amenities,
     required this.rating,
     this.photo,
+    this.customerId,
   });
 
   final String id;
@@ -84,7 +85,11 @@ class Pg {
   final double rating;
   final String? photo; // compressed image, base64
 
-  Pg copyWith({String? name, String? address, int? beds, int? occupied, String? amenities, double? rating, String? photo}) => Pg(
+  /// SaaS scope: the business account this record belongs to. Null on
+  /// legacy/local-demo rows created before multi-tenancy.
+  final String? customerId;
+
+  Pg copyWith({String? name, String? address, int? beds, int? occupied, String? amenities, double? rating, String? photo, String? customerId}) => Pg(
         id: id,
         name: name ?? this.name,
         address: address ?? this.address,
@@ -93,12 +98,13 @@ class Pg {
         amenities: amenities ?? this.amenities,
         rating: rating ?? this.rating,
         photo: photo ?? this.photo,
+        customerId: customerId ?? this.customerId,
       );
 
   Map<String, dynamic> toMap() => {
         'id': id, 'name': name, 'address': address, 'beds': beds,
         'occupied': occupied, 'amenities': amenities, 'rating': rating,
-        'photo': photo,
+        'photo': photo, 'customerId': customerId,
       };
 
   static Pg fromMap(Map<String, dynamic> map) => Pg(
@@ -110,6 +116,7 @@ class Pg {
         amenities: map['amenities'] as String,
         rating: (map['rating'] as num).toDouble(),
         photo: map['photo'] as String?,
+        customerId: map['customerId'] as String?,
       );
 }
 
@@ -122,6 +129,7 @@ class Room {
     required this.beds,
     required this.occupied,
     required this.rent,
+    this.customerId,
   });
 
   final String id;
@@ -131,18 +139,21 @@ class Room {
   final int beds;
   final int occupied;
   final int rent;
+  final String? customerId;
 
   String get type => switch (beds) { 1 => 'Single', 2 => 'Double sharing', _ => 'Triple sharing' };
 
-  Room copyWith({int? occupied, int? rent}) => Room(
+  Room copyWith({int? occupied, int? rent, String? customerId}) => Room(
         id: id, pgId: pgId, number: number, floor: floor, beds: beds,
         occupied: occupied ?? this.occupied,
         rent: rent ?? this.rent,
+        customerId: customerId ?? this.customerId,
       );
 
   Map<String, dynamic> toMap() => {
         'id': id, 'pgId': pgId, 'number': number, 'floor': floor,
         'beds': beds, 'occupied': occupied, 'rent': rent,
+        'customerId': customerId,
       };
 
   static Room fromMap(Map<String, dynamic> map) => Room(
@@ -153,6 +164,7 @@ class Room {
         beds: map['beds'] as int,
         occupied: map['occupied'] as int,
         rent: map['rent'] as int,
+        customerId: map['customerId'] as String?,
       );
 }
 
@@ -167,6 +179,7 @@ class Tenant {
     required this.agreement,
     required this.joinDate,
     this.kycDoc,
+    this.customerId,
   });
 
   final String id;
@@ -178,11 +191,12 @@ class Tenant {
   final AgreementStatus agreement;
   final DateTime joinDate;
   final String? kycDoc; // identity document image, base64
+  final String? customerId;
 
   String get initials => name.split(' ').where((e) => e.isNotEmpty).map((e) => e[0]).take(2).join();
 
   Tenant copyWith({String? name, String? phone, KycStatus? kyc, AgreementStatus? agreement, String? kycDoc}) => Tenant(
-        id: id, roomId: roomId, bed: bed, joinDate: joinDate,
+        id: id, roomId: roomId, bed: bed, joinDate: joinDate, customerId: customerId,
         name: name ?? this.name,
         phone: phone ?? this.phone,
         kyc: kyc ?? this.kyc,
@@ -194,7 +208,7 @@ class Tenant {
         'id': id, 'name': name, 'phone': phone, 'roomId': roomId, 'bed': bed,
         'kyc': kyc.name, 'agreement': agreement.name,
         'joinDate': joinDate.toIso8601String(),
-        'kycDoc': kycDoc,
+        'kycDoc': kycDoc, 'customerId': customerId,
       };
 
   static Tenant fromMap(Map<String, dynamic> map) => Tenant(
@@ -207,6 +221,7 @@ class Tenant {
         agreement: AgreementStatus.values.byName(map['agreement'] as String),
         joinDate: DateTime.parse(map['joinDate'] as String),
         kycDoc: map['kycDoc'] as String?,
+        customerId: map['customerId'] as String?,
       );
 }
 
@@ -221,6 +236,7 @@ class Payment {
     this.paidDate,
     this.method,
     this.paidAmount = 0,
+    this.customerId,
   });
 
   final String id;
@@ -231,6 +247,7 @@ class Payment {
   final DateTime dueDate;
   final DateTime? paidDate;
   final String? method;
+  final String? customerId;
 
   /// How much has been received when [status] is partial. For paid the full
   /// [amount] is considered collected; for due, nothing.
@@ -255,6 +272,7 @@ class Payment {
 
   Payment copyWith({PaymentStatus? status, DateTime? paidDate, String? method, int? paidAmount}) => Payment(
         id: id, tenantId: tenantId, period: period, amount: amount, dueDate: dueDate,
+        customerId: customerId,
         status: status ?? this.status,
         paidDate: paidDate ?? this.paidDate,
         method: method ?? this.method,
@@ -266,7 +284,7 @@ class Payment {
         'amount': amount, 'status': status.name,
         'dueDate': dueDate.toIso8601String(),
         'paidDate': paidDate?.toIso8601String(), 'method': method,
-        'paidAmount': paidAmount,
+        'paidAmount': paidAmount, 'customerId': customerId,
       };
 
   static Payment fromMap(Map<String, dynamic> map) => Payment(
@@ -279,6 +297,7 @@ class Payment {
         paidDate: map['paidDate'] == null ? null : DateTime.parse(map['paidDate'] as String),
         method: map['method'] as String?,
         paidAmount: map['paidAmount'] as int? ?? 0,
+        customerId: map['customerId'] as String?,
       );
 }
 
@@ -293,6 +312,7 @@ class MaintenanceRequest {
     required this.createdAt,
     this.assignee,
     this.photo,
+    this.customerId,
   });
 
   final String id;
@@ -304,10 +324,11 @@ class MaintenanceRequest {
   final DateTime createdAt;
   final String? assignee;
   final String? photo; // issue photo, base64
+  final String? customerId;
 
   MaintenanceRequest copyWith({MaintenanceStatus? status, String? assignee}) => MaintenanceRequest(
         id: id, roomId: roomId, title: title, category: category,
-        priority: priority, createdAt: createdAt, photo: photo,
+        priority: priority, createdAt: createdAt, photo: photo, customerId: customerId,
         status: status ?? this.status,
         assignee: assignee ?? this.assignee,
       );
@@ -316,7 +337,7 @@ class MaintenanceRequest {
         'id': id, 'roomId': roomId, 'title': title, 'category': category,
         'status': status.name, 'priority': priority.name,
         'createdAt': createdAt.toIso8601String(), 'assignee': assignee,
-        'photo': photo,
+        'photo': photo, 'customerId': customerId,
       };
 
   static MaintenanceRequest fromMap(Map<String, dynamic> map) => MaintenanceRequest(
@@ -329,6 +350,7 @@ class MaintenanceRequest {
         createdAt: DateTime.parse(map['createdAt'] as String),
         assignee: map['assignee'] as String?,
         photo: map['photo'] as String?,
+        customerId: map['customerId'] as String?,
       );
 }
 
@@ -340,6 +362,7 @@ class Visitor {
     required this.purpose,
     required this.status,
     required this.expectedAt,
+    this.customerId,
   });
 
   final String id;
@@ -348,15 +371,18 @@ class Visitor {
   final String purpose;
   final VisitorStatus status;
   final DateTime expectedAt;
+  final String? customerId;
 
   Visitor copyWith({VisitorStatus? status}) => Visitor(
         id: id, tenantId: tenantId, name: name, purpose: purpose, expectedAt: expectedAt,
+        customerId: customerId,
         status: status ?? this.status,
       );
 
   Map<String, dynamic> toMap() => {
         'id': id, 'tenantId': tenantId, 'name': name, 'purpose': purpose,
         'status': status.name, 'expectedAt': expectedAt.toIso8601String(),
+        'customerId': customerId,
       };
 
   static Visitor fromMap(Map<String, dynamic> map) => Visitor(
@@ -366,6 +392,7 @@ class Visitor {
         purpose: map['purpose'] as String,
         status: VisitorStatus.values.byName(map['status'] as String),
         expectedAt: DateTime.parse(map['expectedAt'] as String),
+        customerId: map['customerId'] as String?,
       );
 }
 
@@ -377,6 +404,7 @@ class Announcement {
     required this.author,
     required this.postedAt,
     this.pgId,
+    this.customerId,
   });
 
   final String id;
@@ -387,10 +415,12 @@ class Announcement {
 
   /// Target property; null means every property (all tenants).
   final String? pgId;
+  final String? customerId;
 
   Map<String, dynamic> toMap() => {
         'id': id, 'title': title, 'body': body, 'author': author,
         'postedAt': postedAt.toIso8601String(), 'pgId': pgId,
+        'customerId': customerId,
       };
 
   static Announcement fromMap(Map<String, dynamic> map) => Announcement(
@@ -400,6 +430,7 @@ class Announcement {
         author: map['author'] as String,
         postedAt: DateTime.parse(map['postedAt'] as String),
         pgId: map['pgId'] as String?,
+        customerId: map['customerId'] as String?,
       );
 }
 
@@ -484,6 +515,7 @@ class AppNotification {
     this.tenantId,
     this.pgId,
     this.relatedEntityId,
+    this.customerId,
   });
 
   final String id;
@@ -492,6 +524,7 @@ class AppNotification {
   final NotificationType type;
   final DateTime createdAt;
   final bool read;
+  final String? customerId;
 
   /// Audience. Combined with [tenantId] and [pgId] this decides who may see it.
   final NotificationScope roleScope;
@@ -508,6 +541,7 @@ class AppNotification {
   AppNotification copyWith({bool? read}) => AppNotification(
         id: id, title: title, body: body, type: type, createdAt: createdAt,
         roleScope: roleScope, tenantId: tenantId, pgId: pgId, relatedEntityId: relatedEntityId,
+        customerId: customerId,
         read: read ?? this.read,
       );
 
@@ -515,7 +549,7 @@ class AppNotification {
         'id': id, 'title': title, 'body': body, 'type': type.name,
         'createdAt': createdAt.toIso8601String(), 'read': read,
         'roleScope': roleScope.name, 'tenantId': tenantId, 'pgId': pgId,
-        'relatedEntityId': relatedEntityId,
+        'relatedEntityId': relatedEntityId, 'customerId': customerId,
       };
 
   static AppNotification fromMap(Map<String, dynamic> map) => AppNotification(
@@ -533,5 +567,6 @@ class AppNotification {
         tenantId: map['tenantId'] as String?,
         pgId: map['pgId'] as String?,
         relatedEntityId: map['relatedEntityId'] as String?,
+        customerId: map['customerId'] as String?,
       );
 }

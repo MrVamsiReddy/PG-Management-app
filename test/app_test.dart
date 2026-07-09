@@ -11,6 +11,7 @@ import 'package:pg_management/src/format.dart';
 import 'package:pg_management/src/home_shell.dart';
 import 'package:pg_management/src/l10n.dart';
 import 'package:pg_management/src/module_screens.dart';
+import 'package:pg_management/src/saas_models.dart';
 import 'package:pg_management/src/theme.dart';
 
 void main() {
@@ -510,6 +511,85 @@ void main() {
     // Surviving modules still render.
     expect(find.text('Maintenance'), findsOneWidget);
     expect(find.text('Announcements'), findsOneWidget);
+  });
+
+  test('every record a session creates is stamped with its customer id', () {
+    state.login(UserRole.owner); // local demo session => customer 'demo'
+    expect(state.customerId, 'demo');
+
+    final room = state.rooms.firstWhere((r) => r.occupied < r.beds);
+    state.onboardTenant(name: 'Stamp Test', phone: '90000 12399', roomId: room.id, bed: state.suggestBed(room.id));
+    final tenant = state.tenants.first;
+    expect(tenant.customerId, 'demo');
+    // The tenant's generated monthly due carries the scope too.
+    expect(state.payments.firstWhere((p) => p.tenantId == tenant.id).customerId, 'demo');
+
+    state.publishAnnouncement('Scoped', 'Body');
+    expect(state.announcements.first.customerId, 'demo');
+    expect(state.notifications.first.customerId, 'demo');
+
+    state.addVisitor(name: 'Scoped Visitor', tenantId: tenant.id, purpose: 'Family');
+    expect(state.visitors.first.customerId, 'demo');
+
+    state.addMaintenanceRequest(title: 'Scoped issue', roomId: room.id, category: 'Other', priority: Priority.low);
+    expect(state.maintenance.first.customerId, 'demo');
+
+    state.addRoom(const Room(id: 'r-scope', pgId: 'p1', number: '999', floor: 9, beds: 2, occupied: 0, rent: 5000));
+    expect(state.rooms.last.customerId, 'demo');
+
+    state.savePg(const Pg(id: 'p-scope', name: 'Scoped PG', address: 'X', beds: 10, occupied: 0, amenities: '', rating: 4.0));
+    expect(state.pgs.first.customerId, 'demo');
+  });
+
+  test('SaaS models survive a toMap/fromMap round trip', () {
+    final now = DateTime.now();
+    final customer = Customer(id: 'c1', businessName: 'Acme PG', ownerName: 'A', ownerEmail: 'a@b.c', phone: '9', status: CustomerStatus.disabled, plan: 'pro', createdAt: now, disabledAt: now);
+    expect(Customer.fromMap(customer.toMap()).toMap(), customer.toMap());
+    expect(customer.enabled, isFalse);
+
+    final invite = TenantInvite(id: 'i1', customerId: 'c1', tenantId: 't1', email: 'x@y.z', token: 'tok', status: InviteStatus.pending, expiresAt: now.add(const Duration(days: 7)));
+    expect(TenantInvite.fromMap(invite.toMap()).toMap(), invite.toMap());
+    expect(invite.usable, isTrue);
+    expect(TenantInvite.fromMap({...invite.toMap(), 'status': 'revoked'}).usable, isFalse);
+
+    final submission = PaymentSubmission(id: 's1', customerId: 'c1', pgId: 'p1', tenantId: 't1', dueId: 'd1', amount: 9500, utr: 'UTR123', submittedAt: now);
+    expect(PaymentSubmission.fromMap(submission.toMap()).toMap(), submission.toMap());
+    expect(submission.status, SubmissionStatus.pendingConfirmation);
+
+    const bed = Bed(id: 'b1', customerId: 'c1', pgId: 'p1', roomId: 'r1', label: 'A');
+    expect(Bed.fromMap(bed.toMap()).toMap(), bed.toMap());
+
+    final rule = RentRule(id: 'rr1', customerId: 'c1', pgId: 'p1', sharingType: 2, amount: 9500, effectiveFrom: now);
+    expect(RentRule.fromMap(rule.toMap()).toMap(), rule.toMap());
+
+    final log = AuditLog(id: 'l1', customerId: null, actorUserId: 'u1', actorRole: 'admin', action: 'customer_created', entityType: 'customer', entityId: 'c1', afterJson: const {'status': 'enabled'}, createdAt: now);
+    expect(AuditLog.fromMap(log.toMap()).toMap(), log.toMap());
+  });
+
+  test('the SaaS migration scopes and locks down every business table', () {
+    final sql = File('supabase/004_saas_core.sql').readAsStringSync();
+    const tables = [
+      'customers', 'profiles', 'pgs', 'floors', 'rooms', 'beds', 'tenants',
+      'tenant_invites', 'rent_rules', 'pg_payment_settings', 'payment_dues',
+      'payments', 'payment_submissions', 'payment_proof_files', 'complaints',
+      'notices', 'visitors', 'audit_logs',
+    ];
+    for (final table in tables) {
+      expect(sql, contains('create table if not exists public.$table'), reason: '$table must exist');
+      expect(sql, contains('alter table public.$table enable row level security'), reason: '$table must enable RLS');
+    }
+    // Every business table carries the customer scope (customers is the scope).
+    for (final table in tables.where((t) => t != 'customers' && t != 'profiles' && t != 'audit_logs')) {
+      expect(sql, contains(RegExp('create table if not exists public\\.$table[^;]*customer_id\\s+uuid not null', dotAll: true)), reason: '$table must require customer_id');
+    }
+    // Disabled customers are excluded at the helper level, tenants never
+    // write dues, and the proofs bucket exists with scoped policies.
+    expect(sql, contains("c.status = 'enabled'"));
+    expect(sql.contains('payment_dues_tenant_read'), isTrue);
+    expect(sql.contains('payment_dues_tenant_insert'), isFalse, reason: 'tenants must never write dues');
+    expect(sql, contains("'payment-proofs'"));
+    expect(sql, contains('pp_tenant_insert'));
+    expect(sql, contains('unique (tenant_id, period)'));
   });
 
   test('language preference persists across restarts', () async {

@@ -136,6 +136,9 @@ class AppState extends ChangeNotifier {
     language = AppLanguage.fromCode(box.get('language') as String?);
     pushEnabled = box.get('pushEnabled') as bool? ?? true;
     await _loadAll();
+    // Demo-only seed: init runs against the LOCAL Hive box (cloud repos are
+    // attached later by restoreCloudSession), so this can never put mock data
+    // into a production customer's workspace.
     if (pgs.isEmpty) {
       _seed();
       await persistAll();
@@ -344,11 +347,8 @@ class AppState extends ChangeNotifier {
     _workspaceOwnerId = workspaceOwnerId;
     _useSupabaseRepos(workspaceOwnerId);
     await _loadAll();
-    // Seed only a brand-new private workspace — never an owner's shared one.
-    if (pgs.isEmpty && workspaceOwnerId == user.id) {
-      _seed();
-      await persistAll();
-    }
+    // SaaS rule: new customers start EMPTY. Cloud workspaces are never seeded
+    // with demo/mock data — only the local, offline demo box seeds (in init).
     await _ensureMonthlyDuesAtStartup();
     isLoggedIn = true;
     notifyListeners();
@@ -406,6 +406,11 @@ class AppState extends ChangeNotifier {
     final tenant = currentTenant;
     return tenant == null ? '—' : tenantRoomLabel(tenant);
   }
+
+  /// SaaS scope stamped onto every record this session creates. Interim
+  /// mapping until the relational backend lands: in cloud mode the workspace
+  /// owner doubles as the customer; the local demo uses the 'demo' sentinel.
+  String get customerId => cloudMode ? (_workspaceOwnerId ?? 'demo') : 'demo';
 
   // ---- Active property (multi-PG owners work one property at a time) ----
 
@@ -575,6 +580,7 @@ class AppState extends ChangeNotifier {
     notifications.insert(0, AppNotification(
       id: _id('n'), title: title, body: body, type: type, createdAt: DateTime.now(),
       roleScope: scope, tenantId: tenantId, pgId: pgId, relatedEntityId: relatedEntityId,
+      customerId: customerId,
     ));
     if (push) _pushToWorkspace(title, body, scope: scope, tenantId: tenantId);
   }
@@ -636,17 +642,18 @@ class AppState extends ChangeNotifier {
   }
 
   void savePg(Pg pg) {
-    final i = pgs.indexWhere((e) => e.id == pg.id);
+    final stamped = pg.copyWith(customerId: pg.customerId ?? customerId);
+    final i = pgs.indexWhere((e) => e.id == stamped.id);
     if (i == -1) {
-      pgs.insert(0, pg);
+      pgs.insert(0, stamped);
     } else {
-      pgs[i] = pg;
+      pgs[i] = stamped;
     }
     _persist({'pgs'});
   }
 
   void addRoom(Room room) {
-    rooms.add(room);
+    rooms.add(room.copyWith(customerId: room.customerId ?? customerId));
     _persist({'rooms'});
   }
 
@@ -694,7 +701,7 @@ class AppState extends ChangeNotifier {
     tenants.insert(0, Tenant(
       id: _id('t'), name: cleanName, phone: cleanPhone, roomId: roomId, bed: cleanBed,
       kyc: KycStatus.pending, agreement: AgreementStatus.awaitingSign, joinDate: DateTime.now(),
-      kycDoc: kycDoc,
+      kycDoc: kycDoc, customerId: customerId,
     ));
     rooms[i] = room.copyWith(occupied: room.occupied + 1);
     final p = pgs.indexWhere((e) => e.id == room.pgId);
@@ -759,6 +766,7 @@ class AppState extends ChangeNotifier {
         id: 'pay-${period.year}-${period.month}-${tenant.id}',
         tenantId: tenant.id, period: period, amount: rent,
         status: PaymentStatus.due, dueDate: dueDate,
+        customerId: customerId,
       ));
       added = true;
     }
@@ -821,6 +829,7 @@ class AppState extends ChangeNotifier {
         id: _id('pay'), tenantId: tenantId, period: period, amount: amount,
         status: PaymentStatus.paid, paidAmount: amount,
         dueDate: DateTime(now.year, now.month, 5), paidDate: now, method: method,
+        customerId: customerId,
       );
       payments.insert(0, payment);
     }
@@ -850,7 +859,7 @@ class AppState extends ChangeNotifier {
     final request = MaintenanceRequest(
       id: _id('m'), roomId: roomId, title: title, category: category,
       status: MaintenanceStatus.open, priority: priority, createdAt: DateTime.now(),
-      photo: photo,
+      photo: photo, customerId: customerId,
     );
     maintenance.insert(0, request);
     // Managers are alerted to the new request; it also appears in the raising
@@ -878,6 +887,7 @@ class AppState extends ChangeNotifier {
     final visitor = Visitor(
       id: _id('v'), tenantId: tenantId, name: name, purpose: purpose,
       status: VisitorStatus.awaitingApproval, expectedAt: DateTime.now(),
+      customerId: customerId,
     );
     visitors.insert(0, visitor);
     // Managers are alerted to approve; the visit is private to this tenant.
@@ -910,6 +920,7 @@ class AppState extends ChangeNotifier {
     final announcement = Announcement(
       id: _id('a'), title: title, body: body,
       author: '$ownerName, ${role.label}', postedAt: DateTime.now(), pgId: pgId,
+      customerId: customerId,
     );
     announcements.insert(0, announcement);
     _notify('New announcement', title, NotificationType.announcement,
