@@ -53,68 +53,6 @@ create table if not exists public.profiles (
 create index if not exists profiles_customer_idx on public.profiles (customer_id);
 
 -- ---------------------------------------------------------------------------
--- 2. Helper functions (security definer: they bypass RLS to avoid recursion)
--- ---------------------------------------------------------------------------
-
-create or replace function public.is_platform_admin() returns boolean
-language sql stable security definer set search_path = public as
-$$ select exists (select 1 from profiles where id = auth.uid() and platform_admin) $$;
-
--- The caller's customer id, but only when they are an owner of an ENABLED
--- customer. Returns null otherwise, which makes every comparison fail closed.
-create or replace function public.my_owner_customer_id() returns uuid
-language sql stable security definer set search_path = public as
-$$
-  select p.customer_id from profiles p
-  join customers c on c.id = p.customer_id
-  where p.id = auth.uid() and p.role = 'owner' and c.status = 'enabled'
-$$;
-
--- Tenant rows belonging to the caller, active and under an enabled customer.
-create or replace function public.my_tenant_ids() returns setof uuid
-language sql stable security definer set search_path = public as
-$$
-  select t.id from tenants t
-  join customers c on c.id = t.customer_id
-  where t.user_id = auth.uid() and t.active and c.status = 'enabled'
-$$;
-
-create or replace function public.my_tenant_pg_ids() returns setof uuid
-language sql stable security definer set search_path = public as
-$$
-  select t.pg_id from tenants t
-  join customers c on c.id = t.customer_id
-  where t.user_id = auth.uid() and t.active and c.status = 'enabled'
-$$;
-
-create or replace function public.my_tenant_room_ids() returns setof uuid
-language sql stable security definer set search_path = public as
-$$
-  select t.room_id from tenants t
-  join customers c on c.id = t.customer_id
-  where t.user_id = auth.uid() and t.active and t.room_id is not null and c.status = 'enabled'
-$$;
-
--- Enabled customers the caller belongs to in any role (profile or tenancy).
-create or replace function public.my_member_customer_ids() returns setof uuid
-language sql stable security definer set search_path = public as
-$$
-  select c.id from customers c
-  where c.status = 'enabled' and (
-    c.id in (select customer_id from profiles where id = auth.uid())
-    or c.id in (select customer_id from tenants where user_id = auth.uid() and active))
-$$;
-
-grant execute on function
-  public.is_platform_admin(),
-  public.my_owner_customer_id(),
-  public.my_tenant_ids(),
-  public.my_tenant_pg_ids(),
-  public.my_tenant_room_ids(),
-  public.my_member_customer_ids()
-to authenticated;
-
--- ---------------------------------------------------------------------------
 -- 3. Property structure: pgs → floors → rooms → beds
 -- ---------------------------------------------------------------------------
 
@@ -359,6 +297,66 @@ create table if not exists public.audit_logs (
   created_at    timestamptz not null default now()
 );
 create index if not exists audit_logs_customer_idx on public.audit_logs (customer_id);
+
+-- ---------------------------------------------------------------------------
+-- 7b. Helper functions (security definer: they bypass RLS to avoid recursion).
+--     Defined here, after every table exists, because language-sql functions
+--     are validated against their referenced tables at creation time.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.is_platform_admin() returns boolean
+language sql stable security definer set search_path = public as
+$$ select exists (select 1 from profiles where id = auth.uid() and platform_admin) $$;
+
+create or replace function public.my_owner_customer_id() returns uuid
+language sql stable security definer set search_path = public as
+$$
+  select p.customer_id from profiles p
+  join customers c on c.id = p.customer_id
+  where p.id = auth.uid() and p.role = 'owner' and c.status = 'enabled'
+$$;
+
+create or replace function public.my_tenant_ids() returns setof uuid
+language sql stable security definer set search_path = public as
+$$
+  select t.id from tenants t
+  join customers c on c.id = t.customer_id
+  where t.user_id = auth.uid() and t.active and c.status = 'enabled'
+$$;
+
+create or replace function public.my_tenant_pg_ids() returns setof uuid
+language sql stable security definer set search_path = public as
+$$
+  select t.pg_id from tenants t
+  join customers c on c.id = t.customer_id
+  where t.user_id = auth.uid() and t.active and c.status = 'enabled'
+$$;
+
+create or replace function public.my_tenant_room_ids() returns setof uuid
+language sql stable security definer set search_path = public as
+$$
+  select t.room_id from tenants t
+  join customers c on c.id = t.customer_id
+  where t.user_id = auth.uid() and t.active and t.room_id is not null and c.status = 'enabled'
+$$;
+
+create or replace function public.my_member_customer_ids() returns setof uuid
+language sql stable security definer set search_path = public as
+$$
+  select c.id from customers c
+  where c.status = 'enabled' and (
+    c.id in (select customer_id from profiles where id = auth.uid())
+    or c.id in (select customer_id from tenants where user_id = auth.uid() and active))
+$$;
+
+grant execute on function
+  public.is_platform_admin(),
+  public.my_owner_customer_id(),
+  public.my_tenant_ids(),
+  public.my_tenant_pg_ids(),
+  public.my_tenant_room_ids(),
+  public.my_member_customer_ids()
+to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 8. Row level security
