@@ -861,4 +861,59 @@ void main() {
     expect(find.text('Tenant login'), findsNothing);
     expect(find.text('Create account'), findsNothing);
   });
+
+  test('createAdmin fails without a server and never needs a hardcoded key', () async {
+    final error = await state.createAdmin(fullName: 'A', email: 'a@b.c', password: 'password1', setupKey: 'whatever');
+    expect(error, isNotNull);
+  });
+
+  test('adminSetupMessage maps server error codes', () {
+    expect(adminSetupMessage('code:invalid_key'), contains('Invalid'));
+    expect(adminSetupMessage('code:rate_limited'), contains('Too many'));
+    expect(adminSetupMessage('code:key_expired'), contains('expired'));
+    expect(adminSetupMessage('code:weak_password'), contains('8'));
+    expect(adminSetupMessage(null), isNotEmpty);
+  });
+
+  test('the create-admin function reads the key from a secret and guards it', () {
+    final fn = File('supabase/functions/create-admin/index.ts').readAsStringSync();
+    expect(fn, contains('Deno.env.get("ADMIN_SETUP_KEY")'));
+    expect(fn, contains('timingSafeEqual'));
+    expect(fn, contains('ADMIN_SETUP_KEY_EXPIRES_AT'));
+    expect(fn, contains('ADMIN_SETUP_KEY_PREVIOUS'));
+    expect(fn, contains('admin_setup_attempts'));
+    expect(fn, contains('"code:rate_limited"'));
+    expect(fn, contains('platform_admin: true'));
+    expect(fn, contains('must_change_password: false'));
+    for (final line in fn.split('\n').where((l) => l.contains('return json('))) {
+      expect(line.contains('setupKey'), isFalse, reason: 'the setup key must never be returned');
+    }
+  });
+
+  test('the admin-setup migration locks its attempts table', () {
+    final sql = File('supabase/005_admin_setup.sql').readAsStringSync();
+    expect(sql, contains('create table if not exists public.admin_setup_attempts'));
+    expect(sql, contains('alter table public.admin_setup_attempts enable row level security'));
+  });
+
+  testWidgets('admin login offers admin setup with a setup-key field', (tester) async {
+    await tester.pumpWidget(PgManagementApp(state: state));
+    await tester.pump();
+    await tester.tap(find.text('Admin login'));
+    await tester.pumpAndSettle();
+    expect(find.text('Set up a platform admin'), findsOneWidget);
+
+    await tester.tap(find.text('Set up a platform admin'));
+    await tester.pumpAndSettle();
+    expect(find.text('Setup key'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Create admin'), findsOneWidget);
+  });
+
+  testWidgets('owner login does not offer admin setup', (tester) async {
+    await tester.pumpWidget(PgManagementApp(state: state));
+    await tester.pump();
+    await tester.tap(find.text('Owner login'));
+    await tester.pumpAndSettle();
+    expect(find.text('Set up a platform admin'), findsNothing);
+  });
 }

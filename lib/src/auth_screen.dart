@@ -171,6 +171,13 @@ class _LoginScreenState extends State<LoginScreen> {
                         ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
                         : const Text('Sign in'),
                   ),
+                  if (widget.portal == LoginPortal.admin) ...[
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: busy ? null : () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminSetupScreen())),
+                      child: const Text('Set up a platform admin'),
+                    ),
+                  ],
                 ]),
               ),
             ),
@@ -262,6 +269,113 @@ class _SetPasswordScreenState extends State<SetPasswordScreen> {
                   ),
                   const SizedBox(height: 8),
                   TextButton(onPressed: busy ? null : state.logout, child: const Text('Sign out')),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class AdminSetupScreen extends StatefulWidget {
+  const AdminSetupScreen({super.key});
+  @override
+  State<AdminSetupScreen> createState() => _AdminSetupScreenState();
+}
+
+class _AdminSetupScreenState extends State<AdminSetupScreen> {
+  bool busy = false;
+  bool obscure = true;
+  final formKey = GlobalKey<FormState>();
+  final name = TextEditingController();
+  final email = TextEditingController();
+  final password = TextEditingController();
+  final setupKey = TextEditingController();
+
+  @override
+  void dispose() {
+    name.dispose();
+    email.dispose();
+    password.dispose();
+    setupKey.dispose();
+    super.dispose();
+  }
+
+  Future<void> submit() async {
+    if (!formKey.currentState!.validate()) return;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => busy = true);
+    final error = await AppScope.of(context).createAdmin(
+      fullName: name.text,
+      email: email.text,
+      password: password.text,
+      setupKey: setupKey.text,
+    );
+    if (!mounted) return;
+    setState(() => busy = false);
+    if (error != null) {
+      messenger.showSnackBar(SnackBar(content: Text(error)));
+      return;
+    }
+    Navigator.pop(context);
+    messenger.showSnackBar(const SnackBar(content: Text('Admin account created. You can now sign in.')));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Set up platform admin')),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 460),
+              child: Form(
+                key: formKey,
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  const Text('Create a platform admin using the server setup key. The key is verified on the server and never stored in the app.', style: TextStyle(color: Colors.black54)),
+                  const SizedBox(height: 20),
+                  TextFormField(
+                    controller: name,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(labelText: 'Full name', prefixIcon: Icon(Icons.person_outline)),
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Enter a name' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: email,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(labelText: 'Email address', prefixIcon: Icon(Icons.mail_outline)),
+                    validator: (v) => v == null || !v.contains('@') ? 'Enter a valid email' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: password,
+                    obscureText: obscure,
+                    decoration: InputDecoration(
+                      labelText: 'Password (8+ characters)',
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(icon: Icon(obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined), onPressed: () => setState(() => obscure = !obscure)),
+                    ),
+                    validator: (v) => v == null || v.length < 8 ? 'Use at least 8 characters' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: setupKey,
+                    obscureText: true,
+                    decoration: const InputDecoration(labelText: 'Setup key', prefixIcon: Icon(Icons.vpn_key_outlined)),
+                    validator: (v) => v == null || v.isEmpty ? 'Enter the setup key' : null,
+                  ),
+                  const SizedBox(height: 18),
+                  FilledButton(
+                    onPressed: busy ? null : submit,
+                    child: busy
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
+                        : const Text('Create admin'),
+                  ),
                 ]),
               ),
             ),

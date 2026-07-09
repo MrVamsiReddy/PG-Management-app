@@ -46,6 +46,16 @@ AccessGate evaluateProfileAccess({
   );
 }
 
+String adminSetupMessage(String? code) => switch (code) {
+      'code:rate_limited' => 'Too many attempts. Please wait a few minutes and try again.',
+      'code:key_expired' => 'The admin setup key has expired. Request a new key.',
+      'code:invalid_key' => 'Invalid setup key.',
+      'code:weak_password' => 'Use at least 8 characters for the password.',
+      'code:missing_fields' => 'Please fill in all fields.',
+      'code:create_failed' => 'Could not create the admin account. The email may already be in use.',
+      _ => 'Something went wrong. Please try again.',
+    };
+
 String? portalError(UserRole resolved, LoginPortal portal) {
   final matches = switch (portal) {
     LoginPortal.owner => resolved == UserRole.owner,

@@ -52,6 +52,21 @@ flutter run -t lib/main_owner.dart
 flutter run -t lib/main_tenant.dart
 ```
 
+## Platform admin setup
+
+Platform admins are created through the `create-admin` Edge Function using a server-side setup key. The key is never in the app; it is entered by the person creating the admin and verified server-side with a timing-safe comparison.
+
+1. Run `supabase/004_saas_core.sql` and `supabase/005_admin_setup.sql` in the SQL Editor.
+2. Deploy the function: Edge Functions → Deploy → name it exactly `create-admin` → paste `supabase/functions/create-admin/index.ts`.
+3. Set the secret (Edge Functions → Secrets): `ADMIN_SETUP_KEY` = a long random string. Optional: `ADMIN_SETUP_KEY_EXPIRES_AT` = an ISO timestamp after which the key stops working.
+4. In the app, open **Admin login → Set up a platform admin**, enter name/email/password and the setup key.
+
+Security:
+- The key lives only in the Edge Function secret and is compared server-side; it is never returned or logged.
+- Failed attempts are rate limited per IP (5 per 15 minutes) via `admin_setup_attempts`; only the IP/email/outcome are recorded, never the attempted key.
+- Rotation: set a new `ADMIN_SETUP_KEY`; to allow a grace period, keep the old value in `ADMIN_SETUP_KEY_PREVIOUS` — both are accepted until you remove it.
+- Expiry: set `ADMIN_SETUP_KEY_EXPIRES_AT`; after that time every attempt fails.
+
 ## Cloud accounts (Supabase)
 
 The app supports two modes side by side:

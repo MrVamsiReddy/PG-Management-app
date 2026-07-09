@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show AuthException, PostgrestException, User, UserAttributes;
+import 'package:supabase_flutter/supabase_flutter.dart' show AuthException, FunctionException, PostgrestException, User, UserAttributes;
 
 import 'access.dart';
 import 'format.dart';
@@ -9,7 +9,7 @@ import 'models.dart';
 import 'repositories.dart';
 import 'supabase_config.dart';
 
-export 'access.dart' show LoginPortal;
+export 'access.dart' show LoginPortal, adminSetupMessage;
 export 'l10n.dart' show AppLanguage;
 export 'models.dart';
 
@@ -266,6 +266,27 @@ class AppState extends ChangeNotifier {
   }
 
   /// Emails a password-reset link. Returns an error message, or null.
+  Future<String?> createAdmin({required String fullName, required String email, required String password, required String setupKey}) async {
+    final client = supabaseOrNull;
+    if (client == null) return 'Cannot reach the server. Check your connection.';
+    try {
+      final result = await client.functions.invoke('create-admin', body: {
+        'fullName': fullName.trim(),
+        'email': email.trim(),
+        'password': password,
+        'setupKey': setupKey,
+      });
+      final data = result.data;
+      if (data is Map && data['ok'] == true) return null;
+      return adminSetupMessage(data is Map ? data['error'] as String? : null);
+    } on FunctionException catch (e) {
+      final details = e.details;
+      return adminSetupMessage(details is Map ? details['error'] as String? : null);
+    } catch (_) {
+      return adminSetupMessage(null);
+    }
+  }
+
   Future<String?> sendPasswordReset(String email) async {
     final client = supabaseOrNull;
     if (client == null) return 'Password reset needs an internet connection.';
