@@ -26,7 +26,31 @@ flutter create --platforms=android,ios,web .
 flutter run
 ```
 
-`flutter create` adds the native runner projects when cloning this source-only workspace; it preserves the existing `lib/`, `web/`, and package configuration. Select any role on the sign-in screen and use the prefilled demo credentials. Data is stored in the local Hive box `pg_management` and survives app restarts; the store is schema-versioned and reseeds itself after breaking model changes.
+`flutter create` adds the native runner projects when cloning this source-only workspace; it preserves the existing `lib/`, `web/`, and package configuration.
+
+## Separate apps: Owner/Admin and Tenant
+
+The Owner/Admin and Tenant experiences are separate build surfaces with their own entry points. The tenant build does not include owner/admin screens.
+
+- `lib/main_owner.dart` — Owner/Admin app (owner login, admin login, PG management, tenant creation, reports/settings).
+- `lib/main_tenant.dart` — Tenant app (tenant login only; rent, complaints, notices, visitors, profile).
+- `lib/main.dart` — combined app used for local development and tests.
+
+Build:
+
+```bash
+# Owner/Admin
+flutter build web --release -t lib/main_owner.dart
+flutter build apk --release -t lib/main_owner.dart
+
+# Tenant
+flutter build web --release -t lib/main_tenant.dart
+flutter build apk --release -t lib/main_tenant.dart
+
+# Run a surface locally
+flutter run -t lib/main_owner.dart
+flutter run -t lib/main_tenant.dart
+```
 
 ## Cloud accounts (Supabase)
 

@@ -4,11 +4,13 @@ import 'app_state.dart';
 import 'theme.dart';
 
 class AuthScreen extends StatelessWidget {
-  const AuthScreen({super.key});
+  const AuthScreen({super.key, this.portals});
+  final List<LoginPortal>? portals;
 
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
+    final shown = portals ?? LoginPortal.values;
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -44,11 +46,10 @@ class AuthScreen extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 28),
-                _portal(context, LoginPortal.owner, Icons.business_center_outlined, 'Owner login', 'Manage your PG business'),
-                const SizedBox(height: 12),
-                _portal(context, LoginPortal.tenant, Icons.person_outline, 'Tenant login', 'View your rent, notices and requests'),
-                const SizedBox(height: 12),
-                _portal(context, LoginPortal.admin, Icons.admin_panel_settings_outlined, 'Admin login', 'Platform administration'),
+                for (final p in shown) ...[
+                  _portal(context, p, _portalIcon(p), '${p.label} login', _portalSubtitle(p)),
+                  const SizedBox(height: 12),
+                ],
               ]),
             ),
           ),
@@ -56,6 +57,18 @@ class AuthScreen extends StatelessWidget {
       ),
     );
   }
+
+  IconData _portalIcon(LoginPortal p) => switch (p) {
+        LoginPortal.owner => Icons.business_center_outlined,
+        LoginPortal.tenant => Icons.person_outline,
+        LoginPortal.admin => Icons.admin_panel_settings_outlined,
+      };
+
+  String _portalSubtitle(LoginPortal p) => switch (p) {
+        LoginPortal.owner => 'Manage your PG business',
+        LoginPortal.tenant => 'View your rent, notices and requests',
+        LoginPortal.admin => 'Platform administration',
+      };
 
   Widget _portal(BuildContext context, LoginPortal portal, IconData icon, String title, String subtitle) => Card(
         clipBehavior: Clip.antiAlias,

@@ -12,7 +12,9 @@ import 'package:pg_management/src/format.dart';
 import 'package:pg_management/src/home_shell.dart';
 import 'package:pg_management/src/l10n.dart';
 import 'package:pg_management/src/module_screens.dart';
+import 'package:pg_management/src/owner_app.dart';
 import 'package:pg_management/src/saas_models.dart';
+import 'package:pg_management/src/tenant_app.dart';
 import 'package:pg_management/src/theme.dart';
 
 void main() {
@@ -830,5 +832,33 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.widgetWithText(FilledButton, 'Sign in'), findsOneWidget);
     expect(find.text('Forgot password?'), findsOneWidget);
+  });
+
+  testWidgets('tenant app shows only tenant surfaces and no owner routes', (tester) async {
+    state.login(UserRole.tenant);
+    await tester.pumpWidget(TenantApp(state: state));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('My Rent'), findsOneWidget);
+    expect(find.text('My Requests'), findsOneWidget);
+    expect(find.text('Manage'), findsNothing);
+    expect(find.text('Properties'), findsNothing);
+    expect(find.text('Onboard'), findsNothing);
+  });
+
+  testWidgets('tenant app blocks a non-tenant account', (tester) async {
+    state.login(UserRole.owner);
+    await tester.pumpWidget(TenantApp(state: state));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Sign out'), findsOneWidget);
+    expect(find.text('My Rent'), findsNothing);
+  });
+
+  testWidgets('owner/admin app auth offers no tenant portal or sign-up', (tester) async {
+    await tester.pumpWidget(OwnerAdminApp(state: state));
+    await tester.pump();
+    expect(find.text('Owner login'), findsOneWidget);
+    expect(find.text('Admin login'), findsOneWidget);
+    expect(find.text('Tenant login'), findsNothing);
+    expect(find.text('Create account'), findsNothing);
   });
 }
