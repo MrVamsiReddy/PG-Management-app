@@ -79,13 +79,24 @@ class PgListingsScreen extends StatelessWidget {
                         Positioned(
                             right: 10,
                             top: 9,
-                            child: IconButton(
-                                onPressed: () =>
-                                    _editPg(context, state, existing: pg),
-                                icon: const Icon(Icons.edit_outlined,
-                                    color: Colors.white),
-                                style: IconButton.styleFrom(
-                                    backgroundColor: Colors.black26))),
+                            child: Row(children: [
+                              IconButton(
+                                  onPressed: () =>
+                                      _editPg(context, state, existing: pg),
+                                  icon: const Icon(Icons.edit_outlined,
+                                      color: Colors.white),
+                                  style: IconButton.styleFrom(
+                                      backgroundColor: Colors.black26)),
+                              const SizedBox(width: 6),
+                              IconButton(
+                                  tooltip: 'Delete PG',
+                                  onPressed: () =>
+                                      _deletePg(context, state, pg),
+                                  icon: const Icon(Icons.delete_outline,
+                                      color: Colors.white),
+                                  style: IconButton.styleFrom(
+                                      backgroundColor: Colors.black26)),
+                            ])),
                       ]),
                     ),
                     Padding(
@@ -146,6 +157,31 @@ class PgListingsScreen extends StatelessWidget {
         },
       ),
     ));
+  }
+
+  void _deletePg(BuildContext context, AppState state, Pg pg) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Delete ${pg.name}?'),
+        content: const Text(
+            'This removes the property, its rooms and its announcements. It is blocked while tenants live there. This cannot be undone.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: coral),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final error = state.removePg(pg.id);
+    messenger
+        .showSnackBar(SnackBar(content: Text(error ?? '${pg.name} deleted.')));
   }
 
   void _editPg(BuildContext context, AppState state, {Pg? existing}) {

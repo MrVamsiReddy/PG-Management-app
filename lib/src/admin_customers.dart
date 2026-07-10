@@ -155,28 +155,70 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
 
   Future<void> _viewPgs(
       BuildContext context, AppState state, Customer c) async {
-    final names = await state.loadCustomerPgNames(c.id);
+    var pgs = await state.loadCustomerPgs(c.id);
     if (!context.mounted) return;
     showAppSheet(
         context,
-        Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SheetHandle(),
-              Text('${c.businessName} · PGs',
-                  style: Theme.of(context).textTheme.headlineMedium),
-              const SizedBox(height: 12),
-              if (names.isEmpty)
-                const EmptyState(
-                    icon: Icons.apartment_outlined,
-                    title: 'No PGs yet — the owner sets these up')
-              else
-                ...names.map((n) => ListTile(
-                    leading:
-                        const Icon(Icons.apartment_outlined, color: primary),
-                    title: Text(n))),
-            ]));
+        StatefulBuilder(
+            builder: (context, setSheet) => Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SheetHandle(),
+                      Text('${c.businessName} · PGs',
+                          style: Theme.of(context).textTheme.headlineMedium),
+                      const SizedBox(height: 12),
+                      if (pgs.isEmpty)
+                        const EmptyState(
+                            icon: Icons.apartment_outlined,
+                            title: 'No PGs yet — the owner sets these up')
+                      else
+                        ...pgs.map((pg) => ListTile(
+                            leading: const Icon(Icons.apartment_outlined,
+                                color: primary),
+                            title: Text(pg.name),
+                            trailing: IconButton(
+                                tooltip: 'Delete PG',
+                                icon: const Icon(Icons.delete_outline,
+                                    color: coral),
+                                onPressed: () async {
+                                  final error = await _deletePg(
+                                      context, state, c, pg.id, pg.name);
+                                  if (error == null) {
+                                    pgs = pgs
+                                        .where((e) => e.id != pg.id)
+                                        .toList();
+                                    setSheet(() {});
+                                  }
+                                }))),
+                    ])));
+  }
+
+  Future<String?> _deletePg(BuildContext context, AppState state, Customer c,
+      String pgId, String pgName) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Delete $pgName?'),
+        content: const Text(
+            'This removes the property and its rooms from the customer\'s account. Blocked while tenants live there. This cannot be undone.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: coral),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (confirmed != true) return 'cancelled';
+    final error = await state.adminRemovePg(customerId: c.id, pgId: pgId);
+    messenger
+        .showSnackBar(SnackBar(content: Text(error ?? '$pgName deleted.')));
+    return error;
   }
 
   void _create(BuildContext context, AppState state) {

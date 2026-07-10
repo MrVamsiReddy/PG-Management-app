@@ -2094,7 +2094,39 @@ void main() {
     expect(sql, contains('admin reads all app_data'));
     expect(sql, contains('public.is_platform_admin()'));
     // No cloud → empty, never throws.
-    expect(await state.loadCustomerPgNames('c1'), isEmpty);
+    expect(await state.loadCustomerPgs('c1'), isEmpty);
+  });
+
+  test('owner PG deletion removes the property tree but never live tenants',
+      () async {
+    final pg = state.pgs.first;
+    final pgRooms = state.rooms.where((r) => r.pgId == pg.id).toList();
+    expect(pgRooms, isNotEmpty);
+
+    // Occupied property is protected.
+    expect(state.removePg(pg.id), contains('active tenants'));
+    expect(state.pgs.where((p) => p.id == pg.id), isNotEmpty);
+
+    // Offboard everyone, then deletion sweeps rooms + announcements.
+    for (final t in state.tenants
+        .where((t) => pgRooms.any((r) => r.id == t.roomId))
+        .toList()) {
+      await state.removeTenant(t.id);
+    }
+    expect(state.removePg(pg.id), isNull);
+    expect(state.pgs.where((p) => p.id == pg.id), isEmpty);
+    expect(state.rooms.where((r) => r.pgId == pg.id), isEmpty);
+    expect(state.announcements.where((a) => a.pgId == pg.id), isEmpty);
+    expect(state.removePg('missing'), 'Property not found.');
+  });
+
+  test('admin PG deletion fails closed without a server and 011 grants write',
+      () async {
+    expect(await state.adminRemovePg(customerId: 'c1', pgId: 'p1'), isNotNull);
+    final sql =
+        File('supabase/011_admin_app_data_write.sql').readAsStringSync();
+    expect(sql, contains('admin updates all app_data'));
+    expect(sql, contains('public.is_platform_admin()'));
   });
 
   test('customer deletion cascades every table atomically and is admin-only',

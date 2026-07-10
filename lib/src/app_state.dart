@@ -495,32 +495,83 @@ class AppState extends ChangeNotifier {
   /// in the `app_data` blob keyed by the owner's user id (not the relational
   /// `pgs` table), so resolve the owner from the customer's profile, then read
   /// the blob (admins have a read policy on `app_data`).
-  Future<List<String>> loadCustomerPgNames(String customerId) async {
+  Future<String?> _customerOwnerId(
+      SupabaseClient client, String customerId) async {
+    final prof = await client
+        .from('profiles')
+        .select('id')
+        .eq('customer_id', customerId)
+        .eq('role', 'owner')
+        .limit(1)
+        .maybeSingle();
+    return prof?['id'] as String?;
+  }
+
+  Future<List<Map>> _ownerCollection(
+      SupabaseClient client, String ownerId, String key) async {
+    final row = await client
+        .from('app_data')
+        .select('data')
+        .eq('owner_id', ownerId)
+        .eq('key', key)
+        .maybeSingle();
+    return (row?['data'] as List? ?? const []).cast<Map>();
+  }
+
+  Future<List<({String id, String name})>> loadCustomerPgs(
+      String customerId) async {
     final client = supabaseOrNull;
     if (client == null) return [];
     try {
-      final prof = await client
-          .from('profiles')
-          .select('id')
-          .eq('customer_id', customerId)
-          .eq('role', 'owner')
-          .limit(1)
-          .maybeSingle();
-      final ownerId = prof?['id'] as String?;
+      final ownerId = await _customerOwnerId(client, customerId);
       if (ownerId == null) return [];
-      final row = await client
-          .from('app_data')
-          .select('data')
-          .eq('owner_id', ownerId)
-          .eq('key', 'pgs')
-          .maybeSingle();
-      final data = row?['data'] as List? ?? const [];
-      return data
-          .map((e) => (e as Map)['name'] as String? ?? '')
-          .where((n) => n.isNotEmpty)
-          .toList();
+      final data = await _ownerCollection(client, ownerId, 'pgs');
+      return [
+        for (final e in data)
+          if ((e['name'] as String? ?? '').isNotEmpty)
+            (id: e['id'] as String? ?? '', name: e['name'] as String)
+      ];
     } catch (_) {
       return [];
+    }
+  }
+
+  /// Platform-admin deletion of a customer's PG, editing the owner's
+  /// app_data blob directly (011 grants admins update). Same guard as the
+  /// owner path: blocked while tenants live in the property.
+  Future<String?> adminRemovePg(
+      {required String customerId, required String pgId}) async {
+    final client = supabaseOrNull;
+    if (client == null) {
+      return 'Cannot reach the server. Check your connection.';
+    }
+    try {
+      final ownerId = await _customerOwnerId(client, customerId);
+      if (ownerId == null) return 'Owner not found.';
+      final pgsData = await _ownerCollection(client, ownerId, 'pgs');
+      if (!pgsData.any((p) => p['id'] == pgId)) return 'Property not found.';
+      final roomsData = await _ownerCollection(client, ownerId, 'rooms');
+      final tenantsData = await _ownerCollection(client, ownerId, 'tenants');
+      final roomIds =
+          roomsData.where((r) => r['pgId'] == pgId).map((r) => r['id']).toSet();
+      if (tenantsData.any((t) => roomIds.contains(t['roomId']))) {
+        return 'Cannot delete a property with active tenants.';
+      }
+      await client
+          .from('app_data')
+          .update({'data': pgsData.where((p) => p['id'] != pgId).toList()})
+          .eq('owner_id', ownerId)
+          .eq('key', 'pgs');
+      await client
+          .from('app_data')
+          .update({'data': roomsData.where((r) => r['pgId'] != pgId).toList()})
+          .eq('owner_id', ownerId)
+          .eq('key', 'rooms');
+      _audit('pg_removed',
+          customerId: customerId, entityType: 'pg', entityId: pgId);
+      return null;
+    } catch (_) {
+      return 'Something went wrong. Please try again.';
     }
   }
 
@@ -1232,6 +1283,29 @@ class AppState extends ChangeNotifier {
         entityType: 'room',
         entityId: roomId,
         before: {'number': removed.number, 'beds': removed.beds});
+    return null;
+  }
+
+  /// Deletes a property and everything scoped to it (rooms, their open
+  /// maintenance requests, its announcements). Blocked while any tenant
+  /// still lives there — offboard tenants first.
+  String? removePg(String pgId) {
+    final i = pgs.indexWhere((p) => p.id == pgId);
+    if (i == -1) return 'Property not found.';
+    final roomIds = rooms.where((r) => r.pgId == pgId).map((r) => r.id).toSet();
+    if (tenants.any((t) => roomIds.contains(t.roomId))) {
+      return 'Cannot delete a property with active tenants.';
+    }
+    final removed = pgs.removeAt(i);
+    rooms.removeWhere((r) => r.pgId == pgId);
+    maintenance.removeWhere((m) => roomIds.contains(m.roomId));
+    announcements.removeWhere((a) => a.pgId == pgId);
+    if (_activePgId == pgId) _activePgId = null;
+    _persist({'pgs', 'rooms', 'maintenance', 'announcements'});
+    _audit('pg_removed',
+        entityType: 'pg',
+        entityId: pgId,
+        before: {'name': removed.name, 'rooms': roomIds.length});
     return null;
   }
 

@@ -1,7 +1,7 @@
 name: pg_management
 description: A complete role-based PG management platform.
 publish_to: "none"
-version: 1.4.0+5
+version: 1.5.0+6
 
 environment:
   sdk: ">=3.3.0 <4.0.0"

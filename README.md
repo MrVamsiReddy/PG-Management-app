@@ -87,7 +87,7 @@ Signed in as a platform admin (owner/admin app), you manage customers, not PGs d
 
 - Create a customer — enters business name, owner name/email, phone. This calls the `create-customer` Edge Function, which creates the customer row and its owner login (temporary password, forced change at first sign-in) and returns the credentials to share. New customers start empty (no PGs, rooms or tenants).
 - Enable / disable a customer — a disabled customer immediately blocks its owner and tenants (enforced by RLS).
-- View a customer's PGs.
+- View a customer's PGs, and delete a PG (blocked while tenants live there; requires `supabase/011_admin_app_data_write.sql` for the admin write policy). Owners delete their own PGs from the PG properties screen.
 
 Deploy the function: Edge Functions → Deploy → name it exactly `create-customer` → paste `supabase/functions/create-customer/index.ts`. It requires the caller to be a platform admin.
 
