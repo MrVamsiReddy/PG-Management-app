@@ -8,14 +8,16 @@
 //   - email the tenant that they are no longer part of the PG and that
 //     their data has been permanently deleted (English/Hindi/Telugu)
 //
-// Email needs the RESEND_API_KEY secret (free tier at resend.com); with
-// RESEND_FROM as the verified sender. Without the secret the cleanup still
-// runs and `emailSent: false` is returned so the app can tell the owner.
+// Email needs the GMAIL_USER + GMAIL_APP_PASSWORD secrets (a Google App
+// Password; the account needs 2-Step Verification). Without them the
+// cleanup still runs and `emailSent: false` is returned so the app can
+// tell the owner.
 //
 // Deploy (Supabase dashboard): Edge Functions → `remove-tenant` → paste →
-// Deploy. Secrets: RESEND_API_KEY (optional RESEND_FROM).
+// Deploy. Secrets: GMAIL_USER, GMAIL_APP_PASSWORD.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -117,22 +119,35 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Farewell email — best-effort, needs the RESEND_API_KEY secret.
+    // Farewell email — best-effort, via Gmail SMTP when secrets are set.
     let emailSent = false;
-    const resendKey = Deno.env.get("RESEND_API_KEY");
-    if (email && resendKey) {
+    const user = Deno.env.get("GMAIL_USER");
+    const pass = Deno.env.get("GMAIL_APP_PASSWORD");
+    if (email && user && pass) {
       const t = emails[lang] ?? emails.en;
-      const res = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${resendKey}`, "content-type": "application/json" },
-        body: JSON.stringify({
-          from: Deno.env.get("RESEND_FROM") ?? "PG Management <onboarding@resend.dev>",
-          to: [email],
-          subject: t.subject(pgName),
-          text: t.body(tenantName, pgName),
-        }),
+      const client = new SMTPClient({
+        connection: {
+          hostname: "smtp.gmail.com",
+          port: 465,
+          tls: true,
+          auth: { username: user, password: pass },
+        },
       });
-      emailSent = res.ok;
+      try {
+        await client.send({
+          from: `PG Management <${user}>`,
+          to: email,
+          subject: t.subject(pgName),
+          content: t.body(tenantName, pgName),
+        });
+        emailSent = true;
+      } catch (_e) {
+        emailSent = false;
+      } finally {
+        try {
+          await client.close();
+        } catch (_e) { /* already closed */ }
+      }
     }
 
     const { data: prof } = await admin.from("profiles")

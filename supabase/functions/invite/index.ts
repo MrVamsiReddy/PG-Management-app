@@ -21,12 +21,14 @@
 // maps to localized text.
 //
 // Deploy (Supabase dashboard): Edge Functions → `invite` → paste → Deploy.
-// Run supabase/006_invites.sql first. Optional secrets: RESEND_API_KEY
-// (+ RESEND_FROM) — with them, create/resend deliver the invite email
-// directly (localized en/hi/te) and return `emailSent: true`; without them
-// the app falls back to the share sheet.
+// Run supabase/006_invites.sql first. Optional secrets: GMAIL_USER +
+// GMAIL_APP_PASSWORD (Google App Password, needs 2-Step Verification) —
+// with them, create/resend deliver the invite email directly via Gmail SMTP
+// (localized en/hi/te) and return `emailSent: true`; without them the app
+// falls back to the share sheet.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const appWebUrl = "https://mrvamsireddy.github.io/PG-Management-app/";
 const apkDownloadUrl =
@@ -91,24 +93,33 @@ const inviteMails: Record<string, InviteMail> = {
   },
 };
 
-// Best-effort transactional email via Resend; returns delivery success.
+// Best-effort transactional email via Gmail SMTP; returns delivery success.
 async function sendMail(to: string, subject: string, text: string): Promise<boolean> {
-  const key = Deno.env.get("RESEND_API_KEY");
-  if (!key) return false;
+  const user = Deno.env.get("GMAIL_USER");
+  const pass = Deno.env.get("GMAIL_APP_PASSWORD");
+  if (!user || !pass) return false;
+  const client = new SMTPClient({
+    connection: {
+      hostname: "smtp.gmail.com",
+      port: 465,
+      tls: true,
+      auth: { username: user, password: pass },
+    },
+  });
   try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "content-type": "application/json" },
-      body: JSON.stringify({
-        from: Deno.env.get("RESEND_FROM") ?? "PG Management <onboarding@resend.dev>",
-        to: [to],
-        subject,
-        text,
-      }),
+    await client.send({
+      from: `PG Management <${user}>`,
+      to,
+      subject,
+      content: text,
     });
-    return res.ok;
+    return true;
   } catch (_e) {
     return false;
+  } finally {
+    try {
+      await client.close();
+    } catch (_e) { /* already closed */ }
   }
 }
 

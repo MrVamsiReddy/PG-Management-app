@@ -95,9 +95,17 @@ Deploy the function: Edge Functions → Deploy → name it exactly `create-custo
 
 Tenants → tenant card → ⋮ → **Remove tenant**. After confirmation the tenant's record and all their data (payments, requests, visitors, notifications) are permanently deleted and their bed is freed. The `remove-tenant` Edge Function then deletes their login, invite/member links, UPI submissions and payment-proof screenshots, and emails the tenant that they are no longer part of the PG and that their data has been permanently deleted (in the owner's app language — English/Hindi/Telugu).
 
-The same `RESEND_API_KEY` secret also powers automatic **invite emails**: tenant onboarding collects the email address, and the `invite` function (redeploy `supabase/functions/invite/index.ts`) delivers the credentials + app links directly to the tenant (localized en/hi/te); without the secret the owner shares the invite message manually as before.
+## Transactional email (Gmail SMTP)
 
-Deploy the function: Edge Functions → Deploy → name it exactly `remove-tenant` → paste `supabase/functions/remove-tenant/index.ts`. For the email, set the `RESEND_API_KEY` secret (free key from resend.com; optional `RESEND_FROM` = a verified sender like `PG Management <you@yourdomain.com>`). Without the secret the removal still works fully — the app just tells the owner no email could be sent. Note: Resend's shared `onboarding@resend.dev` sender only delivers to your own Resend account email; verify a domain to email real tenants.
+Both the **invite email** (sent automatically after tenant onboarding by the `invite` function — credentials + app links, localized en/hi/te) and the **removal email** (`remove-tenant`) are delivered through Gmail SMTP. One-time setup:
+
+1. On the Gmail account you want to send from: Google Account → Security → enable **2-Step Verification**, then create an **App Password** (Security → App passwords → app "Mail"), a 16-character code.
+2. Supabase → Edge Functions → Secrets: set `GMAIL_USER` = the Gmail address and `GMAIL_APP_PASSWORD` = the app password (spaces removed).
+3. Redeploy both functions (`supabase/functions/invite/index.ts`, `supabase/functions/remove-tenant/index.ts`).
+
+Without the secrets everything still works — invites fall back to the owner's share sheet, and removals just report that no email could be sent. Gmail's free sending limit (~500 recipients/day) is plenty at this scale.
+
+Deploy the removal function: Edge Functions → Deploy → name it exactly `remove-tenant` → paste `supabase/functions/remove-tenant/index.ts`.
 
 ## Cloud accounts (Supabase)
 

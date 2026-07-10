@@ -713,8 +713,9 @@ void main() {
     expect(fn, contains('"invites"'));
     expect(fn, contains('"profiles"'));
     expect(fn, contains('push_tokens'));
-    expect(fn, contains('RESEND_API_KEY'));
-    expect(fn, contains('api.resend.com'));
+    expect(fn, contains('GMAIL_USER'));
+    expect(fn, contains('GMAIL_APP_PASSWORD'));
+    expect(fn, contains('smtp.gmail.com'));
     expect(fn, contains('tenant_removed'));
     expect(fn, contains('audit_logs'));
     for (final lang in ['en', 'hi', 'te']) {
@@ -1536,8 +1537,9 @@ void main() {
 
   test('the invite function emails the invite with localized templates', () {
     final fn = File('supabase/functions/invite/index.ts').readAsStringSync();
-    expect(fn, contains('RESEND_API_KEY'));
-    expect(fn, contains('api.resend.com'));
+    expect(fn, contains('GMAIL_USER'));
+    expect(fn, contains('GMAIL_APP_PASSWORD'));
+    expect(fn, contains('smtp.gmail.com'));
     expect(fn, contains('emailSent'));
     for (final lang in ['en', 'hi', 'te']) {
       expect(fn, contains('$lang:'), reason: '$lang template must exist');

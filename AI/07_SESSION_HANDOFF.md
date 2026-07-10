@@ -57,8 +57,10 @@ Database changes: none (no new migrations; invite fn needs redeploy).
 Tests added:
 - "a filled temporary password never reports required on save", "onboarding stores the tenant email for the invite", email validation case, "inviteTenant requires the email saved at onboarding", "the invite function emails the invite with localized templates" · 129 passing · analyze clean.
 
+Follow-up (same day): email provider switched Resend → Gmail SMTP (denomailer, smtp.gmail.com:465) in both `invite` and `remove-tenant`; secrets are now GMAIL_USER + GMAIL_APP_PASSWORD (Google App Password, requires 2-Step Verification). Released as v1.7.0.
+
 Remaining work / manual:
-- Redeploy `invite` Edge Function; RESEND_API_KEY (+ verified domain / RESEND_FROM) required for real delivery — resend.dev sender only reaches the account owner's inbox.
+- Redeploy `invite` + `remove-tenant` Edge Functions; set GMAIL_USER + GMAIL_APP_PASSWORD secrets for real delivery.
 - Legacy tenants (onboarded before this) have no email — resend uses the last invite row; fresh invite needs re-onboarding or a future edit-tenant UI.
 
 Known issues introduced/affected: none new; 09 P0/P1 unchanged.
