@@ -11,7 +11,7 @@ Target model + what the code enforces today. ✅ enforced · ⚠️ partial/UI-o
 ## Platform Admin
 Responsibilities: manage customers and platform admins.
 - Allowed: create platform admin (via `create-admin` fn + setup key) ✅; create/enable/disable customer (`create-customer` fn, `setCustomerStatus`) ✅; view customers ✅; view a customer's PGs ❌ (`loadCustomerPgNames` reads relational `pgs`, which the app never writes → always empty); view all audit logs (`AuditLogScreen` via appbar) ✅.
-- Forbidden: PG/rent/payment operations. In `owner_app` admin → `CustomerManagementScreen` only ✅. In `main.dart` (combined) admin → PG `HomeShell` ❌.
+- Forbidden: PG/rent/payment operations. Both `owner_app` and `main.dart` route admin → `CustomerManagementScreen` only ✅; the admin PG layout was removed from `HomeShell`.
 - Screens: `CustomerManagementScreen`, `AuditLogScreen`. Edge Functions: `create-admin`, `create-customer`.
 
 ## Customer / Owner

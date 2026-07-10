@@ -894,12 +894,14 @@ void main() {
     expect(find.text('Properties'), findsNothing);
   });
 
-  testWidgets('admin navigation is property-centric', (tester) async {
+  testWidgets('admin sees customer management, not the PG owner UI',
+      (tester) async {
     state.debugSignIn(UserRole.admin);
     await tester.pumpWidget(PgManagementApp(state: state));
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('Properties'), findsOneWidget);
-    expect(find.text('Operations'), findsOneWidget);
+    expect(find.text('Customers'), findsOneWidget);
+    expect(find.text('Properties'), findsNothing);
+    expect(find.text('Operations'), findsNothing);
     expect(find.text('Manage'), findsNothing);
   });
 

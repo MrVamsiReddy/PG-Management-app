@@ -25,7 +25,7 @@ See `09_KNOWN_ISSUES.md` (P0: runtime on the `app_data` blob keyed by `owner_id`
 
 ## Technical debt
 - Two parallel data models (`app_data` blob live vs relational unused).
-- `main.dart` combined app grants admin PG operations.
+- (resolved) `main.dart` now routes admin to customer management, not PG operations.
 - Localization partial; some Edge-Function messages are English strings mapped client-side.
 
 ## Recently done (cloud-only)

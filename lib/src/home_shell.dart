@@ -22,7 +22,8 @@ class _HomeShellState extends State<HomeShell> {
     final state = AppScope.of(context);
     final l = AppLocalizations.of(context);
     // Each role gets its own navigation: tenants never see management
-    // surfaces, admins get a property-centric layout.
+    // surfaces. Platform admins are routed to CustomerManagementScreen before
+    // reaching HomeShell — they never manage PGs here.
     final (pages, destinations) = switch (state.role) {
       UserRole.tenant => (
           const <Widget>[
@@ -55,38 +56,7 @@ class _HomeShellState extends State<HomeShell> {
                 label: l.t('nav.profile')),
           ],
         ),
-      UserRole.admin => (
-          const <Widget>[
-            DashboardScreen(),
-            PgListingsScreen(),
-            ModulesHubScreen(),
-            PaymentsScreen(),
-            ProfileScreen()
-          ],
-          <NavigationDestination>[
-            NavigationDestination(
-                icon: const Icon(Icons.space_dashboard_outlined),
-                selectedIcon: const Icon(Icons.space_dashboard_rounded),
-                label: l.t('nav.dashboard')),
-            NavigationDestination(
-                icon: const Icon(Icons.apartment_outlined),
-                selectedIcon: const Icon(Icons.apartment_rounded),
-                label: l.t('nav.properties')),
-            NavigationDestination(
-                icon: const Icon(Icons.grid_view_outlined),
-                selectedIcon: const Icon(Icons.grid_view_rounded),
-                label: l.t('nav.operations')),
-            NavigationDestination(
-                icon: const Icon(Icons.account_balance_wallet_outlined),
-                selectedIcon: const Icon(Icons.account_balance_wallet),
-                label: l.t('nav.rent')),
-            NavigationDestination(
-                icon: const Icon(Icons.person_outline),
-                selectedIcon: const Icon(Icons.person),
-                label: l.t('nav.profile')),
-          ],
-        ),
-      UserRole.owner => (
+      UserRole.admin || UserRole.owner => (
           const <Widget>[
             DashboardScreen(),
             ModulesHubScreen(),

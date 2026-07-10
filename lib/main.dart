@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+import 'src/admin_customers.dart';
 import 'src/app_state.dart';
 import 'src/auth_screen.dart';
 import 'src/bootstrap.dart';
@@ -42,7 +43,9 @@ class PgManagementApp extends StatelessWidget {
               ? const AuthScreen()
               : state.mustChangePassword
                   ? const SetPasswordScreen()
-                  : const HomeShell(),
+                  : state.role == UserRole.admin
+                      ? const CustomerManagementScreen()
+                      : const HomeShell(),
         ),
       ),
     );

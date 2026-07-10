@@ -15,7 +15,7 @@ Severity: P0 blocker · P1 high · P2 medium · P3 low. Grounded in current sour
 - P2 · Full localization (P10).
 
 ## Incorrect permissions
-- P1 · `main.dart` (combined app) routes a platform admin into the PG `HomeShell` (PG operations) — admin should be customer-management only. Fix: restrict/retire `main.dart` for production; ship `main_owner.dart`/`main_tenant.dart`.
+- ~~P1 · `main.dart` routes a platform admin into the PG `HomeShell`.~~ **Fixed:** `main.dart` now routes admin → `CustomerManagementScreen` (same as `OwnerAdminApp`); the admin PG layout was removed from `HomeShell`, so admin never gets PG operations on any entry point.
 
 ## Technical debt
 - P1 · Two parallel data models (`app_data` blob live vs relational unused).
