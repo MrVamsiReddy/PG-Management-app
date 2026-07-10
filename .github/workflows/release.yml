@@ -29,9 +29,16 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter build apk --release
-      - run: cp build/app/outputs/flutter-apk/app-release.apk PG-Management.apk
+      - run: flutter build apk --release -t lib/main_owner.dart
+      - run: cp build/app/outputs/flutter-apk/app-release.apk PG-Management-Owner.apk
+      - run: flutter build apk --release -t lib/main_tenant.dart
+      - run: cp build/app/outputs/flutter-apk/app-release.apk PG-Management-Tenant.apk
+      # Back-compat alias for existing invite links (tenant build).
+      - run: cp PG-Management-Tenant.apk PG-Management.apk
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
-          files: PG-Management.apk
+          files: |
+            PG-Management-Owner.apk
+            PG-Management-Tenant.apk
+            PG-Management.apk
