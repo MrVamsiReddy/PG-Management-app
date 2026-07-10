@@ -59,7 +59,7 @@ class _HomeShellState extends State<HomeShell> {
       UserRole.admin || UserRole.owner => (
           const <Widget>[
             DashboardScreen(),
-            ModulesHubScreen(),
+            ModulesHubScreen(embedded: true),
             PaymentsScreen(),
             MaintenanceScreen(),
             ProfileScreen()

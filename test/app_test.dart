@@ -1695,6 +1695,38 @@ void main() {
     expect(find.byIcon(Icons.star_border), findsWidgets);
   });
 
+  testWidgets('the pushed Manage hub has a working Back button',
+      (tester) async {
+    state.debugSignIn(UserRole.owner);
+    await tester.pumpWidget(AppScope(
+      notifier: state,
+      child: MaterialApp(
+        theme: buildAppTheme(),
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => Center(
+              child: ElevatedButton(
+                onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const ModulesHubScreen())),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    // Pushed hub shows an app bar with a Back button…
+    expect(find.byType(BackButton), findsOneWidget);
+    // …and tapping it returns to the previous screen.
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    expect(find.text('open'), findsOneWidget);
+  });
+
   testWidgets('the PG setup wizard is localized', (tester) async {
     state.debugSignIn(UserRole.owner);
     state.setLanguage(AppLanguage.hindi);

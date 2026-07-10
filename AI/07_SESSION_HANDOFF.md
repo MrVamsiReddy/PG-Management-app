@@ -36,6 +36,25 @@ Next task:
 
 ## Latest
 ```
+### Session: 2026-07-10 · Improvements #8 — navigation back fix
+Prompt/goal: Manage → View All must have proper Back navigation; always return to the previous screen.
+Commit(s): (this session)
+
+Summary:
+- ModulesHubScreen returned a bare ListView (no Scaffold/AppBar). As the shell "Manage" tab that's fine, but when pushed (dashboard "View all") it had no Back button. Added an `embedded` flag: tab passes embedded:true (bare + PageHeader); pushed uses the default (Scaffold + AppBar 'Manage' → automatic Back). home_shell Manage tab updated to ModulesHubScreen(embedded: true).
+- Verified module/community screens (Rooms/Tenants/Payments/Maintenance/Visitors/Announcements/Notifications) already have their own Scaffolds → Back works when pushed.
+
+Files modified:
+- lib/src/module_screens.dart (embedded flag + Scaffold wrap), lib/src/home_shell.dart (tab)
+- test/app_test.dart (pushed hub has a working Back button)
+- AI/06,07 updated
+
+Tests: 117 passing; analyze clean; dart format applied. No backend changes.
+
+Next task: #9 rooms & beds (responsive floor selector; Room Details page; ⋮ menu edit room/sharing/rent/delete; delete only when empty + remove empty beds).
+```
+
+```
 ### Session: 2026-07-10 · Improvements #7 — dashboard favourites + polish
 Prompt/goal: Better dashboard spacing/typography/hierarchy; favourite tiles (gold star top-right), favourites first, persisted per user.
 Commit(s): (this session)

@@ -14,7 +14,12 @@ export 'operations_screens.dart';
 export 'property_screens.dart';
 
 class ModulesHubScreen extends StatelessWidget {
-  const ModulesHubScreen({super.key});
+  const ModulesHubScreen({super.key, this.embedded = false});
+
+  /// True when rendered as the shell's "Manage" tab (the shell provides the
+  /// app bar). False when pushed as its own route — then it needs a Scaffold
+  /// with an app bar so the user has a Back button.
+  final bool embedded;
 
   @override
   Widget build(BuildContext context) {
@@ -87,12 +92,14 @@ class ModulesHubScreen extends StatelessWidget {
         color: const Color(0xFF536179)
       ),
     ];
-    return ListView(
+    final list = ListView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
       children: [
-        const PageHeader(
-            title: 'Manage', subtitle: 'Everything you need, in one place.'),
-        const SizedBox(height: 22),
+        if (embedded) ...[
+          const PageHeader(
+              title: 'Manage', subtitle: 'Everything you need, in one place.'),
+          const SizedBox(height: 22),
+        ],
         LayoutBuilder(builder: (context, constraints) {
           final columns = constraints.maxWidth > 850
               ? 4
@@ -140,6 +147,12 @@ class ModulesHubScreen extends StatelessWidget {
           );
         }),
       ],
+    );
+    if (embedded) return list;
+    // Pushed as a route: wrap so there is an app bar with a Back button.
+    return Scaffold(
+      appBar: AppBar(title: const Text('Manage')),
+      body: list,
     );
   }
 }
