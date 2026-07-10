@@ -9,8 +9,8 @@ Enforced in current code unless marked Pending. Roles → `04`; schema → `03`.
 - `must_change_password` is enforced client-side (`SetPasswordScreen` blocks the app) and server-side for writes (`006` restrictive `app_data` policies; app refreshes the JWT after the change). ✅
 
 ## PG hierarchy
-- Owner builds a PG via `PgSetupWizard` → `AppState.createProperty(name, address, amenities, specs)`. Creates a `Pg` and its `Room`s in the live model, stamped with `customerId`, and sets it active. ✅
-- The live `Room` model carries `floor` (int) and `beds` (count). Separate `floors`/`beds` relational rows are **not** created (schema B unused). ⚠️
+- Owner creates a PG via `PgSetupWizard` → `AppState.createProperty(name, address, amenities)` — **only** name/address/basic info; no rent or sharing type. `specs` is optional (defaults to empty) so the PG starts with **no rooms**; rooms/sharing/rent are added later during tenant onboarding or on the Rooms & Beds screen. Stamped with `customerId`, set active. ✅
+- The live `Room` model carries `floor` (int), `beds` (count), sharing type (= beds) and `rent`. Separate `floors`/`beds` relational rows are **not** created (schema B unused). ⚠️
 - Multiple PGs per owner supported; `activePg`/`selectPg` scope all owner screens. ✅
 
 ## Bed / room assignment

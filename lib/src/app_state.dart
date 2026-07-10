@@ -1098,14 +1098,17 @@ class AppState extends ChangeNotifier {
         after: {'number': room.number, 'beds': room.beds});
   }
 
+  /// Creates a PG. Rooms/beds/rent are configured later (during onboarding or
+  /// on the Rooms & Beds screen), so [specs] is optional — a PG may start with
+  /// no rooms.
   String? createProperty(
       {required String name,
       required String address,
       required String amenities,
-      required List<({String number, int floor, int beds, int rent})> specs}) {
+      List<({String number, int floor, int beds, int rent})> specs =
+          const []}) {
     final cleanName = name.trim();
     if (cleanName.isEmpty) return 'Enter a property name.';
-    if (specs.isEmpty) return 'Add at least one room.';
     final pgId = 'p${DateTime.now().microsecondsSinceEpoch}';
     final totalBeds = specs.fold(0, (s, e) => s + e.beds);
     pgs.insert(

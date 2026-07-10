@@ -17,9 +17,10 @@ Roadmap = `app improvements.md` (Prompts 1–11). Details of each area live in `
 
 ## Post-P11 improvements (in progress, one task at a time)
 - **Customer deletion (done)** — platform admin can permanently delete a customer from `CustomerManagementScreen` (delete icon + confirm dialog). `AppState.deleteCustomer` → `delete-customer` Edge Function (platform-admin only) → `admin_delete_customer(target)` RPC in `008_delete_customer.sql`: a single-transaction plpgsql cascade over app_data/members/invites/pg_upi_settings/upi_submissions/push_tokens/audit_logs/profiles and the `customers` row (which cascades all 004 relational tables). The function then purges the customer's `payment-proofs` Storage folder and deletes every auth user (owner + tenants). RPC is service-role-only (`revoke ... from public, authenticated`). UI removes the row on success.
+- **PG creation simplified (done)** — `PgSetupWizard` is now a single form collecting only PG name, address and amenities (basic info); the rent-by-sharing and floors/rooms/beds steps were removed. `createProperty` accepts optional `specs` (defaults to empty) so a PG can be created with **no rooms** — rooms/sharing/rent are configured later (onboarding / Rooms & Beds). Rent and sharing no longer appear during PG creation.
 
 ## In progress
-- Improvements batch tasks 2–9 (PG creation simplification, onboarding rent, room pricing, password mgmt, subscriptions, dashboard, navigation, rooms/beds) — pending, executed one at a time.
+- Improvements batch tasks 3–9 (onboarding rent, room pricing, password mgmt, subscriptions, dashboard, navigation, rooms/beds) — pending, executed one at a time.
 
 ## P11 production checklist (verified 2026-07-10)
 - ✅ No demo/local/offline code, no seed/mock path (Hive + demo removed; only stray comments remained).
@@ -47,4 +48,4 @@ Removed the local Hive store, the demo/seed path (`_seed`, `debugSeedDemoData`),
 Before Prompts 8–11 add more features on the unenforced foundation, migrate the owner/tenant runtime from the `app_data` blob onto the relational `customer_id`-scoped tables so `004` RLS becomes the enforcement boundary, and make `payRent` a submission (not a paid-mark). Then P9/P8 land on solid ground.
 
 ## Test status
-`test/app_test.dart` — 102 passing; `flutter analyze` clean; `dart format` applied repo-wide; owner + tenant `flutter build web --release` succeed. See `10_TESTING_GUIDE.md`.
+`test/app_test.dart` — 103 passing; `flutter analyze` clean; `dart format` applied repo-wide; owner + tenant `flutter build web --release` succeed. See `10_TESTING_GUIDE.md`.

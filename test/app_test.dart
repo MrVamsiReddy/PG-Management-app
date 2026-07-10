@@ -1888,8 +1888,21 @@ void main() {
 
     await tester.tap(find.widgetWithText(FilledButton, 'Set up your PG'));
     await tester.pumpAndSettle();
+    // PG creation collects only basic details — no rent/sharing here.
     expect(find.text('Property details'), findsOneWidget);
-    expect(find.text('Rent by sharing'), findsOneWidget);
+    expect(find.text('Rent by sharing'), findsNothing);
+    expect(find.text('Beds per room'), findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Create'), findsOneWidget);
+  });
+
+  test('createProperty can create a PG with no rooms (rent set later)', () {
+    final before = state.pgs.length;
+    final error =
+        state.createProperty(name: 'Bare PG', address: 'Y', amenities: '');
+    expect(error, isNull);
+    expect(state.pgs.length, before + 1);
+    expect(state.pgs.first.beds, 0);
+    expect(state.rooms.where((r) => r.pgId == state.pgs.first.id), isEmpty);
   });
 
   test('createProperty builds the PG with floors, rooms, beds and rent', () {

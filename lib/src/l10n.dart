@@ -281,6 +281,8 @@ const Map<String, Map<String, String>> _strings = {
     'wiz.rentNote':
         'Rent is stored per room now; changing rent later never alters past payments.',
     'wiz.enterName': 'Enter a property name.',
+    'wiz.created': 'created.',
+    'wiz.basicInfo': 'Enter the PG name, address and basic information.',
     'wiz.generateOne': 'Generate at least one room.',
     'wiz.createdWith': 'created with',
     'wiz.roomsSuffix': 'rooms.',
@@ -514,6 +516,8 @@ const Map<String, Map<String, String>> _strings = {
     'wiz.rentNote':
         'किराया अब प्रति कमरा संग्रहीत है; बाद में किराया बदलने से पुराने भुगतान नहीं बदलते।',
     'wiz.enterName': 'संपत्ति का नाम दर्ज करें।',
+    'wiz.created': 'बनाया गया।',
+    'wiz.basicInfo': 'पीजी का नाम, पता और बुनियादी जानकारी दर्ज करें।',
     'wiz.generateOne': 'कम से कम एक कमरा बनाएँ।',
     'wiz.createdWith': 'बनाया गया',
     'wiz.roomsSuffix': 'कमरों के साथ।',
@@ -748,6 +752,9 @@ const Map<String, Map<String, String>> _strings = {
     'wiz.rentNote':
         'అద్దె ఇప్పుడు ఒక్కో గదికి నిల్వ చేయబడుతుంది; తర్వాత అద్దె మార్చడం పాత చెల్లింపులను ఎప్పుడూ మార్చదు.',
     'wiz.enterName': 'ఆస్తి పేరును నమోదు చేయండి.',
+    'wiz.created': 'సృష్టించబడింది.',
+    'wiz.basicInfo':
+        'పీజీ పేరు, చిరునామా మరియు ప్రాథమిక సమాచారాన్ని నమోదు చేయండి.',
     'wiz.generateOne': 'కనీసం ఒక గదిని సృష్టించండి.',
     'wiz.createdWith': 'సృష్టించబడింది',
     'wiz.roomsSuffix': 'గదులతో.',

@@ -36,6 +36,26 @@ Next task:
 
 ## Latest
 ```
+### Session: 2026-07-10 · Improvements #2 — PG creation simplified
+Prompt/goal: PG creation collects only name/address/basic info; remove sharing type + rent config from PG creation.
+Commit(s): (this session)
+
+Summary:
+- pg_wizard.dart rewritten from a 4-step Stepper (details/rent-by-sharing/floors-rooms-beds/review) to a single form: PG name, address, amenities → Create. No rent, no sharing, no room generation.
+- createProperty(name, address, amenities, [specs]) — specs now optional (default const []); removed the "add at least one room" guard so a PG can start with zero rooms (rent/sharing set later per tasks 3/9).
+- l10n: added wiz.created + wiz.basicInfo (en/hi/te). Old wiz.* keys retained (reused by onboarding/rooms later).
+
+Files modified:
+- lib/src/pg_wizard.dart (simplified), lib/src/app_state.dart (createProperty optional specs)
+- lib/src/l10n.dart (2 keys ×3), test/app_test.dart (wizard widget test updated; new no-rooms test)
+- AI/05,06,07 updated
+
+Tests: 103 passing; analyze clean; dart format applied. No backend changes (no deploy needed).
+
+Next task: #3 tenant onboarding (select PG/floor/room/bed/sharing/rent; tenant inherits room values).
+```
+
+```
 ### Session: 2026-07-10 · Improvements #1 — customer deletion
 Prompt/goal: Platform admin can permanently delete a customer + cascade all data (no orphans), transactional server-side, admin-only.
 Commit(s): (this session)
