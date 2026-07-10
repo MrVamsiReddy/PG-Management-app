@@ -1,8 +1,7 @@
 name: iOS IPA
 
+# Manual-trigger only: iOS builds are paused until explicitly needed.
 on:
-  push:
-    tags: ['v*']
   workflow_dispatch:
     inputs:
       tag:
