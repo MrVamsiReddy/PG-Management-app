@@ -502,4 +502,18 @@ class AuditLog {
         afterJson: (map['afterJson'] as Map?)?.cast<String, dynamic>(),
         createdAt: DateTime.parse(map['createdAt'] as String),
       );
+
+  static AuditLog fromRow(Map<String, dynamic> r) => AuditLog(
+        id: '${r['id']}',
+        customerId: r['customer_id'] as String?,
+        actorUserId: r['actor_user_id'] as String? ?? '',
+        actorRole: r['actor_role'] as String? ?? '',
+        action: r['action'] as String? ?? '',
+        entityType: r['entity_type'] as String?,
+        entityId: r['entity_id'] as String?,
+        beforeJson: (r['before_json'] as Map?)?.cast<String, dynamic>(),
+        afterJson: (r['after_json'] as Map?)?.cast<String, dynamic>(),
+        createdAt: DateTime.tryParse(r['created_at'] as String? ?? '') ??
+            DateTime.now(),
+      );
 }

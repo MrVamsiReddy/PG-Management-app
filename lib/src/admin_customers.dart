@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
+import 'audit_log_screen.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -25,6 +26,11 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
       appBar: AppBar(
         title: const Text('Customers'),
         actions: [
+          IconButton(
+              tooltip: 'Audit log',
+              onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const AuditLogScreen())),
+              icon: const Icon(Icons.history)),
           IconButton(
               tooltip: 'Sign out',
               onPressed: state.logout,

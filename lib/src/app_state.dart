@@ -399,9 +399,49 @@ class AppState extends ChangeNotifier {
         'status': enabled ? 'enabled' : 'disabled',
         'disabled_at': enabled ? null : DateTime.now().toIso8601String(),
       }).eq('id', id);
+      _audit(enabled ? 'customer_enabled' : 'customer_disabled',
+          customerId: id, entityType: 'customer', entityId: id);
       return null;
     } catch (_) {
       return 'Could not update the customer.';
+    }
+  }
+
+  void _audit(String action,
+      {String? customerId,
+      String? entityType,
+      String? entityId,
+      Map<String, dynamic>? before,
+      Map<String, dynamic>? after}) {
+    final client = supabaseOrNull;
+    final uid = client?.auth.currentUser?.id;
+    if (client == null || uid == null) return;
+    client.from('audit_logs').insert({
+      'customer_id': customerId ?? _resolvedCustomerId,
+      'actor_user_id': uid,
+      'actor_role': role.name,
+      'action': action,
+      'entity_type': entityType,
+      'entity_id': entityId,
+      'before_json': before,
+      'after_json': after,
+    }).then((_) {}, onError: (_) {});
+  }
+
+  Future<List<AuditLog>> loadAuditLogs({int limit = 200}) async {
+    final client = supabaseOrNull;
+    if (client == null) return [];
+    try {
+      final rows = await client
+          .from('audit_logs')
+          .select()
+          .order('created_at', ascending: false)
+          .limit(limit);
+      return (rows as List)
+          .map((r) => AuditLog.fromRow(Map<String, dynamic>.from(r as Map)))
+          .toList();
+    } catch (_) {
+      return [];
     }
   }
 
@@ -995,6 +1035,10 @@ class AppState extends ChangeNotifier {
   void addRoom(Room room) {
     rooms.add(room.copyWith(customerId: room.customerId ?? customerId));
     _persist({'rooms'});
+    _audit('room_created',
+        entityType: 'room',
+        entityId: room.id,
+        after: {'number': room.number, 'beds': room.beds});
   }
 
   String? createProperty(
@@ -1032,6 +1076,10 @@ class AppState extends ChangeNotifier {
     }
     _activePgId = pgId;
     _persist({'pgs', 'rooms'});
+    _audit('pg_created',
+        entityType: 'pg',
+        entityId: pgId,
+        after: {'name': cleanName, 'beds': totalBeds});
     return null;
   }
 
@@ -1046,8 +1094,12 @@ class AppState extends ChangeNotifier {
     if (_roomOccupancy(rooms[i]) > 0) {
       return 'Cannot remove a room with active tenants.';
     }
-    rooms.removeAt(i);
+    final removed = rooms.removeAt(i);
     _persist({'rooms'});
+    _audit('room_removed',
+        entityType: 'room',
+        entityId: roomId,
+        before: {'number': removed.number, 'beds': removed.beds});
     return null;
   }
 
@@ -1068,14 +1120,25 @@ class AppState extends ChangeNotifier {
         rent: r.rent,
         customerId: r.customerId);
     _persist({'rooms'});
+    _audit('room_beds_changed',
+        entityType: 'room',
+        entityId: roomId,
+        before: {'beds': r.beds},
+        after: {'beds': beds});
     return null;
   }
 
   String? setRoomRent(String roomId, int rent) {
     final i = rooms.indexWhere((r) => r.id == roomId);
     if (i == -1) return 'Room not found.';
+    final before = rooms[i].rent;
     rooms[i] = rooms[i].copyWith(rent: rent);
     _persist({'rooms'});
+    _audit('rent_changed',
+        entityType: 'room',
+        entityId: roomId,
+        before: {'rent': before},
+        after: {'rent': rent});
     return null;
   }
 
@@ -1150,7 +1213,12 @@ class AppState extends ChangeNotifier {
     }
     // The new tenant's first due appears immediately in rent collection.
     generateMonthlyDues();
+    final assigned = tenants.first;
     _persist({'tenants', 'rooms', 'pgs', 'payments'});
+    _audit('tenant_assigned',
+        entityType: 'tenant',
+        entityId: assigned.id,
+        after: {'name': cleanName, 'room_id': roomId, 'bed': cleanBed});
     return null;
   }
 
@@ -1334,6 +1402,10 @@ class AppState extends ChangeNotifier {
       relatedEntityId: payment.id,
     );
     _persist({'payments', 'notifications'});
+    _audit('payment_recorded',
+        entityType: 'payment',
+        entityId: payment.id,
+        after: {'tenant_id': tenantId, 'amount': amount, 'method': method});
   }
 
   void addMaintenanceRequest(

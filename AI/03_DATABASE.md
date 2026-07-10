@@ -25,7 +25,7 @@ Tables:
 
 File: `supabase/005_admin_setup.sql` — `admin_setup_attempts` (rate-limit log; RLS on, no policies = service-role only).
 
-**Used by app today:** only `customers`, `profiles`, `pgs` (admin reads), and `admin_setup_attempts` (function). All owner/tenant business data uses store A. `floors`/`beds`/`rent_rules`/`payment_*`/`tenant_invites`/`complaints`/`notices` relational tables are unqueried by the app.
+**Used by app today:** `customers`, `profiles`, `pgs` (admin reads), `admin_setup_attempts` (function), and `audit_logs` (P8: app `_audit()` inserts + `loadAuditLogs` reads; edge functions insert via service role). All owner/tenant business data uses store A. `floors`/`beds`/`rent_rules`/`payment_*`/`tenant_invites`/`complaints`/`notices` relational tables are unqueried by the app.
 
 ## Relationships (relational schema B)
 ```

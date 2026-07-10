@@ -11,7 +11,6 @@ Severity: P0 blocker · P1 high · P2 medium · P3 low. Grounded in current sour
 
 ## Missing functionality (Pending — see 06)
 - P1 · Manual UPI submit/confirm/reject flow (P9).
-- P1 · Audit log writes + viewers (P8).
 - P2 · Admin "view customer PGs" returns empty — `loadCustomerPgNames` reads relational `pgs` the app never writes.
 - P2 · Full localization (P10).
 

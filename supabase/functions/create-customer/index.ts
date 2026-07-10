@@ -57,6 +57,12 @@ Deno.serve(async (req) => {
     }
 
     await admin.from("profiles").upsert({ id: created.user.id, role: "owner", customer_id: customer.id, full_name: ownerName ?? "" });
+    const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || null;
+    const ua = req.headers.get("user-agent");
+    await admin.from("audit_logs").insert([
+      { customer_id: customer.id, actor_user_id: caller.id, actor_role: "admin", action: "customer_created", entity_type: "customer", entity_id: customer.id, after_json: { business_name: businessName }, ip, user_agent: ua },
+      { customer_id: customer.id, actor_user_id: caller.id, actor_role: "admin", action: "owner_created", entity_type: "user", entity_id: created.user.id, after_json: { email: ownerEmail }, ip, user_agent: ua },
+    ]);
     return json({ ok: true, customerId: customer.id, tempPassword: password });
   } catch (_e) {
     return json({ error: "code:server_error" }, 500);

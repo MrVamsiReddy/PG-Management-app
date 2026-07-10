@@ -1238,6 +1238,80 @@ void main() {
     expect(fn, isNot(contains('console.error')));
   });
 
+  // ---- Prompt 8: audit logs ----
+
+  test('audit_logs RLS isolates admin, owner and tenant', () {
+    final sql = File('supabase/004_saas_core.sql').readAsStringSync();
+    for (final field in [
+      'customer_id',
+      'actor_user_id',
+      'actor_role',
+      'action',
+      'entity_type',
+      'entity_id',
+      'before_json',
+      'after_json',
+      'ip',
+      'user_agent',
+      'created_at',
+    ]) {
+      expect(sql, contains(field), reason: '$field column must exist');
+    }
+    expect(sql, contains('audit_logs_admin_read'));
+    expect(sql, contains('audit_logs_admin_insert'));
+    expect(sql, contains('audit_logs_owner_read'));
+    expect(sql, contains('audit_logs_owner_insert'));
+    expect(sql, isNot(contains('audit_logs_tenant')),
+        reason: 'tenants must have no audit access');
+  });
+
+  test('AuditLog.fromRow maps snake_case db columns', () {
+    final log = AuditLog.fromRow({
+      'id': 42,
+      'customer_id': 'c1',
+      'actor_user_id': 'u1',
+      'actor_role': 'owner',
+      'action': 'pg_created',
+      'entity_type': 'pg',
+      'entity_id': 'p1',
+      'before_json': null,
+      'after_json': {'name': 'HSR'},
+      'created_at': DateTime(2026, 7, 10).toIso8601String(),
+    });
+    expect(log.id, '42');
+    expect(log.customerId, 'c1');
+    expect(log.action, 'pg_created');
+    expect(log.afterJson?['name'], 'HSR');
+  });
+
+  test('loadAuditLogs fails closed without a cloud connection', () async {
+    expect(await state.loadAuditLogs(), isEmpty);
+  });
+
+  test('edge functions write audit_logs for sensitive actions', () {
+    final invite =
+        File('supabase/functions/invite/index.ts').readAsStringSync();
+    for (final action in [
+      'tenant_invited',
+      'tenant_invite_resent',
+      'tenant_invite_revoked'
+    ]) {
+      expect(invite, contains(action));
+    }
+    expect(invite, contains('audit_logs'));
+
+    final customer =
+        File('supabase/functions/create-customer/index.ts').readAsStringSync();
+    expect(customer, contains('customer_created'));
+    expect(customer, contains('owner_created'));
+    expect(customer, contains('audit_logs'));
+
+    final adminFn =
+        File('supabase/functions/create-admin/index.ts').readAsStringSync();
+    expect(adminFn, contains('admin_created'));
+    expect(adminFn, contains('audit_logs'));
+  });
+
   test('setLanguage switches the active language and locale', () {
     expect(state.language, AppLanguage.english);
     state.setLanguage(AppLanguage.telugu);

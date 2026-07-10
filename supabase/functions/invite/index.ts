@@ -69,6 +69,14 @@ Deno.serve(async (req) => {
     const caller = userData?.user;
     if (!caller) return json({ error: "code:unauthorized" }, 401);
 
+    const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || null;
+    const ua = req.headers.get("user-agent");
+    const audit = (action: string, customerId: string | null, entityId: string, after?: unknown) =>
+      admin.from("audit_logs").insert({
+        customer_id: customerId, actor_user_id: caller.id, actor_role: "owner",
+        action, entity_type: "tenant", entity_id: entityId, after_json: after ?? null, ip, user_agent: ua,
+      });
+
     const body = await req.json().catch(() => ({}));
     const action = String(body.action ?? "create");
 
@@ -143,6 +151,8 @@ Deno.serve(async (req) => {
           await admin.auth.admin.updateUserById(row.user_id, { password: tempPassword(32) });
         }
       }
+      const { data: rp } = await admin.from("profiles").select("customer_id").eq("id", caller.id).maybeSingle();
+      await audit("tenant_invite_revoked", rp?.customer_id ?? null, tenantId);
       return json({ ok: true, status: "revoked" });
     }
 
@@ -237,6 +247,8 @@ Deno.serve(async (req) => {
       bed_label: bedLabel,
     }).select("token, expires_at").single();
     if (inviteError || !invite) return json({ error: "code:server_error" }, 500);
+
+    await audit(action === "resend" ? "tenant_invite_resent" : "tenant_invited", customerId, tenantId, { email: address });
 
     return json({
       ok: true,

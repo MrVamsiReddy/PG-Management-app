@@ -40,8 +40,11 @@ Enforced in current code unless marked Pending. Roles → `04`; schema → `03`.
 - Announcements have an audience (all / specific PG); tenants see only their PG's + global (`visibleAnnouncements`). ✅
 - Push (FCM) via `push` function respects notification scope and the `pushEnabled` preference. ✅
 
-## Audit logging
-- **Pending** (Prompt 8). `audit_logs` table exists in schema B; no reads/writes in app or functions.
+## Audit logging (P8)
+- `audit_logs` (in `004`): id, customer_id (nullable), actor_user_id, actor_role, action, entity_type, entity_id, before_json, after_json, ip, user_agent, created_at. Append-only. ✅
+- Written by: edge functions with the service role — `create-admin` (admin_created), `create-customer` (customer_created, owner_created), `invite` (tenant_invited/tenant_invite_resent/tenant_invite_revoked) — and app-side `AppState._audit()` (best-effort, non-blocking) on customer_enabled/disabled, pg_created, room_created/removed/beds_changed, rent_changed, tenant_assigned, payment_recorded. ✅
+- payment_submitted/confirmed/rejected reserved for the P9 UPI flow. App-side owner logs depend on the owner having a resolved `customer_id` (RLS owner-insert requires `customer_id = my_owner_customer_id()`); legacy owners without a profile write nothing. ⚠️
+- Permissions (RLS): platform admin → all; owner → own customer read+append; tenant → none. Viewer: `AuditLogScreen` (admin appbar, owner settings). ✅
 
 ## Disabled customer behaviour
 See `04` and `09`: owners blocked, profile-less tenants not blocked.

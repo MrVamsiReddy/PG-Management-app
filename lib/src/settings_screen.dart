@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
+import 'audit_log_screen.dart';
 import 'l10n.dart';
 import 'theme.dart';
 
@@ -80,6 +81,21 @@ class SettingsScreen extends StatelessWidget {
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => _changePassword(context, state, l),
                   ),
+                  if (state.role == UserRole.owner)
+                    ListTile(
+                      leading: Container(
+                          padding: const EdgeInsets.all(9),
+                          decoration: BoxDecoration(
+                              color: primarySoft,
+                              borderRadius: BorderRadius.circular(10)),
+                          child: const Icon(Icons.history,
+                              color: primary, size: 21)),
+                      title: const Text('Activity log',
+                          style: TextStyle(fontWeight: FontWeight.w700)),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                          builder: (_) => const AuditLogScreen())),
+                    ),
                 ]),
               ),
             ],

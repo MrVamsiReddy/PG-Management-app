@@ -61,6 +61,7 @@ Deno.serve(async (req) => {
 
     await admin.from("profiles").upsert({ id: created.user.id, role: "admin", platform_admin: true, full_name: fullName ?? "" });
     await admin.from("admin_setup_attempts").insert({ ip, email, success: true });
+    await admin.from("audit_logs").insert({ customer_id: null, actor_user_id: created.user.id, actor_role: "admin", action: "admin_created", entity_type: "user", entity_id: created.user.id, after_json: { email }, ip, user_agent: req.headers.get("user-agent") });
     return json({ ok: true });
   } catch (_e) {
     return json({ error: "code:server_error" }, 500);

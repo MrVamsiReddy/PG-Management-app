@@ -36,6 +36,36 @@ Next task:
 
 ## Latest
 ```
+### Session: 2026-07-10 · Prompt 8 — audit logs
+Prompt/goal: Create and fully integrate audit_logs with role isolation (admin all, owner own, tenant none).
+Commit(s): (this session)
+
+Summary:
+- audit_logs table + RLS already in 004 (all required fields incl ip/user_agent). Wired writes: edge functions (create-admin→admin_created; create-customer→customer_created+owner_created; invite→tenant_invited/resent/revoked) via service role; app-side AppState._audit() best-effort inserts on customer enable/disable, pg/room create, room removed/beds-changed, rent changed, tenant assigned, payment recorded. Added AuditLogScreen viewer (admin appbar → all logs; owner Settings → own). No schema migration needed.
+
+Files modified:
+- lib/src/app_state.dart (_audit helper, loadAuditLogs, call sites; setCustomerStatus logs)
+- lib/src/saas_models.dart (AuditLog.fromRow for snake_case db rows)
+- lib/src/audit_log_screen.dart (new viewer)
+- lib/src/admin_customers.dart (appbar audit-log button), lib/src/settings_screen.dart (owner Activity log tile)
+- supabase/functions/{invite,create-customer,create-admin}/index.ts (audit inserts + ip/user_agent)
+- test/app_test.dart (4 new tests)
+- AI/03,04,05,06,09 updated
+
+Architecture changes: new AuditLogScreen; _audit is fire-and-forget (not awaited), swallows errors.
+
+Database changes: none (audit_logs already in 004). RLS unchanged (admin all, owner own read+append, tenant none).
+
+Tests added: audit_logs RLS isolation, AuditLog.fromRow, loadAuditLogs fails closed, edge-fn audit writes. 87 passing; analyze clean.
+
+Remaining work: P9–P11. payment_submitted/confirmed/rejected logs land with P9. Owner-side app logs only persist for owners with a resolved customer_id (RLS); legacy owners write nothing.
+
+Known issues introduced/affected: none new. 09 P8 item removed.
+
+Next task: Prompt 9 (manual UPI submit/confirm/reject; also make payRent a submission).
+```
+
+```
 ### Session: 2026-07-10 · Prompt 7 — tenant invite tokens & temporary passwords
 Prompt/goal: Owner-only tenant onboarding via Edge Function with one-time tokens, temp passwords, full lifecycle (pending/accepted/expired/revoked/resent) and backend must_change_password enforcement.
 Commit(s): (this session)
