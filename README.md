@@ -52,6 +52,12 @@ flutter run -t lib/main_owner.dart
 flutter run -t lib/main_tenant.dart
 ```
 
+## iOS builds (GitHub Actions, no Mac needed)
+
+`.github/workflows/ios.yml` builds unsigned owner + tenant IPAs on a macOS runner: it runs on `v*` tags (IPAs attached to the release next to the APKs) and via manual dispatch (IPAs uploaded as a workflow artifact; pass an existing tag to attach them to that release).
+
+The IPAs are unsigned — App Store/TestFlight distribution needs an Apple Developer account and signing setup. Until then, install on an iPhone by sideloading with a free Apple ID (e.g. Sideloadly or AltStore; apps expire after 7 days), or use the web app as a PWA (Safari → Share → Add to Home Screen).
+
 ## Platform admin setup
 
 Platform admins are created through the `create-admin` Edge Function using a server-side setup key. The key is never in the app; it is entered by the person creating the admin and verified server-side with a timing-safe comparison.
