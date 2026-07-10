@@ -92,6 +92,21 @@ class AppState extends ChangeNotifier {
   /// on the set-password screen until a permanent one is chosen.
   bool mustChangePassword = false;
 
+  /// True after a `passwordRecovery` auth event (the user followed a reset
+  /// link): the app blocks on the set-password screen until a new password is
+  /// set. Unlike [mustChangePassword] this flow needs no temporary password.
+  bool passwordRecovery = false;
+
+  /// The app must block on the set-password screen until the account has a
+  /// permanent password — for both first-login and reset-link flows.
+  bool get needsPasswordSet => mustChangePassword || passwordRecovery;
+
+  /// Called from the auth listener when a reset link is opened.
+  void markPasswordRecovery() {
+    passwordRecovery = true;
+    notifyListeners();
+  }
+
   String? _activePgId;
 
   AppLanguage language = AppLanguage.english;
@@ -232,6 +247,7 @@ class AppState extends ChangeNotifier {
     _workspaceOwnerId = null;
     _resolvedCustomerId = null;
     mustChangePassword = false;
+    passwordRecovery = false;
     currentTenantId = '';
     _pgRepo = null;
     _roomRepo = null;
@@ -483,23 +499,40 @@ class AppState extends ChangeNotifier {
 
   Future<String?> sendPasswordReset(String email) async {
     final client = supabaseOrNull;
-    if (client == null) return 'Password reset needs an internet connection.';
+    if (client == null) return 'code:network';
     try {
-      await client.auth.resetPasswordForEmail(email);
+      // redirectTo returns the reset link to the app, which then fires a
+      // passwordRecovery event and shows the set-password screen.
+      await client.auth.resetPasswordForEmail(email, redirectTo: appWebUrl);
       return null;
     } on AuthException catch (e) {
       return e.message;
     } catch (_) {
-      return 'Could not send the reset email. Check your connection.';
+      return 'code:network';
     }
   }
 
-  /// Changes the signed-in account's password and clears the temporary-
-  /// password flag. Returns an error, or null.
-  Future<String?> changePassword(String password) async {
+  /// Sets a new permanent password and clears the set-password gate. For the
+  /// first-login flow [currentPassword] (the temporary password) is
+  /// re-validated first — access is not granted until it checks out and the
+  /// new password is saved. Recovery-link flows pass no [currentPassword].
+  Future<String?> changePassword(String password,
+      {String? currentPassword}) async {
     final client = supabaseOrNull;
     if (client == null || !isLoggedIn) {
       return 'Sign in with an account to change your password.';
+    }
+    final email = accountEmail;
+    if (currentPassword != null) {
+      if (email == null) return 'code:generic';
+      try {
+        await client.auth
+            .signInWithPassword(email: email, password: currentPassword);
+      } on AuthException {
+        return 'code:bad_credentials'; // wrong temporary password
+      } catch (_) {
+        return 'code:network';
+      }
     }
     try {
       await client.auth.updateUser(UserAttributes(
@@ -509,13 +542,14 @@ class AppState extends ChangeNotifier {
       try {
         await client.auth.refreshSession();
       } catch (_) {}
-      if (role == UserRole.tenant) {
-        // Onboarding complete — consume the one-time invite token.
+      if (role == UserRole.tenant && !passwordRecovery) {
+        // First-login onboarding complete — consume the one-time invite token.
         try {
           await client.functions.invoke('invite', body: {'action': 'accept'});
         } catch (_) {}
       }
       mustChangePassword = false;
+      passwordRecovery = false;
       notifyListeners();
       return null;
     } on AuthException catch (e) {

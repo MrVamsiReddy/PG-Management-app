@@ -36,6 +36,30 @@ Next task:
 
 ## Latest
 ```
+### Session: 2026-07-10 · Improvements #5 — password management
+Prompt/goal: Reset links work; first login requires temp+new+confirm; enforce must_change_password front+back; gate access until password set.
+Commit(s): (this session)
+
+Summary:
+- SetPasswordScreen: added a Temporary password field (first-login only, hidden during recovery) + New + Confirm. changePassword(newPassword, {currentPassword}) re-validates the temp password via signInWithPassword before updateUser; returns code:bad_credentials on mismatch.
+- Reset links: sendPasswordReset now passes redirectTo: appWebUrl. bootstrap onAuthStateChange handles AuthChangeEvent.passwordRecovery → state.markPasswordRecovery(). New passwordRecovery flag + needsPasswordSet getter (= mustChangePassword || passwordRecovery); all three entry points (owner_app/main/tenant_app) gate on needsPasswordSet. changePassword clears both flags; logout resets passwordRecovery.
+- must_change_password still enforced client + server (006 restrictive app_data policies, unchanged).
+- l10n: setpw.temp + setpw.tempReq (en/hi/te).
+
+Files modified:
+- lib/src/app_state.dart (passwordRecovery/needsPasswordSet/markPasswordRecovery, changePassword currentPassword, sendPasswordReset redirectTo, logout reset)
+- lib/src/bootstrap.dart (recovery event), lib/src/auth_screen.dart (temp field), owner_app/tenant_app/main.dart (gate), lib/src/l10n.dart (2 keys ×3)
+- test/app_test.dart (needsPasswordSet/recovery/logout, changePassword fail-closed, 2 widget tests)
+- AI/05,06,07 updated
+
+Manual: Supabase Auth → set Site URL / redirect allow-list to appWebUrl so reset links land back in the app.
+
+Tests: 110 passing; analyze clean; dart format applied. No new migration/function.
+
+Next task: #6 subscription management (plan + starts_at/expires_at; 30-day free default; admin picks plan; auto-disable on expiry + block login with message).
+```
+
+```
 ### Session: 2026-07-10 · Improvements #4 — room pricing model (verify + tighten)
 Prompt/goal: Room=sharing+rent, Tenant=bed+room, Payment=snapshot; rent changes affect future only, preserve history.
 Commit(s): (this session)

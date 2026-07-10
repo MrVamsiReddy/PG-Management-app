@@ -289,11 +289,13 @@ class _SetPasswordScreenState extends State<SetPasswordScreen> {
   bool busy = false;
   bool obscure = true;
   final formKey = GlobalKey<FormState>();
+  final temp = TextEditingController();
   final password = TextEditingController();
   final confirm = TextEditingController();
 
   @override
   void dispose() {
+    temp.dispose();
     password.dispose();
     confirm.dispose();
     super.dispose();
@@ -304,7 +306,10 @@ class _SetPasswordScreenState extends State<SetPasswordScreen> {
     final state = AppScope.of(context);
     final l = AppLocalizations.of(context);
     setState(() => busy = true);
-    final error = await state.changePassword(password.text);
+    // First-login flow re-validates the temporary password; reset-link
+    // (recovery) flow does not have one.
+    final error = await state.changePassword(password.text,
+        currentPassword: state.passwordRecovery ? null : temp.text);
     if (!mounted) return;
     setState(() => busy = false);
     if (error != null) {
@@ -351,6 +356,19 @@ class _SetPasswordScreenState extends State<SetPasswordScreen> {
                             ?.copyWith(color: Colors.black54),
                       ),
                       const SizedBox(height: 24),
+                      if (!state.passwordRecovery) ...[
+                        TextFormField(
+                          controller: temp,
+                          obscureText: true,
+                          decoration: InputDecoration(
+                              labelText: l.t('setpw.temp'),
+                              prefixIcon: const Icon(Icons.vpn_key_outlined)),
+                          validator: (v) => (v == null || v.isEmpty)
+                              ? l.t('setpw.tempReq')
+                              : null,
+                        ),
+                        const SizedBox(height: 16),
+                      ],
                       TextFormField(
                         controller: password,
                         obscureText: obscure,

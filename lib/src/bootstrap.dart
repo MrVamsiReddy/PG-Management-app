@@ -25,6 +25,9 @@ Future<AppState> bootstrap() async {
     if (change.event == AuthChangeEvent.signedIn) {
       unawaited(registerPushToken());
     }
+    if (change.event == AuthChangeEvent.passwordRecovery) {
+      state.markPasswordRecovery();
+    }
   });
   onPushWhileOpen(() => unawaited(state.refresh()));
   return state;

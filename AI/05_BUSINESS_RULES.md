@@ -7,6 +7,7 @@ Enforced in current code unless marked Pending. Roles → `04`; schema → `03`.
 - New customers start empty — the function inserts no PGs/rooms/tenants. ✅
 - Enable/disable via `setCustomerStatus` (updates `customers.status`). Owners with a profile are then blocked by the login gate. ✅ (tenants gap → `09`).
 - `must_change_password` is enforced client-side (`SetPasswordScreen` blocks the app) and server-side for writes (`006` restrictive `app_data` policies; app refreshes the JWT after the change). ✅
+- **Password flows (improvement 5):** first login requires **temporary + new + confirm** — `SetPasswordScreen` shows a temporary-password field that `changePassword(currentPassword:)` re-validates (via re-auth) before saving the new one; access is gated (`needsPasswordSet`) until it succeeds. Password reset uses `resetPasswordForEmail(redirectTo: appWebUrl)`; the `passwordRecovery` auth event sets `passwordRecovery` → the same set-password screen (new + confirm only, no temp field). Both `mustChangePassword` and `passwordRecovery` gate every app entry point. ✅
 
 ## PG hierarchy
 - Owner creates a PG via `PgSetupWizard` → `AppState.createProperty(name, address, amenities)` — **only** name/address/basic info; no rent or sharing type. `specs` is optional (defaults to empty) so the PG starts with **no rooms**; rooms/sharing/rent are added later during tenant onboarding or on the Rooms & Beds screen. Stamped with `customerId`, set active. ✅

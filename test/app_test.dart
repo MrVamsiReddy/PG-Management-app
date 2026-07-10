@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pg_management/main.dart';
 import 'package:pg_management/src/access.dart';
 import 'package:pg_management/src/app_state.dart';
+import 'package:pg_management/src/auth_screen.dart';
 import 'package:pg_management/src/dashboard_screen.dart';
 import 'package:pg_management/src/format.dart';
 import 'package:pg_management/src/home_shell.dart';
@@ -786,8 +787,25 @@ void main() {
 
   test('fresh sessions never start on the set-password gate', () {
     expect(state.mustChangePassword, isFalse);
+    expect(state.needsPasswordSet, isFalse);
     state.debugSignIn(UserRole.owner);
     expect(state.mustChangePassword, isFalse);
+    expect(state.needsPasswordSet, isFalse);
+  });
+
+  test('a reset link opens the set-password gate; logout clears it', () async {
+    expect(state.needsPasswordSet, isFalse);
+    state.markPasswordRecovery();
+    expect(state.passwordRecovery, isTrue);
+    expect(state.needsPasswordSet, isTrue);
+    await state.logout();
+    expect(state.needsPasswordSet, isFalse);
+  });
+
+  test('changePassword fails closed without a cloud connection', () async {
+    state.debugSignIn(UserRole.owner);
+    expect(await state.changePassword('newpass1', currentPassword: 'temp'),
+        isNotNull);
   });
 
   test('a tenant cannot see other tenants notifications or manager activity',
@@ -1602,6 +1620,26 @@ void main() {
     await tester.tap(find.text('Aarav Mehta'));
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('ऐप में आमंत्रित करें'), findsOneWidget);
+  });
+
+  testWidgets('first login requires temporary + new + confirm password',
+      (tester) async {
+    state.debugSignIn(UserRole.owner);
+    await tester.pumpWidget(localized(state, const SetPasswordScreen()));
+    await tester.pump();
+    expect(find.text('Temporary password'), findsOneWidget);
+    expect(find.text('New password'), findsOneWidget);
+    expect(find.text('Confirm password'), findsOneWidget);
+  });
+
+  testWidgets('reset-link flow hides the temporary-password field',
+      (tester) async {
+    state.debugSignIn(UserRole.owner);
+    state.markPasswordRecovery();
+    await tester.pumpWidget(localized(state, const SetPasswordScreen()));
+    await tester.pump();
+    expect(find.text('Temporary password'), findsNothing);
+    expect(find.text('New password'), findsOneWidget);
   });
 
   testWidgets('profile personal-details row opens an editable sheet',

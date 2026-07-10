@@ -40,7 +40,7 @@ class OwnerAdminApp extends StatelessWidget {
     if (!state.isLoggedIn) {
       return const AuthScreen(portals: [LoginPortal.owner, LoginPortal.admin]);
     }
-    if (state.mustChangePassword) return const SetPasswordScreen();
+    if (state.needsPasswordSet) return const SetPasswordScreen();
     if (state.role == UserRole.tenant) return const _WrongApp();
     if (state.role == UserRole.admin) return const CustomerManagementScreen();
     return const HomeShell();

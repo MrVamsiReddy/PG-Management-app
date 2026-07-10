@@ -41,7 +41,7 @@ class TenantApp extends StatelessWidget {
 
   Widget _home() {
     if (!state.isLoggedIn) return const LoginScreen(portal: LoginPortal.tenant);
-    if (state.mustChangePassword) return const SetPasswordScreen();
+    if (state.needsPasswordSet) return const SetPasswordScreen();
     if (state.role != UserRole.tenant) return const _WrongApp();
     return const TenantShell();
   }

@@ -41,7 +41,7 @@ class PgManagementApp extends StatelessWidget {
           ],
           home: !state.isLoggedIn
               ? const AuthScreen()
-              : state.mustChangePassword
+              : state.needsPasswordSet
                   ? const SetPasswordScreen()
                   : state.role == UserRole.admin
                       ? const CustomerManagementScreen()

@@ -190,6 +190,8 @@ const Map<String, Map<String, String>> _strings = {
     'auth.resetSentTo': 'Reset link sent to',
     // Set password
     'setpw.title': 'Set your password',
+    'setpw.temp': 'Temporary password',
+    'setpw.tempReq': 'Enter your temporary password',
     'setpw.hello': 'Welcome',
     'setpw.sub':
         'Your temporary password worked — now choose your own. You will use it for every sign-in from here on.',
@@ -428,6 +430,8 @@ const Map<String, Map<String, String>> _strings = {
     'auth.enterEmailFirst': 'पहले ऊपर अपना ईमेल पता दर्ज करें।',
     'auth.resetSentTo': 'रीसेट लिंक भेजा गया',
     'setpw.title': 'अपना पासवर्ड सेट करें',
+    'setpw.temp': 'अस्थायी पासवर्ड',
+    'setpw.tempReq': 'अपना अस्थायी पासवर्ड दर्ज करें',
     'setpw.hello': 'स्वागत है',
     'setpw.sub':
         'आपका अस्थायी पासवर्ड काम कर गया — अब अपना खुद का चुनें। इसके बाद हर साइन-इन के लिए इसी का उपयोग करेंगे।',
@@ -662,6 +666,8 @@ const Map<String, Map<String, String>> _strings = {
     'auth.enterEmailFirst': 'ముందుగా పైన మీ ఇమెయిల్ చిరునామాను నమోదు చేయండి.',
     'auth.resetSentTo': 'రీసెట్ లింక్ పంపబడింది',
     'setpw.title': 'మీ పాస్‌వర్డ్‌ను సెట్ చేయండి',
+    'setpw.temp': 'తాత్కాలిక పాస్‌వర్డ్',
+    'setpw.tempReq': 'మీ తాత్కాలిక పాస్‌వర్డ్‌ను నమోదు చేయండి',
     'setpw.hello': 'స్వాగతం',
     'setpw.sub':
         'మీ తాత్కాలిక పాస్‌వర్డ్ పనిచేసింది — ఇప్పుడు మీ స్వంతది ఎంచుకోండి. ఇక నుండి ప్రతి సైన్-ఇన్‌కు దీన్నే ఉపయోగిస్తారు.',
