@@ -57,6 +57,8 @@ Database changes: none (no new migrations; invite fn needs redeploy).
 Tests added:
 - "a filled temporary password never reports required on save", "onboarding stores the tenant email for the invite", email validation case, "inviteTenant requires the email saved at onboarding", "the invite function emails the invite with localized templates" · 129 passing · analyze clean.
 
+Follow-up 2 (same day, v1.8.0): the production "current password required when setting new password" error was Supabase's "secure password change" setting rejecting client updateUser. Added `set-password` action to the invite fn (verifies temp password via anon sign-in, then service-role updateUserById + must_change_password=false); changePassword falls back to it on AuthException. code:weak_password mapped. Redeploy `invite`.
+
 Follow-up (same day): email provider switched Resend → Gmail SMTP (denomailer, smtp.gmail.com:465) in both `invite` and `remove-tenant`; secrets are now GMAIL_USER + GMAIL_APP_PASSWORD (Google App Password, requires 2-Step Verification). Released as v1.7.0.
 
 Remaining work / manual:

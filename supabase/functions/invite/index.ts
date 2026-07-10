@@ -180,6 +180,31 @@ Deno.serve(async (req) => {
 
     // ---- Tenant-side actions -----------------------------------------------
 
+    // First-login password change, done with the service role so it works
+    // even when the project's "secure password change" auth setting is on.
+    // The temporary password is verified first; it is never logged.
+    if (action === "set-password") {
+      const tempPassword = String(body.tempPassword ?? "");
+      const newPassword = String(body.newPassword ?? "");
+      if (newPassword.length < 6) return json({ error: "code:weak_password" }, 400);
+      if (!tempPassword || !caller.email) return json({ error: "code:temp_wrong" }, 403);
+      const verifier = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+      );
+      const { error: pwError } = await verifier.auth.signInWithPassword({
+        email: caller.email,
+        password: tempPassword,
+      });
+      if (pwError) return json({ error: "code:temp_wrong" }, 403);
+      const { error: upError } = await admin.auth.admin.updateUserById(caller.id, {
+        password: newPassword,
+        user_metadata: { ...caller.user_metadata, must_change_password: false },
+      });
+      if (upError) return json({ error: "code:server_error" }, 500);
+      return json({ ok: true });
+    }
+
     if (action === "validate" || action === "accept") {
       const callerEmail = (caller.email ?? "").toLowerCase();
       let invite: InviteRow | null = null;

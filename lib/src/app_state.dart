@@ -627,23 +627,53 @@ class AppState extends ChangeNotifier {
     try {
       await client.auth.updateUser(UserAttributes(
           password: password, data: {'must_change_password': false}));
-      // Fresh JWT so backend policies (which block writes while the
-      // temporary-password claim is set) see the cleared flag immediately.
-      try {
-        await client.auth.refreshSession();
-      } catch (_) {}
-      if (role == UserRole.tenant && !passwordRecovery) {
-        // First-login onboarding complete — consume the one-time invite token.
-        try {
-          await client.functions.invoke('invite', body: {'action': 'accept'});
-        } catch (_) {}
-      }
-      mustChangePassword = false;
-      passwordRecovery = false;
-      notifyListeners();
-      return null;
     } on AuthException catch (e) {
-      return e.message;
+      // Projects with "secure password change" enabled reject client-side
+      // updates ("current password required"). The first-login flow already
+      // holds the temporary password, so the invite function re-verifies it
+      // and performs the change with the service role instead.
+      if (currentPassword == null) return e.message;
+      final serverError = await _serverSetPassword(client,
+          tempPassword: currentPassword, newPassword: password);
+      if (serverError != null) return serverError;
+    } catch (_) {
+      return 'Could not update the password. Check your connection.';
+    }
+    // Fresh JWT so backend policies (which block writes while the
+    // temporary-password claim is set) see the cleared flag immediately.
+    try {
+      await client.auth.refreshSession();
+    } catch (_) {}
+    if (role == UserRole.tenant && !passwordRecovery) {
+      // First-login onboarding complete — consume the one-time invite token.
+      try {
+        await client.functions.invoke('invite', body: {'action': 'accept'});
+      } catch (_) {}
+    }
+    mustChangePassword = false;
+    passwordRecovery = false;
+    notifyListeners();
+    return null;
+  }
+
+  Future<String?> _serverSetPassword(SupabaseClient client,
+      {required String tempPassword, required String newPassword}) async {
+    try {
+      final result = await client.functions.invoke('invite', body: {
+        'action': 'set-password',
+        'tempPassword': tempPassword,
+        'newPassword': newPassword,
+      });
+      final data = result.data;
+      if (data is Map && data['ok'] == true) return null;
+      return data is Map
+          ? data['error'] as String? ?? 'code:generic'
+          : 'code:generic';
+    } on FunctionException catch (e) {
+      final details = e.details;
+      return details is Map
+          ? details['error'] as String? ?? 'code:generic'
+          : 'code:generic';
     } catch (_) {
       return 'Could not update the password. Check your connection.';
     }

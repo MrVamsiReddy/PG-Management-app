@@ -43,6 +43,7 @@ class AppLocalizations {
         'code:network' => t('err.network'),
         'code:bad_credentials' => t('err.badCredentials'),
         'code:temp_wrong' => t('setpw.tempWrong'),
+        'code:weak_password' => t('auth.passwordShort'),
         'code:email_in_use' => t('err.emailInUse'),
         'code:generic' || null => t('err.generic'),
         _ => code,

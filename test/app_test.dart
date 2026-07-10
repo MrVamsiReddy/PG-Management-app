@@ -1520,10 +1520,17 @@ void main() {
       '"resend"',
       '"revoke"',
       '"validate"',
-      '"accept"'
+      '"accept"',
+      '"set-password"'
     ]) {
       expect(fn, contains(action), reason: '$action action must exist');
     }
+    // Server-side first-login password change: temp password verified first,
+    // then the service role updates it (immune to secure-password-change).
+    expect(fn, contains('signInWithPassword'));
+    expect(fn, contains('updateUserById'));
+    expect(fn, contains('code:temp_wrong'));
+    expect(fn, contains('must_change_password: false'));
     expect(fn, contains('must_change_password'));
     expect(fn, contains('code:invite_expired'));
     expect(fn, contains('code:invite_revoked'));
