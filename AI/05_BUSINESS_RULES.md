@@ -24,7 +24,7 @@ Enforced in current code unless marked Pending. Roles → `04`; schema → `03`.
 ## Rent
 - Rent by sharing type entered in the wizard; each room stores its rent (snapshot / override). ✅
 - `generateMonthlyDues` creates the current month's `due` per tenant at the room's rent, idempotent (deterministic id `pay-YYYY-M-tenantId`, `unique(tenant_id, period)` in relational schema). Runs at startup for managers; a tenant session only materialises its own due, never persists owner-wide. ✅
-- **Rent history preserved:** `Payment.amount` is fixed at creation; changing a room's rent later never rewrites existing dues/payments. ✅
+- **Rent history preserved / live dues follow (2026-07-11):** `setRoomRent` also updates **untouched** current/future dues in that room (status `due`, nothing collected, no UPI proof under review) so tenants immediately see the new amount; anything with money against it — paid, partial, or pending confirmation — keeps its snapshot. `refresh()` re-materialises the tenant session's own monthly due after every reload (previously a pull-to-refresh dropped the in-memory due → "No rent scheduled yet"). ✅
 
 ## Payment workflow (P9, current)
 - Owner `recordPayment` settles the matching current-month due in place (full→paid, part→partial) or creates a standalone advance row; no duplicate current-month rows. ✅

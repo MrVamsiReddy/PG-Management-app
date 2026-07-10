@@ -235,6 +235,10 @@ class AppState extends ChangeNotifier {
     try {
       await _loadAll();
     } catch (_) {}
+    // A reload replaces the collections, so a tenant's in-memory due (never
+    // persisted owner-wide) must be materialised again or the rent card
+    // goes blank after pull-to-refresh.
+    if (isLoggedIn) await _ensureMonthlyDuesAtStartup();
     notifyListeners();
   }
 
@@ -1388,7 +1392,42 @@ class AppState extends ChangeNotifier {
     if (i == -1) return 'Room not found.';
     final before = rooms[i].rent;
     rooms[i] = rooms[i].copyWith(rent: rent);
-    _persist({'rooms'});
+    // The new rent shows up immediately on untouched current/future dues in
+    // this room. Anything with money against it — paid, partial, or a UPI
+    // proof under review — keeps its snapshot (rent history is preserved).
+    final now = DateTime.now();
+    final month = DateTime(now.year, now.month);
+    final tenantIds =
+        tenants.where((t) => t.roomId == roomId).map((t) => t.id).toSet();
+    final underReview = submissions
+        .where((s) => s.status != UpiStatus.rejected)
+        .map((s) => s.paymentId)
+        .toSet();
+    var duesChanged = false;
+    for (var p = 0; p < payments.length; p++) {
+      final pay = payments[p];
+      if (tenantIds.contains(pay.tenantId) &&
+          pay.status == PaymentStatus.due &&
+          pay.paidAmount == 0 &&
+          !pay.period.isBefore(month) &&
+          !underReview.contains(pay.id) &&
+          pay.amount != rent) {
+        payments[p] = Payment(
+          id: pay.id,
+          tenantId: pay.tenantId,
+          period: pay.period,
+          amount: rent,
+          status: pay.status,
+          dueDate: pay.dueDate,
+          paidDate: pay.paidDate,
+          method: pay.method,
+          paidAmount: pay.paidAmount,
+          customerId: pay.customerId,
+        );
+        duesChanged = true;
+      }
+    }
+    _persist({'rooms', if (duesChanged) 'payments'});
     _audit('rent_changed',
         entityType: 'room',
         entityId: roomId,

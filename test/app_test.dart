@@ -2318,16 +2318,22 @@ void main() {
     expect(made.every((r) => r.customerId == state.customerId), isTrue);
   });
 
-  test('changing a room rent never rewrites existing payments', () {
+  test('changing a room rent updates pristine dues but never paid history', () {
     final room = state.rooms.firstWhere((r) => r.id == 'r1');
     final due = state.payments
         .firstWhere((p) => p.tenantId == 't1' && p.status == PaymentStatus.due);
-    final originalAmount = due.amount;
+    final paidRow = state.payments.firstWhere(
+        (p) => p.tenantId == 't1' && p.status == PaymentStatus.paid);
+    final paidAmount = paidRow.amount;
 
     expect(state.setRoomRent(room.id, 12000), isNull);
     expect(state.roomById(room.id)!.rent, 12000);
-    expect(state.payments.firstWhere((p) => p.id == due.id).amount,
-        originalAmount);
+    // The untouched current-month due follows the new rent immediately —
+    // this is what the tenant sees on their rent card.
+    expect(state.payments.firstWhere((p) => p.id == due.id).amount, 12000);
+    // Collected money is history and keeps its snapshot.
+    expect(state.payments.firstWhere((p) => p.id == paidRow.id).amount,
+        paidAmount);
   });
 
   test('room pricing model: sharing type + rent live on the room', () {
@@ -2339,7 +2345,8 @@ void main() {
     expect(room.rent, 7000);
   });
 
-  test('a rent change applies to future dues only; history is preserved', () {
+  test('a rent change reaches untouched dues; collected money is preserved',
+      () {
     final roomId = state.ensureRoom(
         pgId: 'p2', floor: 1, roomNumber: '302', sharingType: 2, rent: 7000);
     state.onboardTenant(
@@ -2352,11 +2359,19 @@ void main() {
     final firstDue = state.payments.firstWhere((p) => p.tenantId == first.id);
     expect(firstDue.amount, 7000);
 
+    // Untouched due → the tenant sees the new rent for this month too.
     expect(state.setRoomRent(roomId, 9000), isNull);
-    // The already-created due keeps its snapshot (history preserved).
-    expect(state.payments.firstWhere((p) => p.id == firstDue.id).amount, 7000);
+    expect(state.payments.firstWhere((p) => p.id == firstDue.id).amount, 9000);
 
-    // A tenant assigned after the change inherits the new rent.
+    // Once money is collected the amount is a snapshot: a later rent change
+    // never rewrites it.
+    state.recordPayment(tenantId: first.id, amount: 9000, method: 'Cash');
+    expect(state.setRoomRent(roomId, 11000), isNull);
+    expect(state.payments.firstWhere((p) => p.id == firstDue.id).amount, 9000);
+    expect(state.payments.firstWhere((p) => p.id == firstDue.id).status,
+        PaymentStatus.paid);
+
+    // A tenant assigned after the change inherits the current rent.
     state.onboardTenant(
         name: 'Second In',
         phone: '9000000002',
@@ -2365,7 +2380,7 @@ void main() {
         bed: 'B');
     final second = state.tenants.firstWhere((t) => t.name == 'Second In');
     final secondDue = state.payments.firstWhere((p) => p.tenantId == second.id);
-    expect(secondDue.amount, 9000);
+    expect(secondDue.amount, 11000);
   });
 
   test('editRoom changes number/floor and rejects duplicates', () {
