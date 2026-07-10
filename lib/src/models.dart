@@ -234,6 +234,9 @@ class Room {
   final int rent;
   final String? customerId;
 
+  /// Sharing type is the number of beds in the room (1 = single … 4 = four).
+  int get sharingType => beds;
+
   String get type => switch (beds) {
         1 => 'Single',
         2 => 'Double sharing',

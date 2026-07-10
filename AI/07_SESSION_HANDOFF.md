@@ -36,6 +36,26 @@ Next task:
 
 ## Latest
 ```
+### Session: 2026-07-10 · Improvements #4 — room pricing model (verify + tighten)
+Prompt/goal: Room=sharing+rent, Tenant=bed+room, Payment=snapshot; rent changes affect future only, preserve history.
+Commit(s): (this session)
+
+Summary:
+- Verified the model was already implemented: Payment.amount is the rent snapshot (set by idempotent generateMonthlyDues from roomById(tenant.roomId).rent); setRoomRent mutates only the room; existing dues never rewritten; future dues/new tenants pick up the new rent.
+- Added Room.sharingType getter (= beds) for explicit modeling.
+- Fixed a latent uniqueness bug: _id() now appends a monotonic counter (microsecond clock is coarse on Windows, so two rapid onboardings could mint the same tenant id → colliding payment id → skipped due). This surfaced via the new future-dues test.
+
+Files modified:
+- lib/src/models.dart (Room.sharingType), lib/src/app_state.dart (_id counter)
+- test/app_test.dart (pricing-model + future-only-rent tests)
+- AI/06,07 updated
+
+Tests: 106 passing; analyze clean; dart format applied. No backend/deploy changes.
+
+Next task: #5 password management (reset links work; first-login temp+new+confirm; must_change_password enforced front+back). Note 006 already enforces must_change_password server-side; verify + add confirm-password on set-password if missing.
+```
+
+```
 ### Session: 2026-07-10 · Improvements #3 — tenant onboarding sets room pricing
 Prompt/goal: Onboarding collects PG/Floor/Room/Bed/Sharing Type/Current Rent; sharing+rent belong to the room; tenant inherits them.
 Commit(s): (this session)

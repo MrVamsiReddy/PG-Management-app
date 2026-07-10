@@ -1967,6 +1967,36 @@ void main() {
         originalAmount);
   });
 
+  test('room pricing model: sharing type + rent live on the room', () {
+    final roomId = state.ensureRoom(
+        pgId: 'p2', floor: 1, roomNumber: '301', sharingType: 2, rent: 7000);
+    final room = state.roomById(roomId)!;
+    expect(room.sharingType, 2);
+    expect(room.sharingType, room.beds);
+    expect(room.rent, 7000);
+  });
+
+  test('a rent change applies to future dues only; history is preserved', () {
+    final roomId = state.ensureRoom(
+        pgId: 'p2', floor: 1, roomNumber: '302', sharingType: 2, rent: 7000);
+    state.onboardTenant(
+        name: 'First In', phone: '9000000001', roomId: roomId, bed: 'A');
+    final first = state.tenants.firstWhere((t) => t.name == 'First In');
+    final firstDue = state.payments.firstWhere((p) => p.tenantId == first.id);
+    expect(firstDue.amount, 7000);
+
+    expect(state.setRoomRent(roomId, 9000), isNull);
+    // The already-created due keeps its snapshot (history preserved).
+    expect(state.payments.firstWhere((p) => p.id == firstDue.id).amount, 7000);
+
+    // A tenant assigned after the change inherits the new rent.
+    state.onboardTenant(
+        name: 'Second In', phone: '9000000002', roomId: roomId, bed: 'B');
+    final second = state.tenants.firstWhere((t) => t.name == 'Second In');
+    final secondDue = state.payments.firstWhere((p) => p.tenantId == second.id);
+    expect(secondDue.amount, 9000);
+  });
+
   test('structure reduction is blocked when beds are occupied', () {
     final occupied = state.rooms.firstWhere((r) => r.id == 'r1');
     expect(state.removeRoom(occupied.id), contains('active tenants'));

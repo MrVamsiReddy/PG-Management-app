@@ -981,8 +981,12 @@ class AppState extends ChangeNotifier {
 
   // ---- Actions ----
 
+  int _idSeq = 0;
+
+  // Unique even under a coarse clock: a monotonic counter disambiguates ids
+  // created within the same microsecond (e.g. onboarding two tenants quickly).
   String _id(String prefix) =>
-      '$prefix${DateTime.now().microsecondsSinceEpoch}';
+      '$prefix${DateTime.now().microsecondsSinceEpoch}_${_idSeq++}';
 
   void _notify(
     String title,
