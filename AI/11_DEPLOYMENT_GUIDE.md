@@ -44,6 +44,7 @@ Deploy `create-admin` + set `ADMIN_SETUP_KEY` → in the app: **Admin login → 
 ## Release checklist
 - [ ] Migrations 1–7 run; email confirmation off; `payment-proofs` bucket present.
 - [ ] All 4 functions deployed; `ADMIN_SETUP_KEY` + `FIREBASE_SERVICE_ACCOUNT` set.
-- [ ] `flutter analyze` clean; `flutter test` green.
-- [ ] Ship `main_owner`/`main_tenant` builds — **not** `main.dart** (combined app leaks admin PG ops, `09`).
-- [ ] Review `09` P0/P1 before treating as production multi-tenant.
+- [x] `flutter analyze` clean; `flutter test` green (101); `dart format` applied. (P11)
+- [x] Owner + tenant `flutter build web --release` succeed. (P11)
+- [ ] Ship `main_owner`/`main_tenant` builds — `main.dart` is a combined dev/test app (admin now routes to customer management, but keep prod on the split builds).
+- [ ] **Blockers before "production multi-tenant":** migrate runtime to relational `customer_id` RLS (P0); backfill `profiles` for legacy tenants so the disabled-customer gate applies (P1). See `09`.

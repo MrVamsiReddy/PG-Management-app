@@ -36,6 +36,30 @@ Next task:
 
 ## Latest
 ```
+### Session: 2026-07-10 · Prompt 11 — production readiness QA
+Prompt/goal: Verify the production checklist against source, fix gaps, run format/analyze/test + owner & tenant web release builds, report remaining blockers.
+Commit(s): (this session)
+
+Summary:
+- Verified every checklist item by code search: no demo/local/offline/seed code, no public signup, split owner/tenant apps with tenant build excluding owner screen files, RLS on all tables, server-side timing-safe admin key, must_change_password enforced (client + 006 RLS), full invite lifecycle, audit logging incl. payment events, rent history preserved, occupied-structure guards, tenant-cannot-mark-paid, UPI-return-never-auto-confirms, workspace-scoped proof storage, duplicate UTR detection. Fixed the one production-polish issue found: receipt PDF footer said "demo receipt" → "not a valid tax document". dart format clean, analyze clean, 101 tests pass, both `flutter build web --release` (owner + tenant) succeed.
+
+Files modified:
+- lib/src/receipt_pdf.dart (footer wording)
+- AI/06,07,11 updated (P11 checklist + blockers)
+
+Architecture changes: none.
+Database changes: none.
+Tests added: none (verification pass); 101 passing.
+
+Remaining production BLOCKERS (unchanged, see 09):
+- P0 · runtime still on app_data keyed by owner_id, not relational customer_id RLS (isolation works owner-to-owner, not the customer model).
+- P1 · legacy tenants (no profiles row) bypass the disabled-customer gate.
+Non-blocking: a few secondary ops/community screens not yet localized; admin "view customer PGs" reads unused relational pgs (empty).
+
+Next task: P0 relational-runtime migration (move app_data reads/writes onto 004 customer-scoped tables) — the last gate to true multi-tenant production.
+```
+
+```
 ### Session: 2026-07-10 · Prompt 10 — full localization
 Prompt/goal: Localize the core/tested flows in en/hi/te, persist language, map backend error codes to localized text.
 Commit(s): (this session)
