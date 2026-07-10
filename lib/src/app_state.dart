@@ -1226,6 +1226,45 @@ class AppState extends ChangeNotifier {
     return '';
   }
 
+  /// Ensures a room exists in [pgId] with [roomNumber]. Creates it with the
+  /// given sharing type (= beds) and current [rent] when missing; otherwise
+  /// returns the existing room's id (its stored sharing/rent are inherited).
+  /// Used by tenant onboarding, where room pricing is configured.
+  String ensureRoom(
+      {required String pgId,
+      required int floor,
+      required String roomNumber,
+      required int sharingType,
+      required int rent}) {
+    final number = roomNumber.trim();
+    final existing = _firstOrNull(
+        rooms,
+        (r) =>
+            r.pgId == pgId &&
+            r.number.trim().toLowerCase() == number.toLowerCase());
+    if (existing != null) return existing.id;
+    final room = Room(
+      id: _id('r'),
+      pgId: pgId,
+      number: number,
+      floor: floor,
+      beds: sharingType,
+      occupied: 0,
+      rent: rent,
+      customerId: customerId,
+    );
+    rooms.add(room);
+    // Keep the PG's bed count in step so occupancy stats stay correct.
+    final p = pgs.indexWhere((e) => e.id == pgId);
+    if (p != -1) pgs[p] = pgs[p].copyWith(beds: pgs[p].beds + sharingType);
+    _persist({'rooms', 'pgs'});
+    _audit('room_created',
+        entityType: 'room',
+        entityId: room.id,
+        after: {'number': number, 'beds': sharingType, 'rent': rent});
+    return room.id;
+  }
+
   /// Onboards a tenant after validating the inputs. Returns a user-facing
   /// error message, or null on success. Blocks full rooms and duplicate bed
   /// labels, and keeps room/property occupancy in step.

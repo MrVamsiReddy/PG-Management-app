@@ -724,6 +724,30 @@ void main() {
     expect(due.status, PaymentStatus.due);
   });
 
+  test('onboarding into a new room sets its sharing/rent; tenant inherits', () {
+    // p2 starts with no rooms; the room is created during onboarding.
+    expect(state.rooms.where((r) => r.pgId == 'p2'), isEmpty);
+    final roomId = state.ensureRoom(
+        pgId: 'p2', floor: 2, roomNumber: '201', sharingType: 3, rent: 8500);
+    final room = state.roomById(roomId)!;
+    expect(room.beds, 3);
+    expect(room.rent, 8500);
+    expect(room.type, 'Triple sharing');
+
+    final error = state.onboardTenant(
+        name: 'Nisha Rao', phone: '9000000123', roomId: roomId, bed: 'A');
+    expect(error, isNull);
+    final tenant = state.tenants.firstWhere((t) => t.name == 'Nisha Rao');
+    expect(tenant.roomId, roomId);
+    final due = state.payments.firstWhere((p) => p.tenantId == tenant.id);
+    expect(due.amount, 8500); // inherited the room's current rent as a snapshot
+
+    // ensureRoom is idempotent on room number within a PG.
+    final same = state.ensureRoom(
+        pgId: 'p2', floor: 2, roomNumber: '201', sharingType: 1, rent: 1);
+    expect(same, roomId);
+  });
+
   test('a tenant session resolves to its linked tenant and logout clears it',
       () async {
     state.debugSignIn(UserRole.tenant, tenantId: 't1');

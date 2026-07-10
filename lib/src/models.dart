@@ -237,7 +237,8 @@ class Room {
   String get type => switch (beds) {
         1 => 'Single',
         2 => 'Double sharing',
-        _ => 'Triple sharing'
+        3 => 'Triple sharing',
+        _ => 'Four sharing'
       };
 
   Room copyWith({int? occupied, int? rent, String? customerId}) => Room(

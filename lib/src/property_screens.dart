@@ -704,147 +704,229 @@ class _TenantsScreenState extends State<TenantsScreen> {
 
   void _onboard(BuildContext context, AppState state) {
     final messenger = ScaffoldMessenger.of(context);
-    if (state.pgRooms.isEmpty) {
-      messenger.showSnackBar(SnackBar(
-          content: Text(
-              'Add a room in ${state.activePg?.name ?? 'this property'} first.')));
-      return;
-    }
-    final available = state.pgRooms.where((r) => r.occupied < r.beds).toList();
-    if (available.isEmpty) {
-      messenger.showSnackBar(SnackBar(
-          content: Text(
-              'Every room in ${state.activePg?.name ?? 'this property'} is full. Add a room or free a bed first.')));
+    if (state.pgs.isEmpty) {
+      messenger
+          .showSnackBar(const SnackBar(content: Text('Create a PG first.')));
       return;
     }
 
+    const newRoom = '__new__';
     final formKey = GlobalKey<FormState>();
     final name = TextEditingController();
     final phone = TextEditingController();
-    var roomId = available.first.id;
-    final bed = TextEditingController(text: state.suggestBed(roomId));
+    final roomNumber = TextEditingController();
+    final floorCtl = TextEditingController(text: '1');
+    final rent = TextEditingController(text: '9000');
+    final bed = TextEditingController(text: 'A');
+    var pgId = (state.activePg ?? state.pgs.first).id;
+    var roomChoice = newRoom; // room id, or the "new room" sentinel
+    var sharing = 2;
     String? kycDoc;
 
-    showAppSheet(
-        context,
-        StatefulBuilder(
-            builder: (context, setModalState) => SingleChildScrollView(
-                  child: Form(
-                    key: formKey,
-                    autovalidateMode: AutovalidateMode.onUserInteraction,
+    List<Room> roomsFor(String pg) =>
+        state.rooms.where((r) => r.pgId == pg).toList();
+
+    showAppSheet(context, StatefulBuilder(builder: (context, setModalState) {
+      final pgRooms = roomsFor(pgId);
+      final isNew = roomChoice == newRoom;
+      final selected = isNew
+          ? null
+          : state.rooms
+              .where((r) => r.id == roomChoice)
+              .cast<Room?>()
+              .firstWhere((_) => true, orElse: () => null);
+      return SingleChildScrollView(
+        child: Form(
+          key: formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            const SheetHandle(),
+            Text('Onboard tenant',
+                style: Theme.of(context).textTheme.headlineMedium),
+            const SizedBox(height: 6),
+            const Text(
+                'Select the room and set its sharing type and rent — the tenant inherits them.'),
+            const FormLabel('Full name'),
+            TextFormField(
+              controller: name,
+              textCapitalization: TextCapitalization.words,
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? 'Enter the tenant\'s name'
+                  : null,
+            ),
+            const FormLabel('Phone number'),
+            TextFormField(
+              controller: phone,
+              keyboardType: TextInputType.phone,
+              validator: (v) =>
+                  (v == null || v.replaceAll(RegExp(r'[^0-9]'), '').length < 10)
+                      ? 'Enter a valid 10-digit number'
+                      : null,
+            ),
+            const FormLabel('PG'),
+            DropdownButtonFormField<String>(
+              initialValue: pgId,
+              items: state.pgs
+                  .map(
+                      (p) => DropdownMenuItem(value: p.id, child: Text(p.name)))
+                  .toList(),
+              onChanged: (v) => setModalState(() {
+                pgId = v!;
+                roomChoice = newRoom;
+              }),
+            ),
+            const FormLabel('Room'),
+            DropdownButtonFormField<String>(
+              initialValue: roomChoice,
+              items: [
+                ...pgRooms.map((r) {
+                  final free = r.beds - r.occupied;
+                  final full = free <= 0;
+                  return DropdownMenuItem(
+                    value: r.id,
+                    enabled: !full,
+                    child: Text(
+                        'Room ${r.number} · Floor ${r.floor} · ${r.type} · ${full ? 'Full' : '$free free'}',
+                        style: full
+                            ? const TextStyle(color: Colors.black38)
+                            : null),
+                  );
+                }),
+                const DropdownMenuItem(
+                    value: newRoom, child: Text('＋ New room')),
+              ],
+              onChanged: (v) => setModalState(() {
+                roomChoice = v!;
+                if (v != newRoom) {
+                  bed.text = state.suggestBed(v);
+                }
+              }),
+            ),
+            if (isNew) ...[
+              const FormLabel('Room number'),
+              TextFormField(
+                controller: roomNumber,
+                validator: (v) => (v == null || v.trim().isEmpty)
+                    ? 'Enter a room number'
+                    : null,
+              ),
+              Row(children: [
+                Expanded(
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          const SheetHandle(),
-                          Text('Onboard tenant',
-                              style:
-                                  Theme.of(context).textTheme.headlineMedium),
-                          const SizedBox(height: 6),
-                          const Text(
-                              'Capture details and verify KYC to add a tenant to a room.'),
-                          const FormLabel('Full name'),
-                          TextFormField(
-                            controller: name,
-                            textCapitalization: TextCapitalization.words,
-                            validator: (v) => (v == null || v.trim().isEmpty)
-                                ? 'Enter the tenant\'s name'
-                                : null,
-                          ),
-                          const FormLabel('Phone number'),
-                          TextFormField(
-                            controller: phone,
-                            keyboardType: TextInputType.phone,
-                            validator: (v) => (v == null ||
-                                    v.replaceAll(RegExp(r'[^0-9]'), '').length <
-                                        10)
-                                ? 'Enter a valid 10-digit number'
-                                : null,
-                          ),
-                          const FormLabel('Room'),
-                          DropdownButtonFormField<String>(
-                            initialValue: roomId,
-                            // Full rooms are shown but disabled so the owner sees the whole PG.
-                            items: state.pgRooms.map((r) {
-                              final free = r.beds - r.occupied;
-                              final full = free <= 0;
-                              return DropdownMenuItem(
-                                value: r.id,
-                                enabled: !full,
-                                child: Text(
-                                  'Room ${r.number} · ${r.type} · ${full ? 'Full' : '$free free'}',
-                                  style: full
-                                      ? const TextStyle(color: Colors.black38)
-                                      : null,
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: (v) => setModalState(() {
-                              roomId = v!;
-                              bed.text = state.suggestBed(
-                                  roomId); // pre-fill the next free bed
-                            }),
-                          ),
-                          const FormLabel('Bed label'),
-                          TextFormField(
-                            controller: bed,
-                            textCapitalization: TextCapitalization.characters,
-                            decoration:
-                                const InputDecoration(hintText: 'e.g. B'),
-                            validator: (v) {
-                              final b = (v ?? '').trim();
-                              if (b.isEmpty) return 'Enter a bed label';
-                              if (state
-                                  .takenBeds(roomId)
-                                  .contains(b.toUpperCase())) {
-                                return 'That bed is already taken in this room';
-                              }
-                              return null;
-                            },
-                          ),
-                          const FormLabel('Identity document'),
-                          OutlinedButton.icon(
-                            onPressed: () async {
-                              final picked = await pickImageBase64(context);
-                              if (picked != null) {
-                                setModalState(() => kycDoc = picked);
-                              }
-                            },
-                            icon: Icon(kycDoc == null
-                                ? Icons.upload_file_outlined
-                                : Icons.check_circle_outline),
-                            label: Text(kycDoc == null
-                                ? 'Upload Aadhaar / passport'
-                                : 'Document attached · tap to change'),
-                          ),
-                          const SizedBox(height: 16),
-                          FilledButton(
-                              onPressed: () {
-                                if (!formKey.currentState!.validate()) return;
-                                if (kycDoc == null) {
-                                  messenger.showSnackBar(const SnackBar(
-                                      content: Text(
-                                          'Upload the identity document to continue.')));
-                                  return;
-                                }
-                                final error = state.onboardTenant(
-                                    name: name.text,
-                                    phone: phone.text,
-                                    roomId: roomId,
-                                    bed: bed.text,
-                                    kycDoc: kycDoc);
-                                if (error != null) {
-                                  messenger.showSnackBar(
-                                      SnackBar(content: Text(error)));
-                                  return;
-                                }
-                                Navigator.pop(context);
-                                messenger.showSnackBar(SnackBar(
-                                    content: Text(
-                                        '${name.text.trim()} onboarded to room ${state.roomNumber(roomId)}.')));
-                              },
-                              child: const Text('Onboard tenant')),
-                        ]),
-                  ),
-                )));
+                      const FormLabel('Floor'),
+                      TextFormField(
+                          controller: floorCtl,
+                          keyboardType: TextInputType.number),
+                    ])),
+                const SizedBox(width: 10),
+                Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                      const FormLabel('Sharing type'),
+                      DropdownButtonFormField<int>(
+                        initialValue: sharing,
+                        items: const [
+                          DropdownMenuItem(value: 1, child: Text('Single')),
+                          DropdownMenuItem(value: 2, child: Text('Double')),
+                          DropdownMenuItem(value: 3, child: Text('Triple')),
+                          DropdownMenuItem(value: 4, child: Text('Four')),
+                        ],
+                        onChanged: (v) => setModalState(() => sharing = v ?? 2),
+                      ),
+                    ])),
+              ]),
+              const FormLabel('Current room rent'),
+              TextFormField(
+                controller: rent,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(prefixText: '₹ '),
+              ),
+            ] else if (selected != null) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                    color: primarySoft,
+                    borderRadius: BorderRadius.circular(12)),
+                child: Text(
+                    '${selected.type} · ${inr(selected.rent)} / bed / month (inherited)',
+                    style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: primary)),
+              ),
+            ],
+            const FormLabel('Bed label'),
+            TextFormField(
+              controller: bed,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(hintText: 'e.g. B'),
+              validator: (v) {
+                final b = (v ?? '').trim();
+                if (b.isEmpty) return 'Enter a bed label';
+                if (!isNew &&
+                    state.takenBeds(roomChoice).contains(b.toUpperCase())) {
+                  return 'That bed is already taken in this room';
+                }
+                return null;
+              },
+            ),
+            const FormLabel('Identity document'),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final picked = await pickImageBase64(context);
+                if (picked != null) {
+                  setModalState(() => kycDoc = picked);
+                }
+              },
+              icon: Icon(kycDoc == null
+                  ? Icons.upload_file_outlined
+                  : Icons.check_circle_outline),
+              label: Text(kycDoc == null
+                  ? 'Upload Aadhaar / passport'
+                  : 'Document attached · tap to change'),
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+                onPressed: () {
+                  if (!formKey.currentState!.validate()) return;
+                  if (kycDoc == null) {
+                    messenger.showSnackBar(const SnackBar(
+                        content:
+                            Text('Upload the identity document to continue.')));
+                    return;
+                  }
+                  final roomId = isNew
+                      ? state.ensureRoom(
+                          pgId: pgId,
+                          floor: int.tryParse(floorCtl.text) ?? 1,
+                          roomNumber: roomNumber.text,
+                          sharingType: sharing,
+                          rent: int.tryParse(rent.text) ?? 0)
+                      : roomChoice;
+                  final error = state.onboardTenant(
+                      name: name.text,
+                      phone: phone.text,
+                      roomId: roomId,
+                      bed: bed.text,
+                      kycDoc: kycDoc);
+                  if (error != null) {
+                    messenger.showSnackBar(SnackBar(content: Text(error)));
+                    return;
+                  }
+                  Navigator.pop(context);
+                  messenger.showSnackBar(SnackBar(
+                      content: Text(
+                          '${name.text.trim()} onboarded to room ${state.roomNumber(roomId)}.')));
+                },
+                child: const Text('Onboard tenant')),
+          ]),
+        ),
+      );
+    }));
   }
 }

@@ -13,7 +13,8 @@ Enforced in current code unless marked Pending. Roles → `04`; schema → `03`.
 - The live `Room` model carries `floor` (int), `beds` (count), sharing type (= beds) and `rent`. Separate `floors`/`beds` relational rows are **not** created (schema B unused). ⚠️
 - Multiple PGs per owner supported; `activePg`/`selectPg` scope all owner screens. ✅
 
-## Bed / room assignment
+## Bed / room assignment (onboarding sets room pricing)
+- Onboarding (`TenantsScreen._onboard`) collects PG, Floor, Room (existing or new), Sharing Type, Current Room Rent, Bed and tenant details. A new room is created via `AppState.ensureRoom(pgId, floor, roomNumber, sharingType, rent)` (sharing type = beds; idempotent per room number in a PG; bumps the PG bed count); an existing room's sharing/rent are shown as **inherited**. The tenant then inherits the room's current rent as their first due (snapshot). ✅
 - `onboardTenant(name, phone, roomId, bed, kycDoc)` validates: name present, 10-digit phone, bed label present, room not full, bed label unique in room. Increments room + property occupancy. ✅
 - Structure guards: `removeRoom` blocks rooms with active tenants; `setRoomBeds` blocks reducing below occupancy (`max(stored occupied, tenants in room)`); `setRoomRent` changes rent. ✅
 

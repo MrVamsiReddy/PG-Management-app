@@ -36,6 +36,26 @@ Next task:
 
 ## Latest
 ```
+### Session: 2026-07-10 · Improvements #3 — tenant onboarding sets room pricing
+Prompt/goal: Onboarding collects PG/Floor/Room/Bed/Sharing Type/Current Rent; sharing+rent belong to the room; tenant inherits them.
+Commit(s): (this session)
+
+Summary:
+- TenantsScreen._onboard rewritten: PG dropdown, Room dropdown (existing rooms + "＋ New room"); for a new room it reveals Room number, Floor, Sharing type (1–4), Current rent; existing rooms show inherited sharing/rent. Bed + name/phone/KYC as before.
+- AppState.ensureRoom(pgId, floor, roomNumber, sharingType, rent) → creates the room if absent (beds=sharingType, rent), idempotent per (pg, room number), bumps PG bed count, audits room_created; returns the room id. Onboarding calls it for new rooms, then onboardTenant(roomId,...). Tenant's first due is generated at the room's rent (snapshot).
+- Room.type extended to 4 (Four sharing).
+
+Files modified:
+- lib/src/app_state.dart (ensureRoom), lib/src/property_screens.dart (onboarding UI), lib/src/models.dart (Room.type)
+- test/app_test.dart (new-room onboarding + inherit-rent + idempotent ensureRoom)
+- AI/05,06,07 updated
+
+Tests: 104 passing; analyze clean; dart format applied. No backend/deploy changes.
+
+Next task: #4 room pricing model (Room=sharing+rent, Tenant=bed+room, Payment=snapshot; rent changes affect future only) — mostly already true; verify + tighten.
+```
+
+```
 ### Session: 2026-07-10 · Improvements #2 — PG creation simplified
 Prompt/goal: PG creation collects only name/address/basic info; remove sharing type + rent config from PG creation.
 Commit(s): (this session)
