@@ -36,6 +36,37 @@ Next task:
 
 ## Latest
 ```
+### Session: 2026-07-10 · Prompt 9 — manual UPI rent payments
+Prompt/goal: UPI config per PG, tenant submit-proof flow (never auto-confirm / never mark paid), owner confirm/reject, RLS + storage + audit + localization.
+Commit(s): (this session)
+
+Summary:
+- 007_payments.sql: pg_upi_settings + payment_submissions (tenant may INSERT only a pending_confirmation row, read own; owner full; admin read; NO tenant UPDATE) + revokes tenant 'payments' app_data write + payment-proofs storage policies (can_access_workspace). Removed payRent. New runtime models UpiSettings/UpiSubmission. AppState: loadSubmissions, submitPayment (uploads screenshot, inserts pending, audit payment_submitted, dup handled owner-side), confirmSubmission (→ marks due paid + audit payment_confirmed), rejectSubmission (mandatory reason + audit payment_rejected), loadUpiSettings/saveUpiSettings, paymentStatusKey/canSubmit/duplicateOf/pendingSubmissions/proofUrl. UI upi_screens.dart: tenant showUpiPayFlow (upi:// external + UTR/screenshot submit), owner PaymentReviewScreen (confirm/reject/dup warning/proof), UpiSettingsScreen. Localized en/hi/te (upi.* / status.*).
+
+Files modified:
+- supabase/007_payments.sql (new)
+- lib/src/models.dart (UpiSettings, UpiStatus, UpiSubmission)
+- lib/src/app_state.dart (payment methods, remove payRent, submissions state)
+- lib/src/finance_screens.dart (tenant UPI FAB, owner appbar review/settings, derived status pill; removed _paymentFlow/_success)
+- lib/src/upi_screens.dart (new: pay flow, review, settings)
+- lib/src/l10n.dart (upi.*/status.* in 3 languages)
+- test/app_test.dart (P9 tests; replaced 2 payRent tests)
+- AI/01,03,04,05,06,09,11 updated
+
+Architecture changes: security-critical payment lifecycle on a dedicated RLS-enforced table (payment_submissions) keyed by owner_id/member_email — genuine enforcement even though dues still live in app_data. Screenshots in payment-proofs Storage.
+
+Database changes: 007 (see above). Run once; not idempotent.
+
+Tests added: status derivation/resubmit, tenant-can't-mark-paid, confirm/reject fail-closed, duplicate UTR warning, UpiSettings/UpiSubmission mappers, 007 RLS content. 93 passing; analyze clean.
+
+Remaining work: P10 (full localization sweep), P11 (release QA). Dues themselves still in app_data (P0 relational migration unchanged). Home/receipt cards still show base displayStatus (due/paid), not the pending overlay — minor.
+
+Known issues introduced/affected: 09 P0 "tenant marks paid" resolved; rule 6 now enforced.
+
+Next task: Prompt 10 (full-app localization).
+```
+
+```
 ### Session: 2026-07-10 · Prompt 8 — audit logs
 Prompt/goal: Create and fully integrate audit_logs with role isolation (admin all, owner own, tenant none).
 Commit(s): (this session)

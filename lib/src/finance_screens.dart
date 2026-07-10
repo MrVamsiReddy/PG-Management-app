@@ -5,8 +5,10 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'app_state.dart';
+import 'l10n.dart';
 import 'receipt_pdf.dart';
 import 'theme.dart';
+import 'upi_screens.dart';
 import 'widgets.dart';
 
 class PaymentsScreen extends StatefulWidget {
@@ -34,28 +36,45 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
+    final l = AppLocalizations.of(context);
     final tenant = state.role == UserRole.tenant;
     final due = state.tenantDuePayment;
+    final canPay = due != null && state.canSubmit(due);
     var items = tenant ? state.tenantPayments : state.pgPayments;
     if (filter != 'All') items = items.where(_matches).toList();
     return Scaffold(
       appBar: AppBar(
         title: Text(tenant ? 'My rent' : 'Rent collection'),
         actions: [
-          if (!tenant)
+          if (!tenant) ...[
+            IconButton(
+                tooltip: l.t('upi.reviewTitle'),
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => const PaymentReviewScreen())),
+                icon: Badge(
+                    isLabelVisible: state.pendingSubmissions.isNotEmpty,
+                    label: Text('${state.pendingSubmissions.length}'),
+                    child: const Icon(Icons.fact_check_outlined))),
+            IconButton(
+                tooltip: l.t('upi.settingsTitle'),
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) =>
+                        UpiSettingsScreen(pgId: state.activePg?.id ?? ''))),
+                icon: const Icon(Icons.account_balance_outlined)),
             IconButton(
                 tooltip: 'Export CSV',
                 onPressed: () => _exportCsv(state),
                 icon: const Icon(Icons.table_view_outlined)),
+          ],
         ],
       ),
       floatingActionButton: tenant
-          ? (due == null
+          ? (!canPay
               ? null
               : FloatingActionButton.extended(
-                  onPressed: () => _paymentFlow(state, due),
-                  icon: const Icon(Icons.lock_outline),
-                  label: const Text('Pay rent')))
+                  onPressed: () => showUpiPayFlow(context, state, due),
+                  icon: const Icon(Icons.smartphone),
+                  label: Text(l.t('upi.pay'))))
           : FloatingActionButton.extended(
               onPressed: () => _recordPayment(state),
               icon: const Icon(Icons.add),
@@ -152,7 +171,8 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                               style:
                                   const TextStyle(fontWeight: FontWeight.w800)),
                           const SizedBox(height: 5),
-                          StatusPill(payment.displayStatus)
+                          StatusPill(
+                              statusLabel(l, state.paymentStatusKey(payment)))
                         ]),
                     onTap: () => _receipt(context, state, payment),
                   ),
@@ -184,119 +204,6 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
               Text('CSV copied to clipboard — paste it into a spreadsheet.')));
     }
   }
-
-  void _paymentFlow(AppState state, Payment payment) {
-    var selected = 'UPI';
-    showAppSheet(
-        context,
-        StatefulBuilder(
-            builder: (context, setModalState) => Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const SheetHandle(),
-                      Row(children: [
-                        const Icon(Icons.shield_outlined, color: primary),
-                        const SizedBox(width: 8),
-                        Text('Secure payment',
-                            style: Theme.of(context).textTheme.titleLarge),
-                        const Spacer(),
-                        const Text('PG PAY',
-                            style: TextStyle(
-                                fontSize: 10,
-                                color: primary,
-                                fontWeight: FontWeight.w900))
-                      ]),
-                      const SizedBox(height: 22),
-                      Card(
-                          color: ink,
-                          child: Padding(
-                              padding: const EdgeInsets.all(17),
-                              child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                              '${formatMonthName(payment.period)} rent',
-                                              style: const TextStyle(
-                                                  color: Colors.white60)),
-                                          Text(
-                                              'Room ${state.currentTenantRoomLabel}',
-                                              style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.w700))
-                                        ]),
-                                    Text(inr(payment.balance),
-                                        style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w800,
-                                            fontSize: 22))
-                                  ]))),
-                      const FormLabel('Choose payment method'),
-                      RadioGroup<String>(
-                        groupValue: selected,
-                        onChanged: (value) =>
-                            setModalState(() => selected = value!),
-                        child: Column(
-                            children: [
-                          ('UPI', Icons.qr_code_2),
-                          ('Credit / Debit card', Icons.credit_card),
-                          ('Net banking', Icons.account_balance_outlined),
-                          ('Wallet', Icons.account_balance_wallet_outlined),
-                        ]
-                                .map((method) => RadioListTile<String>(
-                                    value: method.$1,
-                                    title: Text(method.$1,
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.w700)),
-                                    secondary: Icon(method.$2, color: primary),
-                                    contentPadding: EdgeInsets.zero))
-                                .toList()),
-                      ),
-                      const SizedBox(height: 10),
-                      FilledButton.icon(
-                          onPressed: () {
-                            state.payRent(payment.id, selected);
-                            Navigator.pop(context);
-                            _success(state, payment.id);
-                          },
-                          icon: const Icon(Icons.lock_outline),
-                          label: Text('Pay ${inr(payment.balance)}')),
-                      const SizedBox(height: 8),
-                      const Text('256-bit encrypted · Powered by demo payments',
-                          textAlign: TextAlign.center,
-                          style:
-                              TextStyle(fontSize: 10, color: Colors.black45)),
-                    ])));
-  }
-
-  void _success(AppState state, String paymentId) => showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-            icon: const CircleAvatar(
-                radius: 30,
-                backgroundColor: primarySoft,
-                child: Icon(Icons.check_rounded, color: primary, size: 34)),
-            title: const Text('Payment successful!'),
-            content: const Text(
-                'Your rent payment has been recorded and the receipt is ready.',
-                textAlign: TextAlign.center),
-            actionsAlignment: MainAxisAlignment.center,
-            actions: [
-              FilledButton(
-                  onPressed: () {
-                    Navigator.pop(dialogContext);
-                    final paid =
-                        state.payments.firstWhere((p) => p.id == paymentId);
-                    _receipt(context, state, paid);
-                  },
-                  child: const Text('View receipt'))
-            ],
-          ));
 
   void _recordPayment(AppState state) {
     final scoped = state.pgTenants;

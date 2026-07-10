@@ -42,4 +42,4 @@ Three build surfaces over one shared `AppState`: combined (`main.dart`), owner/a
 5. Tenant app and owner/admin app are separate surfaces; tenant build excludes owner screens.
 6. Tenant can never confirm a payment as paid.
 
-> Rules 1, 2 and 6 are **not yet fully enforced at runtime** — see `09_KNOWN_ISSUES.md`.
+> Rules 1 and 2 are **not yet fully enforced at runtime**; rule 6 is now enforced (P9: tenants can only submit `pending_confirmation` proofs, never mark paid). See `09_KNOWN_ISSUES.md`.

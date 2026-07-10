@@ -3,11 +3,13 @@
 Two coexisting models. RLS design → assumptions below; runtime gap → `09_KNOWN_ISSUES.md`.
 
 ## A. `app_data` blob store (LIVE at runtime)
-Files: `supabase/schema.sql`, `002_members.sql`, `003_push_tokens.sql`, `006_invites.sql`.
+Files: `supabase/schema.sql`, `002_members.sql`, `003_push_tokens.sql`, `006_invites.sql`, `007_payments.sql`.
 
 - **`app_data`** — one JSONB row per `(owner_id, key)`; `key` ∈ {pgs, rooms, tenants, payments, maintenance, visitors, announcements, attendance, utilities, notifications}. Whole collections stored as JSON blobs. RLS: owner reads/writes own rows; invited members (via `members`) may read the workspace and write tenant-facing keys. `006` adds restrictive policies: a JWT still carrying `must_change_password=true` cannot write.
 - **`members`** — `(owner_id, member_email, tenant_id)`; links an invited tenant email to a workspace + tenant record.
 - **`invites`** (P7, live) — `(id, owner_id, customer_id?, user_id?, tenant_id[text], email, pg_id, room_id, bed_label, token[unique], status[pending|accepted|expired|revoked|resent], expires_at, created/accepted/revoked/resent timestamps)`. RLS: owner reads own rows; **all writes are service-role only** (the `invite` Edge Function owns every lifecycle transition, so tokens are single-use and can't be forged).
+- **`pg_upi_settings`** (P9, live) — `(owner_id, pg_id[text], upi_id, payee_name, enabled)`; owner writes, workspace members read. PG UPI config for tenant payments.
+- **`payment_submissions`** (P9, live) — `(id, owner_id, customer_id?, pg_id, tenant_id[text], member_email, payment_id, period, amount, utr, screenshot_path, status[pending_confirmation|confirmed|rejected], rejection_reason, submitted_at, confirmed_by, confirmed_at)`. RLS: tenant may **insert only** their own `pending_confirmation` row and read own; owner full control of own workspace; platform admin read-only. No tenant UPDATE → a tenant can never confirm/mark paid. `007` also drops `payments` from the members-writable `app_data` keys. Screenshots go to the private `payment-proofs` bucket (`{owner}/{pg}/{tenant}/{payment}/…`, workspace-scoped policies via `can_access_workspace`).
 - **`push_tokens`** — `(token, user_id, email)`; FCM device tokens; owner-only RLS.
 
 This is the store the owner/tenant apps actually read and write, **cloud-only** — Supabase is the single source of truth; there is no local store or offline cache (Hive was removed). Collections live in memory only while signed in (`SupabaseRepository`, populated on login, cleared on logout). It is **not** `customer_id`-scoped (scoping is by `owner_id`).

@@ -454,24 +454,28 @@ void main() {
     expect(upcoming.displayStatus, 'Due');
   });
 
-  test('payRent marks the payment paid, stores method and date, and notifies',
-      () {
+  test('a submission drives the derived payment status and resubmit rule', () {
     state.currentTenantId = 't1';
     final due = state.tenantDuePayment!;
-    final collectedBefore = state.collectedAmount;
+    expect(state.paymentStatusKey(due), anyOf('due', 'overdue'));
+    expect(state.canSubmit(due), isTrue);
 
-    state.payRent(due.id, 'UPI');
+    UpiSubmission sub(UpiStatus status) => UpiSubmission(
+        id: 's1',
+        tenantId: 't1',
+        paymentId: due.id,
+        amount: due.amount,
+        utr: 'UTR1',
+        status: status,
+        submittedAt: DateTime.now());
 
-    final paid = state.payments.firstWhere((p) => p.id == due.id);
-    expect(paid.status, PaymentStatus.paid);
-    expect(paid.method, 'UPI');
-    expect(paid.paidDate, isNotNull);
-    expect(state.tenantDuePayment, isNull);
-    expect(state.collectedAmount, collectedBefore + due.amount);
-    expect(
-        state.notifications.any((n) =>
-            n.title == 'Rent received' && n.type == NotificationType.payment),
-        isTrue);
+    state.submissions = [sub(UpiStatus.pendingConfirmation)];
+    expect(state.paymentStatusKey(due), 'pending');
+    expect(state.canSubmit(due), isFalse);
+
+    state.submissions = [sub(UpiStatus.rejected)];
+    expect(state.paymentStatusKey(due), 'rejected');
+    expect(state.canSubmit(due), isTrue);
   });
 
   test('recordPayment settles a matching current-month due in place', () {
@@ -798,27 +802,63 @@ void main() {
     expect(state.tenantPayments.any((p) => p.tenantId != 't1'), isFalse);
   });
 
-  test('paying rent notifies managers and the payer separately', () {
+  test('a tenant can never mark a due paid — no client API and no cloud',
+      () async {
     state.debugSignIn(UserRole.tenant, tenantId: 't1');
     final due = state.tenantDuePayment!;
-    state.payRent(due.id, 'UPI');
+    // The only tenant action is submitting proof; it fails closed offline and
+    // never flips the due to paid.
+    final error = await state.submitPayment(payment: due, utr: '123456789012');
+    expect(error, isNotNull);
+    expect(state.payments.firstWhere((p) => p.id == due.id).status,
+        PaymentStatus.due);
+  });
 
-    final managerNote =
-        state.notifications.firstWhere((n) => n.title == 'Rent received');
-    expect(managerNote.roleScope, NotificationScope.managers);
-    expect(managerNote.tenantId, 't1');
-    expect(managerNote.pgId, 'p1');
+  test('confirm and reject fail closed without a cloud connection', () async {
+    state.debugSignIn(UserRole.owner);
+    final sub = UpiSubmission(
+        id: 's9',
+        tenantId: 't1',
+        paymentId: 'pay-x',
+        amount: 9500,
+        utr: 'UTR9',
+        status: UpiStatus.pendingConfirmation,
+        submittedAt: DateTime.now());
+    expect(await state.confirmSubmission(sub), isNotNull);
+    expect(await state.rejectSubmission(sub, 'blurry'), isNotNull);
+    expect(await state.rejectSubmission(sub, ''), isNotNull);
+  });
 
-    final tenantNote =
-        state.notifications.firstWhere((n) => n.title == 'Payment successful');
-    expect(tenantNote.roleScope, NotificationScope.tenant);
-    expect(tenantNote.tenantId, 't1');
-
-    expect(state.visibleNotifications.any((n) => n.title == 'Rent received'),
-        isFalse);
-    expect(
-        state.visibleNotifications.any((n) => n.title == 'Payment successful'),
-        isTrue);
+  test('owner sees a duplicate UTR + amount warning', () {
+    state.debugSignIn(UserRole.owner);
+    final a = UpiSubmission(
+        id: 'a',
+        tenantId: 't1',
+        paymentId: 'p-a',
+        amount: 9500,
+        utr: 'DUP',
+        status: UpiStatus.pendingConfirmation,
+        submittedAt: DateTime.now());
+    final b = UpiSubmission(
+        id: 'b',
+        tenantId: 't2',
+        paymentId: 'p-b',
+        amount: 9500,
+        utr: 'DUP',
+        status: UpiStatus.pendingConfirmation,
+        submittedAt: DateTime.now());
+    final c = UpiSubmission(
+        id: 'c',
+        tenantId: 't3',
+        paymentId: 'p-c',
+        amount: 100,
+        utr: 'OTHER',
+        status: UpiStatus.pendingConfirmation,
+        submittedAt: DateTime.now());
+    state.submissions = [a, b, c];
+    expect(state.duplicateOf(a)?.id, 'b');
+    expect(state.duplicateOf(c), isNull);
+    expect(state.pendingSubmissions.length, 3);
   });
 
   test('maintenance updates reach only tenants in that room', () {
@@ -1312,6 +1352,69 @@ void main() {
         File('supabase/functions/create-admin/index.ts').readAsStringSync();
     expect(adminFn, contains('admin_created'));
     expect(adminFn, contains('audit_logs'));
+  });
+
+  // ---- Prompt 9: manual UPI payments ----
+
+  test('UpiSettings.usable requires an enabled, valid UPI id', () {
+    expect(const UpiSettings(enabled: true, upiId: 'a@bank').usable, isTrue);
+    expect(const UpiSettings(enabled: false, upiId: 'a@bank').usable, isFalse);
+    expect(const UpiSettings(enabled: true, upiId: 'notaupi').usable, isFalse);
+  });
+
+  test('UpiSubmission.fromRow maps db columns and status', () {
+    final s = UpiSubmission.fromRow({
+      'id': 'sub1',
+      'tenant_id': 't1',
+      'payment_id': 'pay-1',
+      'amount': 9500,
+      'utr': 'UTR123',
+      'status': 'confirmed',
+      'submitted_at': DateTime(2026, 7, 10).toIso8601String(),
+      'screenshot_path': 'o/p/t/pay-1/x.jpg',
+    });
+    expect(s.id, 'sub1');
+    expect(s.status, UpiStatus.confirmed);
+    expect(s.amount, 9500);
+    expect(s.screenshotPath, isNotNull);
+  });
+
+  test('payment actions fail closed without a cloud connection', () async {
+    expect(
+        await state.saveUpiSettings('p1',
+            upiId: 'x@y', payeeName: 'A', enabled: true),
+        isNotNull);
+    expect(await state.loadUpiSettings('p1'), isNull);
+    await state.loadSubmissions();
+    expect(state.submissions, isEmpty);
+  });
+
+  test('the payments migration enforces UPI RLS and tenant restrictions', () {
+    final sql = File('supabase/007_payments.sql').readAsStringSync();
+    expect(sql, contains('create table if not exists public.pg_upi_settings'));
+    expect(
+        sql, contains('create table if not exists public.payment_submissions'));
+    for (final s in ['pending_confirmation', 'confirmed', 'rejected']) {
+      expect(sql, contains("'$s'"));
+    }
+    // Tenant may only INSERT a pending submission (no update/confirm path).
+    expect(sql, contains('member submits payment'));
+    expect(sql, contains("status = 'pending_confirmation'"));
+    expect(sql, isNot(contains('member updates submissions')));
+    // Owner + admin read, cross-customer isolation via owner_id / admin check.
+    expect(sql, contains('owner manages submissions'));
+    expect(sql, contains('admin reads submissions'));
+    expect(sql, contains('public.is_platform_admin()'));
+    // Tenants can no longer write the payments blob (cannot self-mark paid).
+    expect(
+        sql,
+        contains(
+            "key in ('maintenance', 'visitors', 'attendance', 'notifications')"));
+    // Storage proofs are workspace-scoped.
+    expect(sql, contains("'payment-proofs'"));
+    expect(sql, contains('can_access_workspace'));
+    // Duplicate detection index on customer/amount/utr scope.
+    expect(sql, contains('payment_submissions_dup_idx'));
   });
 
   test('setLanguage switches the active language and locale', () {

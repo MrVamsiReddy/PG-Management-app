@@ -4,6 +4,78 @@ library;
 
 enum PaymentStatus { due, partial, paid }
 
+class UpiSettings {
+  const UpiSettings(
+      {this.upiId = '', this.payeeName = '', this.enabled = false});
+  final String upiId;
+  final String payeeName;
+  final bool enabled;
+
+  bool get usable => enabled && upiId.contains('@');
+
+  static UpiSettings fromRow(Map<String, dynamic> r) => UpiSettings(
+        upiId: r['upi_id'] as String? ?? '',
+        payeeName: r['payee_name'] as String? ?? '',
+        enabled: r['enabled'] as bool? ?? false,
+      );
+}
+
+enum UpiStatus { pendingConfirmation, confirmed, rejected }
+
+class UpiSubmission {
+  const UpiSubmission({
+    required this.id,
+    required this.tenantId,
+    required this.paymentId,
+    required this.amount,
+    required this.utr,
+    required this.status,
+    required this.submittedAt,
+    this.pgId = '',
+    this.period = '',
+    this.screenshotPath,
+    this.rejectionReason,
+    this.confirmedAt,
+  });
+
+  final String id;
+  final String tenantId;
+  final String paymentId;
+  final int amount;
+  final String utr;
+  final UpiStatus status;
+  final DateTime submittedAt;
+  final String pgId;
+  final String period;
+  final String? screenshotPath;
+  final String? rejectionReason;
+  final DateTime? confirmedAt;
+
+  static UpiStatus _status(String? w) => switch (w) {
+        'confirmed' => UpiStatus.confirmed,
+        'rejected' => UpiStatus.rejected,
+        _ => UpiStatus.pendingConfirmation,
+      };
+
+  static UpiSubmission fromRow(Map<String, dynamic> r) => UpiSubmission(
+        id: '${r['id']}',
+        tenantId: r['tenant_id'] as String? ?? '',
+        paymentId: r['payment_id'] as String? ?? '',
+        amount: (r['amount'] as num?)?.toInt() ?? 0,
+        utr: r['utr'] as String? ?? '',
+        status: _status(r['status'] as String?),
+        submittedAt: DateTime.tryParse(r['submitted_at'] as String? ?? '') ??
+            DateTime.now(),
+        pgId: r['pg_id'] as String? ?? '',
+        period: r['period'] as String? ?? '',
+        screenshotPath: r['screenshot_path'] as String?,
+        rejectionReason: r['rejection_reason'] as String?,
+        confirmedAt: r['confirmed_at'] == null
+            ? null
+            : DateTime.tryParse(r['confirmed_at'] as String),
+      );
+}
+
 enum MaintenanceStatus {
   open('Open'),
   inProgress('In progress'),

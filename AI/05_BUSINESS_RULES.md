@@ -22,10 +22,12 @@ Enforced in current code unless marked Pending. Roles → `04`; schema → `03`.
 - `generateMonthlyDues` creates the current month's `due` per tenant at the room's rent, idempotent (deterministic id `pay-YYYY-M-tenantId`, `unique(tenant_id, period)` in relational schema). Runs at startup for managers; a tenant session only materialises its own due, never persists owner-wide. ✅
 - **Rent history preserved:** `Payment.amount` is fixed at creation; changing a room's rent later never rewrites existing dues/payments. ✅
 
-## Payment workflow (current)
+## Payment workflow (P9, current)
 - Owner `recordPayment` settles the matching current-month due in place (full→paid, part→partial) or creates a standalone advance row; no duplicate current-month rows. ✅
 - Partial payments supported (`paidAmount`, `collected`, `balance`, `Partial` status). ✅
-- **Tenant `payRent` marks the due paid directly.** ❌ Violates "tenant never confirms payment." Manual-UPI submit/confirm flow is **Pending** (Prompt 9).
+- **Manual UPI (Prompt 9):** owner sets UPI id / payee / enable per PG (`pg_upi_settings`, `UpiSettingsScreen`). Tenant views dues, taps Pay via UPI (`upi://` external app), then submits a UTR + optional screenshot → a `payment_submissions` row with status `pending_confirmation`. Returning from the UPI app confirms nothing. Owner reviews (`PaymentReviewScreen`) with tenant/amount/month/UTR/screenshot/time and Confirms (→ due marked paid, `confirmed_by`/`confirmed_at`) or Rejects (mandatory reason → status `rejected`, tenant may resubmit). ✅
+- **Tenant can never mark paid:** `payRent` was removed; tenants have no UPDATE policy on `payment_submissions` and (via `007`) can no longer write the `app_data` payments blob. Only owner confirmation flips a due to paid. ✅
+- Derived status shown = due · overdue · pending_confirmation · paid · rejected (`AppState.paymentStatusKey`). Duplicate `amount`+`utr` in a workspace surfaces an owner warning (`duplicateOf`). Screenshots live in the `payment-proofs` bucket at `{owner}/{pg}/{tenant}/{payment}/…`. Audit: `payment_submitted`/`payment_confirmed`/`payment_rejected`. ✅
 
 ## Invite workflow (P7, current)
 - Only owners create tenant logins, via `inviteTenant`/`resendInvite`/`revokeInvite` → the `invite` Edge Function (actions create/resend/revoke/validate/accept). No client-side fallback. ✅

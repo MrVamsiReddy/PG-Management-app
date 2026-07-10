@@ -1,7 +1,10 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'
     show
         AuthException,
+        FileOptions,
         FunctionException,
         PostgrestException,
         SupabaseClient,
@@ -250,6 +253,7 @@ class AppState extends ChangeNotifier {
     attendance = [];
     utilities = [];
     notifications = [];
+    submissions = [];
     isLoggedIn = false;
     notifyListeners();
   }
@@ -597,6 +601,7 @@ class AppState extends ChangeNotifier {
     _useSupabaseRepos(workspaceOwnerId);
     await _loadAll();
     await _ensureMonthlyDuesAtStartup();
+    await loadSubmissions();
     isLoggedIn = true;
     notifyListeners();
     return null;
@@ -827,6 +832,20 @@ class AppState extends ChangeNotifier {
   String pgNameForTenant(String tenantId) {
     final room = roomById(tenantById(tenantId)?.roomId ?? '');
     return pgById(room?.pgId ?? '')?.name ?? 'PG Management';
+  }
+
+  String pgIdForPayment(Payment p) => _pgIdForTenant(p.tenantId) ?? '';
+
+  Future<String?> proofUrl(String path) async {
+    final client = supabaseOrNull;
+    if (client == null) return null;
+    try {
+      return await client.storage
+          .from('payment-proofs')
+          .createSignedUrl(path, 600);
+    } catch (_) {
+      return null;
+    }
   }
 
   String get displayName {
@@ -1302,17 +1321,211 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  void payRent(String id, String method) {
-    final i = payments.indexWhere((p) => p.id == id);
+  // ---- Manual UPI rent payments (Prompt 9) ----
+
+  String get workspaceId => _workspaceOwnerId ?? '';
+
+  List<UpiSubmission> submissions = [];
+
+  Future<void> loadSubmissions() async {
+    final client = supabaseOrNull;
+    if (client == null) {
+      submissions = [];
+      return;
+    }
+    try {
+      final rows = await client
+          .from('payment_submissions')
+          .select()
+          .order('submitted_at', ascending: false);
+      submissions = (rows as List)
+          .map(
+              (r) => UpiSubmission.fromRow(Map<String, dynamic>.from(r as Map)))
+          .toList();
+    } catch (_) {
+      submissions = [];
+    }
+  }
+
+  UpiSubmission? latestSubmissionFor(String paymentId) =>
+      _firstOrNull(submissions, (s) => s.paymentId == paymentId);
+
+  /// The status a tenant/owner should see for a due, combining the stored
+  /// payment with its latest submission: due · overdue · pending · paid ·
+  /// rejected.
+  String paymentStatusKey(Payment p) {
+    if (p.status == PaymentStatus.paid) return 'paid';
+    final sub = latestSubmissionFor(p.id);
+    if (sub != null) {
+      switch (sub.status) {
+        case UpiStatus.pendingConfirmation:
+          return 'pending';
+        case UpiStatus.confirmed:
+          return 'paid';
+        case UpiStatus.rejected:
+          return 'rejected';
+      }
+    }
+    return p.isOverdue ? 'overdue' : 'due';
+  }
+
+  /// A tenant may submit when the due is unpaid and not already awaiting
+  /// confirmation (a rejected submission can be resubmitted).
+  bool canSubmit(Payment p) {
+    if (p.status == PaymentStatus.paid) return false;
+    final sub = latestSubmissionFor(p.id);
+    return sub == null || sub.status == UpiStatus.rejected;
+  }
+
+  Future<UpiSettings?> loadUpiSettings(String pgId) async {
+    final client = supabaseOrNull;
+    if (client == null) return null;
+    try {
+      final row = await client
+          .from('pg_upi_settings')
+          .select()
+          .eq('owner_id', workspaceId)
+          .eq('pg_id', pgId)
+          .maybeSingle();
+      return row == null
+          ? null
+          : UpiSettings.fromRow(Map<String, dynamic>.from(row));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String?> saveUpiSettings(String pgId,
+      {required String upiId,
+      required String payeeName,
+      required bool enabled}) async {
+    final client = supabaseOrNull;
+    if (client == null || !isLoggedIn) return 'Sign in to save UPI settings.';
+    try {
+      await client.from('pg_upi_settings').upsert({
+        'owner_id': workspaceId,
+        'pg_id': pgId,
+        'upi_id': upiId.trim(),
+        'payee_name': payeeName.trim(),
+        'enabled': enabled,
+        'updated_at': DateTime.now().toIso8601String(),
+      }, onConflict: 'owner_id,pg_id');
+      return null;
+    } catch (_) {
+      return 'Could not save UPI settings. Check your connection.';
+    }
+  }
+
+  /// Tenant submits proof of a UPI payment: status becomes
+  /// pending_confirmation. Returning from the UPI app does NOT mark anything
+  /// paid — only the owner can confirm.
+  Future<String?> submitPayment(
+      {required Payment payment,
+      required String utr,
+      Uint8List? screenshot}) async {
+    final client = supabaseOrNull;
+    if (client == null || !isLoggedIn) return 'Sign in to submit a payment.';
+    final ref = utr.trim();
+    if (ref.length < 6) return 'Enter the 12-digit UPI reference (UTR).';
+    final pgId = pgIdForPayment(payment);
+    try {
+      String? path;
+      if (screenshot != null) {
+        path =
+            '$workspaceId/$pgId/${payment.tenantId}/${payment.id}/${DateTime.now().millisecondsSinceEpoch}.jpg';
+        try {
+          await client.storage.from('payment-proofs').uploadBinary(
+              path, screenshot,
+              fileOptions: const FileOptions(contentType: 'image/jpeg'));
+        } catch (_) {
+          path = null;
+        }
+      }
+      await client.from('payment_submissions').insert({
+        'owner_id': workspaceId,
+        'customer_id': _resolvedCustomerId,
+        'pg_id': pgId,
+        'tenant_id': payment.tenantId,
+        'member_email': (accountEmail ?? '').toLowerCase(),
+        'payment_id': payment.id,
+        'period': payment.period.toIso8601String(),
+        'amount': payment.balance,
+        'utr': ref,
+        'screenshot_path': path,
+      });
+      _audit('payment_submitted',
+          entityType: 'payment',
+          entityId: payment.id,
+          after: {'utr': ref, 'amount': payment.balance});
+      await loadSubmissions();
+      notifyListeners();
+      return null;
+    } catch (_) {
+      return 'Could not submit the payment. Check your connection.';
+    }
+  }
+
+  /// Owner-side: another submission in this workspace already used the same
+  /// amount + UTR. A warning, not a block.
+  UpiSubmission? duplicateOf(UpiSubmission s) => _firstOrNull(submissions,
+      (o) => o.id != s.id && o.utr == s.utr && o.amount == s.amount);
+
+  List<UpiSubmission> get pendingSubmissions => submissions
+      .where((s) => s.status == UpiStatus.pendingConfirmation)
+      .toList();
+
+  Future<String?> confirmSubmission(UpiSubmission s) async {
+    final client = supabaseOrNull;
+    if (client == null || !isLoggedIn) return 'Sign in to confirm payments.';
+    try {
+      await client.from('payment_submissions').update({
+        'status': 'confirmed',
+        'confirmed_by': client.auth.currentUser?.id,
+        'confirmed_at': DateTime.now().toIso8601String(),
+      }).eq('id', s.id);
+      _markConfirmedPaid(s);
+      _audit('payment_confirmed',
+          entityType: 'payment',
+          entityId: s.paymentId,
+          after: {'utr': s.utr, 'amount': s.amount});
+      await loadSubmissions();
+      notifyListeners();
+      return null;
+    } catch (_) {
+      return 'Could not confirm the payment. Check your connection.';
+    }
+  }
+
+  Future<String?> rejectSubmission(UpiSubmission s, String reason) async {
+    final client = supabaseOrNull;
+    if (client == null || !isLoggedIn) return 'Sign in to reject payments.';
+    if (reason.trim().isEmpty) return 'Enter a reason for rejecting.';
+    try {
+      await client.from('payment_submissions').update({
+        'status': 'rejected',
+        'rejection_reason': reason.trim(),
+      }).eq('id', s.id);
+      _audit('payment_rejected',
+          entityType: 'payment',
+          entityId: s.paymentId,
+          after: {'utr': s.utr, 'reason': reason.trim()});
+      await loadSubmissions();
+      notifyListeners();
+      return null;
+    } catch (_) {
+      return 'Could not reject the payment. Check your connection.';
+    }
+  }
+
+  void _markConfirmedPaid(UpiSubmission s) {
+    final i = payments.indexWhere((p) => p.id == s.paymentId);
     if (i == -1) return;
-    // Paying rent settles the whole balance (partial or not) in one go.
     final paid = payments[i] = payments[i].copyWith(
         status: PaymentStatus.paid,
         paidAmount: payments[i].amount,
         paidDate: DateTime.now(),
-        method: method);
+        method: 'UPI');
     final pgId = _pgIdForTenant(paid.tenantId);
-    // Managers see the income; the paying tenant gets a private confirmation.
     _notify(
         'Rent received',
         '${inr(paid.amount)} received from ${tenantName(paid.tenantId)}.',
@@ -1322,8 +1535,8 @@ class AppState extends ChangeNotifier {
         tenantId: paid.tenantId,
         relatedEntityId: paid.id);
     _notify(
-        'Payment successful',
-        'Your ${formatMonthName(paid.period)} rent of ${inr(paid.amount)} is paid.',
+        'Payment confirmed',
+        'Your ${formatMonthName(paid.period)} rent of ${inr(paid.amount)} is confirmed.',
         NotificationType.payment,
         scope: NotificationScope.tenant,
         tenantId: paid.tenantId,
