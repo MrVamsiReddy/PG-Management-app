@@ -271,89 +271,57 @@ class _RoomsScreenState extends State<RoomsScreen> {
                 subtitle: 'Live floor-wise availability'),
             const SizedBox(height: 18),
             if (floors.isNotEmpty)
-              SegmentedButton<int>(
-                segments: floors
-                    .map(
-                        (f) => ButtonSegment(value: f, label: Text('Floor $f')))
-                    .toList(),
-                selected: {selected},
-                onSelectionChanged: (value) =>
-                    setState(() => floor = value.first),
+              SizedBox(
+                height: 40,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: floors.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (context, i) => ChoiceChip(
+                    label: Text('Floor ${floors[i]}'),
+                    selected: selected == floors[i],
+                    onSelected: (_) => setState(() => floor = floors[i]),
+                  ),
+                ),
               ),
             const SizedBox(height: 18),
             ...rooms.map((room) => Card(
                   margin: const EdgeInsets.only(bottom: 12),
-                  child: Padding(
-                    padding: const EdgeInsets.all(17),
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(children: [
-                            Container(
-                                width: 48,
-                                height: 48,
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                    color: primarySoft,
-                                    borderRadius: BorderRadius.circular(13)),
-                                child: Text(room.number,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        color: primary))),
-                            const SizedBox(width: 12),
-                            Expanded(
-                                child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                  Text(room.type,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium),
-                                  Text('${inr(room.rent)} / bed / month')
-                                ])),
-                            IconButton(
-                                onPressed: () {},
-                                icon: const Icon(Icons.more_vert)),
-                          ]),
-                          const Divider(height: 25),
-                          Row(children: [
-                            for (var bed = 0; bed < room.beds; bed++)
-                              Expanded(
-                                  child: Container(
-                                margin: EdgeInsets.only(
-                                    right: bed == room.beds - 1 ? 0 : 8),
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 12),
-                                decoration: BoxDecoration(
-                                    color: bed < room.occupied
-                                        ? primarySoft
-                                        : const Color(0xFFF1F2F2),
-                                    borderRadius: BorderRadius.circular(11),
-                                    border: Border.all(
-                                        color: bed < room.occupied
-                                            ? primary.withValues(alpha: .25)
-                                            : Colors.black12)),
-                                child: Column(children: [
-                                  Icon(Icons.bed_rounded,
-                                      color: bed < room.occupied
-                                          ? primary
-                                          : Colors.black26),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                      bed < room.occupied
-                                          ? 'Occupied'
-                                          : 'Available',
-                                      style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w700,
-                                          color: bed < room.occupied
-                                              ? primary
-                                              : Colors.black45))
-                                ]),
-                              )),
-                          ]),
-                        ]),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) =>
+                                RoomDetailsScreen(roomId: room.id))),
+                    child: Padding(
+                      padding: const EdgeInsets.all(17),
+                      child: Row(children: [
+                        Container(
+                            width: 48,
+                            height: 48,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                                color: primarySoft,
+                                borderRadius: BorderRadius.circular(13)),
+                            child: Text(room.number,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    color: primary))),
+                        const SizedBox(width: 12),
+                        Expanded(
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                              Text(room.type,
+                                  style:
+                                      Theme.of(context).textTheme.titleMedium),
+                              Text(
+                                  '${inr(room.rent)} / bed · ${room.occupied}/${room.beds} filled'),
+                            ])),
+                        RoomMenuButton(room: room),
+                      ]),
+                    ),
                   ),
                 )),
             if (rooms.isEmpty)
@@ -435,6 +403,268 @@ class _RoomsScreenState extends State<RoomsScreen> {
                           child: const Text('Add room')),
                     ]))));
   }
+}
+
+/// The ⋮ menu shared by the room card and the Room Details app bar.
+class RoomMenuButton extends StatelessWidget {
+  const RoomMenuButton({super.key, required this.room, this.onDeleted});
+  final Room room;
+  final VoidCallback? onDeleted;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppScope.of(context);
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert),
+      tooltip: 'Room options',
+      onSelected: (v) {
+        switch (v) {
+          case 'edit':
+            _editRoomDialog(context, state, room);
+          case 'sharing':
+            _editSharingDialog(context, state, room);
+          case 'rent':
+            _editRentDialog(context, state, room);
+          case 'delete':
+            _deleteRoom(context, state, room, onDeleted);
+        }
+      },
+      itemBuilder: (_) => const [
+        PopupMenuItem(value: 'edit', child: Text('Edit room')),
+        PopupMenuItem(value: 'sharing', child: Text('Edit sharing type')),
+        PopupMenuItem(value: 'rent', child: Text('Edit current rent')),
+        PopupMenuItem(
+            value: 'delete',
+            child: Text('Delete room', style: TextStyle(color: coral))),
+      ],
+    );
+  }
+}
+
+void _editRoomDialog(BuildContext context, AppState state, Room room) {
+  final number = TextEditingController(text: room.number);
+  var floor = room.floor;
+  final messenger = ScaffoldMessenger.of(context);
+  showDialog<void>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Edit room'),
+      content: StatefulBuilder(
+        builder: (context, setLocal) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const FormLabel('Room number'),
+              TextField(controller: number),
+              const FormLabel('Floor'),
+              TextField(
+                keyboardType: TextInputType.number,
+                controller: TextEditingController(text: '$floor'),
+                onChanged: (v) => floor = int.tryParse(v) ?? floor,
+              ),
+            ]),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel')),
+        FilledButton(
+            onPressed: () {
+              final error =
+                  state.editRoom(room.id, number: number.text, floor: floor);
+              Navigator.pop(dialogContext);
+              if (error != null) {
+                messenger.showSnackBar(SnackBar(content: Text(error)));
+              }
+            },
+            child: const Text('Save')),
+      ],
+    ),
+  );
+}
+
+void _editSharingDialog(BuildContext context, AppState state, Room room) {
+  var beds = room.beds;
+  final messenger = ScaffoldMessenger.of(context);
+  showDialog<void>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Edit sharing type'),
+      content: StatefulBuilder(
+        builder: (context, setLocal) => DropdownButtonFormField<int>(
+          initialValue: beds,
+          items: const [
+            DropdownMenuItem(value: 1, child: Text('Single')),
+            DropdownMenuItem(value: 2, child: Text('Double sharing')),
+            DropdownMenuItem(value: 3, child: Text('Triple sharing')),
+            DropdownMenuItem(value: 4, child: Text('Four sharing')),
+          ],
+          onChanged: (v) => setLocal(() => beds = v ?? beds),
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel')),
+        FilledButton(
+            onPressed: () {
+              final error = state.setRoomBeds(room.id, beds);
+              Navigator.pop(dialogContext);
+              if (error != null) {
+                messenger.showSnackBar(SnackBar(content: Text(error)));
+              }
+            },
+            child: const Text('Save')),
+      ],
+    ),
+  );
+}
+
+void _editRentDialog(BuildContext context, AppState state, Room room) {
+  final rent = TextEditingController(text: '${room.rent}');
+  final messenger = ScaffoldMessenger.of(context);
+  showDialog<void>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Edit current rent'),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(
+            controller: rent,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(prefixText: '₹ ')),
+        const SizedBox(height: 8),
+        const Text(
+            'Only future dues use the new rent; past payments keep theirs.',
+            style: TextStyle(fontSize: 11, color: Colors.black54)),
+      ]),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel')),
+        FilledButton(
+            onPressed: () {
+              final value = int.tryParse(rent.text) ?? 0;
+              if (value <= 0) return;
+              state.setRoomRent(room.id, value);
+              Navigator.pop(dialogContext);
+              messenger
+                  .showSnackBar(const SnackBar(content: Text('Rent updated.')));
+            },
+            child: const Text('Save')),
+      ],
+    ),
+  );
+}
+
+void _deleteRoom(BuildContext context, AppState state, Room room,
+    VoidCallback? onDeleted) async {
+  final messenger = ScaffoldMessenger.of(context);
+  if (room.occupied > 0 || state.takenBeds(room.id).isNotEmpty) {
+    messenger.showSnackBar(SnackBar(
+        content: Text(
+            'Room ${room.number} has tenants — move them out before deleting.')));
+    return;
+  }
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text('Delete room ${room.number}?'),
+      content: const Text(
+          'This removes the room and its empty beds. This cannot be undone.'),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel')),
+        FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: coral),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete')),
+      ],
+    ),
+  );
+  if (confirmed != true) return;
+  final error = state.removeRoom(room.id);
+  messenger.showSnackBar(
+      SnackBar(content: Text(error ?? 'Room ${room.number} deleted.')));
+  if (error == null) onDeleted?.call();
+}
+
+class RoomDetailsScreen extends StatelessWidget {
+  const RoomDetailsScreen({super.key, required this.roomId});
+  final String roomId;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppScope.of(context);
+    final room = state.roomById(roomId);
+    if (room == null) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: const EmptyState(
+            icon: Icons.meeting_room_outlined, title: 'Room not found'),
+      );
+    }
+    final occupants = state.tenants.where((t) => t.roomId == roomId).toList();
+    final free = room.beds - room.occupied;
+    return ManagerOnly(
+        child: Scaffold(
+      appBar: AppBar(
+        title: Text('Room ${room.number}'),
+        actions: [
+          RoomMenuButton(room: room, onDeleted: () => Navigator.pop(context)),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _detail('Floor', 'Floor ${room.floor}'),
+                    _detail('Sharing type', room.type),
+                    _detail('Current rent', '${inr(room.rent)} / bed / month'),
+                    _detail('Beds', '${room.beds}'),
+                    _detail('Occupancy',
+                        '${room.occupied} filled · $free available'),
+                  ]),
+            ),
+          ),
+          const SizedBox(height: 18),
+          Text('Assigned tenants',
+              style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 8),
+          if (occupants.isEmpty)
+            const EmptyState(
+                icon: Icons.person_outline, title: 'No tenants in this room')
+          else
+            ...occupants.map((t) => Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                        backgroundColor: primarySoft,
+                        child: Text(t.initials,
+                            style: const TextStyle(
+                                color: primary, fontWeight: FontWeight.w800))),
+                    title: Text(t.name,
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: Text('Bed ${t.bed} · ${t.phone}'),
+                    trailing: StatusPill(t.kyc.label),
+                  ),
+                )),
+        ],
+      ),
+    ));
+  }
+
+  Widget _detail(String label, String value) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text(label, style: const TextStyle(color: Colors.black54)),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
+      ]));
 }
 
 class TenantsScreen extends StatefulWidget {

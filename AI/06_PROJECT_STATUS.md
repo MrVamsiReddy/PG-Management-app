@@ -24,9 +24,10 @@ Roadmap = `app improvements.md` (Prompts 1–11). Details of each area live in `
 - **Subscription management (done)** — `009_subscriptions.sql` adds `starts_at`/`expires_at` to `customers` (+ backfill; expiry-aware `my_owner_customer_id`). `create-customer` sets plan (admin-selected free/pro/business) + `starts_at`=now + `expires_at`=now+30d. The login gate blocks owner+tenant with a "subscription expired" message past `expires_at`; `Customer.expired`/`active` drive the admin UI (plan + renews/expired date + Expired pill). Enforced at login (no cron).
 - **Dashboard favourites + polish (done)** — quick-action tiles carry a stable key and a gold-star toggle (top-right); favourited tiles float to the front and persist **per user** on-device (`AppState.favoriteTiles`/`toggleFavorite`/`favoritesFirst`, key `favorites_<email>`, loaded on login/cleared on logout). Light visual polish (rounded tiles, favourite border/typography). Star tap toggles via `notifyListeners` (dashboard rebuilds through `AppScope`).
 - **Navigation back fix (done)** — `ModulesHubScreen` returned a bare `ListView` (no `Scaffold`), so when pushed as a route (dashboard "View all") it had no app bar and no Back button. It now takes an `embedded` flag: bare as the shell's Manage tab (`embedded: true`), but wrapped in `Scaffold`+`AppBar` (with Back) when pushed. Module screens (Rooms/Tenants/Payments/Notifications/…) already have their own app bars, so Back works throughout.
+- **Rooms & beds (done)** — responsive horizontal floor selector (ChoiceChips in a horizontal list, scrolls for many floors); tapping a room opens `RoomDetailsScreen` (floor, sharing type, current rent, beds, occupancy, assigned tenants). Shared ⋮ `RoomMenuButton` (card + details app bar): Edit room (`editRoom` number/floor, dup-checked), Edit sharing type (`setRoomBeds`), Edit current rent (`setRoomRent`), Delete room (`removeRoom`, blocked while occupied; empty delete also decrements the PG bed count).
 
-## In progress
-- Improvements batch task 9 (rooms/beds) — pending, executed one at a time.
+## Improvements batch complete
+- Tasks 1–9 shipped. Interim bugfix: admin "View PGs" reads app_data.
 
 ## P11 production checklist (verified 2026-07-10)
 - ✅ No demo/local/offline code, no seed/mock path (Hive + demo removed; only stray comments remained).
@@ -54,7 +55,7 @@ Removed the local Hive store, the demo/seed path (`_seed`, `debugSeedDemoData`),
 Before Prompts 8–11 add more features on the unenforced foundation, migrate the owner/tenant runtime from the `app_data` blob onto the relational `customer_id`-scoped tables so `004` RLS becomes the enforcement boundary, and make `payRent` a submission (not a paid-mark). Then P9/P8 land on solid ground.
 
 ## Test status
-`test/app_test.dart` — 117 passing; `flutter analyze` clean; `dart format` applied repo-wide; owner + tenant `flutter build web --release` succeed. See `10_TESTING_GUIDE.md`.
+`test/app_test.dart` — 120 passing; `flutter analyze` clean; `dart format` applied repo-wide; owner + tenant `flutter build web --release` succeed. See `10_TESTING_GUIDE.md`.
 
 ## Bugfixes (interim)
 - **Admin "View PGs" now works** — `loadCustomerPgNames` reads the customer's PGs from the `app_data` blob (owner resolved via `profiles`), not the empty relational `pgs` table; `010_admin_app_data.sql` grants platform admins read on `app_data`.

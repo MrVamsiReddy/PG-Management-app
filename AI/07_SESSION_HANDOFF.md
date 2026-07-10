@@ -36,6 +36,29 @@ Next task:
 
 ## Latest
 ```
+### Session: 2026-07-10 · Improvements #9 — rooms & beds
+Prompt/goal: Responsive floor selector; Room Details page; ⋮ menu (edit room/sharing/rent/delete); delete only when empty + remove empty beds + update UI.
+Commit(s): (this session)
+
+Summary:
+- RoomsScreen: SegmentedButton floor selector → horizontal-scrolling ChoiceChips (handles many floors). Room cards now tap → RoomDetailsScreen and carry the ⋮ menu.
+- RoomDetailsScreen (new): floor, sharing type, current rent, beds, occupancy, assigned tenants (bed + phone + KYC pill); ⋮ menu in app bar (onDeleted pops back).
+- RoomMenuButton (new, shared): Edit room / Edit sharing type / Edit current rent / Delete room via file-level dialog helpers.
+- AppState.editRoom(id, number, floor) new (dup-check); removeRoom now decrements the PG bed count on empty delete; delete blocked when occupied (guarded in UI + removeRoom). Room.type already 1–4.
+
+Files modified:
+- lib/src/app_state.dart (editRoom + removeRoom PG-beds), lib/src/property_screens.dart (RoomsScreen rewrite, RoomDetailsScreen, RoomMenuButton, dialogs)
+- test/app_test.dart (editRoom dup, empty-delete bed count, occupied-delete block)
+- AI/05,06,07 updated
+
+Tests: 120 passing; analyze clean; dart format applied. No backend/migration changes.
+
+Improvements batch (tasks 1–9) complete. Remaining production blockers unchanged (09 P0: runtime on app_data not relational RLS; legacy-tenant disabled-customer gap). Pending backend deploys for this batch: run 008/009/010 SQL + redeploy create-customer & delete-customer functions; set Supabase Auth Site URL/redirects to the /PG-Management-app/ path.
+
+Next task: none queued — awaiting direction.
+```
+
+```
 ### Session: 2026-07-10 · Improvements #8 — navigation back fix
 Prompt/goal: Manage → View All must have proper Back navigation; always return to the previous screen.
 Commit(s): (this session)

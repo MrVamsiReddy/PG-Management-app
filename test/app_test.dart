@@ -2170,6 +2170,40 @@ void main() {
     expect(secondDue.amount, 9000);
   });
 
+  test('editRoom changes number/floor and rejects duplicates', () {
+    final roomId = state.ensureRoom(
+        pgId: 'p2', floor: 1, roomNumber: '401', sharingType: 2, rent: 8000);
+    state.ensureRoom(
+        pgId: 'p2', floor: 1, roomNumber: '402', sharingType: 2, rent: 8000);
+    // Rename to a free number + move floor.
+    expect(state.editRoom(roomId, number: '450', floor: 3), isNull);
+    final r = state.roomById(roomId)!;
+    expect(r.number, '450');
+    expect(r.floor, 3);
+    // Duplicate number in the same PG is rejected.
+    expect(state.editRoom(roomId, number: '402', floor: 3), contains('exists'));
+  });
+
+  test('deleting an empty room removes it and adjusts the PG bed count', () {
+    final roomId = state.ensureRoom(
+        pgId: 'p2', floor: 1, roomNumber: '501', sharingType: 3, rent: 7000);
+    final pgBedsAfterAdd = state.pgById('p2')!.beds;
+    expect(state.rooms.any((r) => r.id == roomId), isTrue);
+
+    expect(state.removeRoom(roomId), isNull);
+    expect(state.rooms.any((r) => r.id == roomId), isFalse);
+    expect(state.pgById('p2')!.beds, pgBedsAfterAdd - 3);
+  });
+
+  test('an occupied room cannot be deleted', () {
+    final roomId = state.ensureRoom(
+        pgId: 'p2', floor: 1, roomNumber: '601', sharingType: 2, rent: 7000);
+    state.onboardTenant(
+        name: 'Occupant', phone: '9000000009', roomId: roomId, bed: 'A');
+    expect(state.removeRoom(roomId), contains('active tenants'));
+    expect(state.rooms.any((r) => r.id == roomId), isTrue);
+  });
+
   test('structure reduction is blocked when beds are occupied', () {
     final occupied = state.rooms.firstWhere((r) => r.id == 'r1');
     expect(state.removeRoom(occupied.id), contains('active tenants'));

@@ -1248,6 +1248,8 @@ class AppState extends ChangeNotifier {
     return tenantCount > room.occupied ? tenantCount : room.occupied;
   }
 
+  /// Removes a room only when empty (its beds go with it). Blocks deletion of
+  /// an occupied room and keeps the PG bed count in step.
   String? removeRoom(String roomId) {
     final i = rooms.indexWhere((r) => r.id == roomId);
     if (i == -1) return 'Room not found.';
@@ -1255,11 +1257,47 @@ class AppState extends ChangeNotifier {
       return 'Cannot remove a room with active tenants.';
     }
     final removed = rooms.removeAt(i);
-    _persist({'rooms'});
+    final p = pgs.indexWhere((e) => e.id == removed.pgId);
+    if (p != -1) {
+      final beds = pgs[p].beds - removed.beds;
+      pgs[p] = pgs[p].copyWith(beds: beds < 0 ? 0 : beds);
+    }
+    _persist({'rooms', 'pgs'});
     _audit('room_removed',
         entityType: 'room',
         entityId: roomId,
         before: {'number': removed.number, 'beds': removed.beds});
+    return null;
+  }
+
+  /// Edits a room's number and floor. Rejects a duplicate number in the PG.
+  String? editRoom(String roomId,
+      {required String number, required int floor}) {
+    final i = rooms.indexWhere((r) => r.id == roomId);
+    if (i == -1) return 'Room not found.';
+    final clean = number.trim();
+    if (clean.isEmpty) return 'Enter a room number.';
+    final r = rooms[i];
+    if (rooms.any((o) =>
+        o.id != roomId &&
+        o.pgId == r.pgId &&
+        o.number.trim().toLowerCase() == clean.toLowerCase())) {
+      return 'Room $clean already exists in this PG.';
+    }
+    rooms[i] = Room(
+        id: r.id,
+        pgId: r.pgId,
+        number: clean,
+        floor: floor,
+        beds: r.beds,
+        occupied: r.occupied,
+        rent: r.rent,
+        customerId: r.customerId);
+    _persist({'rooms'});
+    _audit('room_edited',
+        entityType: 'room',
+        entityId: roomId,
+        after: {'number': clean, 'floor': floor});
     return null;
   }
 
