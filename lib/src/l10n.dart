@@ -307,6 +307,14 @@ const Map<String, Map<String, String>> _strings = {
     'inv.inviteToApp': 'Invite to app',
     'inv.copied':
         'Message with the login details copied — paste it into WhatsApp or email.',
+    // Remove tenant
+    'rem.remove': 'Remove tenant',
+    'rem.body':
+        'This permanently deletes the tenant, their login and all their data — payments and visitors included. They are emailed that they are no longer part of this PG. This cannot be undone.',
+    'rem.done': 'Tenant removed and their data permanently deleted.',
+    'rem.emailSent':
+        'They were emailed that they are no longer part of this PG.',
+    'rem.noEmail': 'No notification email could be sent.',
     // Errors (mapped from backend/auth)
     'err.network': 'Cannot reach the server. Check your connection.',
     'err.generic': 'Something went wrong. Please try again.',
@@ -543,6 +551,14 @@ const Map<String, Map<String, String>> _strings = {
     'inv.inviteToApp': 'ऐप में आमंत्रित करें',
     'inv.copied':
         'लॉगिन विवरण वाला संदेश कॉपी किया गया — इसे WhatsApp या ईमेल में पेस्ट करें।',
+    'rem.remove': 'किरायेदार हटाएँ',
+    'rem.body':
+        'यह किरायेदार, उनका लॉगिन और उनका सारा डेटा — भुगतान और विज़िटर सहित — स्थायी रूप से हटा देता है। उन्हें ईमेल से सूचित किया जाता है कि वे अब इस पीजी का हिस्सा नहीं हैं। इसे पूर्ववत नहीं किया जा सकता।',
+    'rem.done':
+        'किरायेदार हटा दिया गया और उनका डेटा स्थायी रूप से हटा दिया गया।',
+    'rem.emailSent':
+        'उन्हें ईमेल से सूचित किया गया कि वे अब इस पीजी का हिस्सा नहीं हैं।',
+    'rem.noEmail': 'सूचना ईमेल नहीं भेजा जा सका।',
     'err.network': 'सर्वर तक नहीं पहुँच सके। अपना कनेक्शन जाँचें।',
     'err.generic': 'कुछ गड़बड़ हुई। कृपया फिर से प्रयास करें।',
     'err.badCredentials': 'गलत ईमेल या पासवर्ड।',
@@ -782,6 +798,14 @@ const Map<String, Map<String, String>> _strings = {
     'inv.inviteToApp': 'యాప్‌కు ఆహ్వానించండి',
     'inv.copied':
         'లాగిన్ వివరాలతో కూడిన సందేశం కాపీ చేయబడింది — దాన్ని WhatsApp లేదా ఇమెయిల్‌లో పేస్ట్ చేయండి.',
+    'rem.remove': 'అద్దెదారుని తొలగించండి',
+    'rem.body':
+        'ఇది అద్దెదారుని, వారి లాగిన్ మరియు వారి మొత్తం డేటాను — చెల్లింపులు మరియు సందర్శకులతో సహా — శాశ్వతంగా తొలగిస్తుంది. వారు ఇకపై ఈ పీజీలో భాగం కాదని వారికి ఇమెయిల్ పంపబడుతుంది. దీన్ని రద్దు చేయలేరు.',
+    'rem.done':
+        'అద్దెదారు తొలగించబడ్డారు మరియు వారి డేటా శాశ్వతంగా తొలగించబడింది.',
+    'rem.emailSent':
+        'వారు ఇకపై ఈ పీజీలో భాగం కాదని ఇమెయిల్ ద్వారా తెలియజేయబడింది.',
+    'rem.noEmail': 'నోటిఫికేషన్ ఇమెయిల్ పంపడం సాధ్యపడలేదు.',
     'err.network': 'సర్వర్‌ను చేరుకోలేకపోయాము. మీ కనెక్షన్‌ను తనిఖీ చేయండి.',
     'err.generic': 'ఏదో తప్పు జరిగింది. దయచేసి మళ్లీ ప్రయత్నించండి.',
     'err.badCredentials': 'తప్పు ఇమెయిల్ లేదా పాస్‌వర్డ్.',

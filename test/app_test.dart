@@ -629,6 +629,59 @@ void main() {
     expect(state.pgById(room.pgId)!.occupied, pgBefore + 1);
   });
 
+  test('removing a tenant permanently deletes their data and frees the bed',
+      () async {
+    final tenant = state.tenants.first;
+    final room = state.roomById(tenant.roomId)!;
+    final occupiedBefore = room.occupied;
+    final pgBefore = state.pgById(room.pgId)!.occupied;
+    expect(state.payments.where((p) => p.tenantId == tenant.id), isNotEmpty);
+
+    final result = await state.removeTenant(tenant.id);
+
+    expect(result.error, isNull);
+    expect(result.emailSent, isFalse);
+    expect(state.tenants.where((t) => t.id == tenant.id), isEmpty);
+    expect(state.payments.where((p) => p.tenantId == tenant.id), isEmpty);
+    expect(state.visitors.where((v) => v.tenantId == tenant.id), isEmpty);
+    expect(state.attendance.where((a) => a.tenantId == tenant.id), isEmpty);
+    expect(state.notifications.where((n) => n.tenantId == tenant.id), isEmpty);
+    expect(state.roomById(room.id)!.occupied, occupiedBefore - 1);
+    expect(state.pgById(room.pgId)!.occupied, pgBefore - 1);
+  });
+
+  test('removing an unknown tenant reports an error and changes nothing',
+      () async {
+    final tenantsBefore = state.tenants.length;
+    final paymentsBefore = state.payments.length;
+    final result = await state.removeTenant('missing');
+    expect(result.error, isNotNull);
+    expect(state.tenants.length, tenantsBefore);
+    expect(state.payments.length, paymentsBefore);
+  });
+
+  test('the remove-tenant function deletes the login and emails the tenant',
+      () {
+    final fn =
+        File('supabase/functions/remove-tenant/index.ts').readAsStringSync();
+    expect(fn, contains('code:unauthorized'));
+    expect(fn, contains('deleteUser'));
+    expect(fn, contains('userId !== caller.id'));
+    expect(fn, contains('upi_submissions'));
+    expect(fn, contains('payment-proofs'));
+    expect(fn, contains('"members"'));
+    expect(fn, contains('"invites"'));
+    expect(fn, contains('"profiles"'));
+    expect(fn, contains('push_tokens'));
+    expect(fn, contains('RESEND_API_KEY'));
+    expect(fn, contains('api.resend.com'));
+    expect(fn, contains('tenant_removed'));
+    expect(fn, contains('audit_logs'));
+    for (final lang in ['en', 'hi', 'te']) {
+      expect(fn, contains('$lang:'));
+    }
+  });
+
   test('onboarding into a full room is blocked and changes nothing', () {
     final full = state.rooms.firstWhere((r) => r.occupied >= r.beds);
     final tenantsBefore = state.tenants.length;

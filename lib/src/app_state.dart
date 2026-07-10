@@ -1459,6 +1459,68 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
+  /// Permanently removes a tenant: their record, payments, visitors and
+  /// notifications are deleted, their bed is freed, and the
+  /// `remove-tenant` Edge Function deletes their login and emails them that
+  /// they are no longer part of this PG.
+  Future<({String? error, String? email, bool emailSent})> removeTenant(
+      String tenantId) async {
+    final i = tenants.indexWhere((t) => t.id == tenantId);
+    if (i == -1) {
+      return (error: 'Tenant not found.', email: null, emailSent: false);
+    }
+    final tenant = tenants[i];
+    final pgName = pgNameForTenant(tenantId);
+    tenants.removeAt(i);
+    payments.removeWhere((p) => p.tenantId == tenantId);
+    visitors.removeWhere((v) => v.tenantId == tenantId);
+    attendance.removeWhere((a) => a.tenantId == tenantId);
+    notifications.removeWhere((n) => n.tenantId == tenantId);
+    final r = rooms.indexWhere((room) => room.id == tenant.roomId);
+    if (r != -1 && rooms[r].occupied > 0) {
+      rooms[r] = rooms[r].copyWith(occupied: rooms[r].occupied - 1);
+      final p = pgs.indexWhere((e) => e.id == rooms[r].pgId);
+      if (p != -1 && pgs[p].occupied > 0) {
+        pgs[p] = pgs[p].copyWith(occupied: pgs[p].occupied - 1);
+      }
+    }
+    await _persist({
+      'tenants',
+      'payments',
+      'visitors',
+      'attendance',
+      'notifications',
+      'rooms',
+      'pgs'
+    });
+    _audit('tenant_removed', entityType: 'tenant', entityId: tenantId, before: {
+      'name': tenant.name,
+      'room_id': tenant.roomId,
+      'bed': tenant.bed
+    });
+    final client = supabaseOrNull;
+    if (client == null || !isLoggedIn) {
+      return (error: null, email: null, emailSent: false);
+    }
+    try {
+      final result = await client.functions.invoke('remove-tenant', body: {
+        'tenantId': tenantId,
+        'tenantName': tenant.name,
+        'pgName': pgName,
+        'lang': language.code,
+      });
+      final data = result.data;
+      if (data is Map && data['ok'] == true) {
+        return (
+          error: null,
+          email: data['email'] as String?,
+          emailSent: data['emailSent'] == true
+        );
+      }
+    } catch (_) {}
+    return (error: null, email: null, emailSent: false);
+  }
+
   /// The current tenant's next unsettled payment (due or partially paid).
   Payment? get tenantDuePayment => _firstOrNull(payments,
       (p) => p.tenantId == currentTenantId && p.status != PaymentStatus.paid);

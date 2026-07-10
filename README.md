@@ -83,6 +83,12 @@ Signed in as a platform admin (owner/admin app), you manage customers, not PGs d
 
 Deploy the function: Edge Functions → Deploy → name it exactly `create-customer` → paste `supabase/functions/create-customer/index.ts`. It requires the caller to be a platform admin.
 
+## Removing a tenant (owner)
+
+Tenants → tenant card → ⋮ → **Remove tenant**. After confirmation the tenant's record and all their data (payments, requests, visitors, notifications) are permanently deleted and their bed is freed. The `remove-tenant` Edge Function then deletes their login, invite/member links, UPI submissions and payment-proof screenshots, and emails the tenant that they are no longer part of the PG and that their data has been permanently deleted (in the owner's app language — English/Hindi/Telugu).
+
+Deploy the function: Edge Functions → Deploy → name it exactly `remove-tenant` → paste `supabase/functions/remove-tenant/index.ts`. For the email, set the `RESEND_API_KEY` secret (free key from resend.com; optional `RESEND_FROM` = a verified sender like `PG Management <you@yourdomain.com>`). Without the secret the removal still works fully — the app just tells the owner no email could be sent. Note: Resend's shared `onboarding@resend.dev` sender only delivers to your own Resend account email; verify a domain to email real tenants.
+
 ## Cloud accounts (Supabase)
 
 The app is cloud-only — every session signs in through Supabase Auth and all data lives in Postgres, isolated by row-level security. There is no demo mode or offline store; the app requires a connection. Accounts are provisioned top-down (platform admin → customer/owner → tenant); there is no public sign-up.

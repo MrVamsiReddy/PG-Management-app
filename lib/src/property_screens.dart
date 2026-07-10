@@ -763,9 +763,15 @@ class _TenantsScreenState extends State<TenantsScreen> {
                                 icon: const Icon(Icons.more_vert),
                                 tooltip: AppLocalizations.of(context)
                                     .t('inv.options'),
-                                onSelected: (value) => value == 'resend'
-                                    ? _resendInvite(context, state, tenant)
-                                    : _revokeInvite(context, state, tenant),
+                                onSelected: (value) {
+                                  if (value == 'resend') {
+                                    _resendInvite(context, state, tenant);
+                                  } else if (value == 'revoke') {
+                                    _revokeInvite(context, state, tenant);
+                                  } else {
+                                    _removeTenant(context, state, tenant);
+                                  }
+                                },
                                 itemBuilder: (context) => [
                                   PopupMenuItem(
                                       value: 'resend',
@@ -782,6 +788,18 @@ class _TenantsScreenState extends State<TenantsScreen> {
                                           title: Text(
                                               AppLocalizations.of(context)
                                                   .t('inv.revoke')),
+                                          contentPadding: EdgeInsets.zero)),
+                                  PopupMenuItem(
+                                      value: 'remove',
+                                      child: ListTile(
+                                          leading: const Icon(
+                                              Icons.person_remove_outlined,
+                                              color: coral),
+                                          title: Text(
+                                              AppLocalizations.of(context)
+                                                  .t('rem.remove'),
+                                              style: const TextStyle(
+                                                  color: coral)),
                                           contentPadding: EdgeInsets.zero)),
                                 ],
                               ),
@@ -894,6 +912,38 @@ class _TenantsScreenState extends State<TenantsScreen> {
     final result = await state.revokeInvite(tenantId: tenant.id);
     messenger.showSnackBar(
         SnackBar(content: Text(result.error ?? l.t('inv.revokeDone'))));
+  }
+
+  void _removeTenant(
+      BuildContext context, AppState state, Tenant tenant) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final l = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('${l.t('rem.remove')} — ${tenant.name}?'),
+        content: Text(l.t('rem.body')),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(l.t('common.cancel'))),
+          FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: coral),
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(l.t('rem.remove'))),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final result = await state.removeTenant(tenant.id);
+    if (result.error != null) {
+      messenger.showSnackBar(SnackBar(content: Text(result.error!)));
+      return;
+    }
+    final note = result.emailSent
+        ? '${l.t('rem.done')} ${l.t('rem.emailSent')}'
+        : '${l.t('rem.done')} ${l.t('rem.noEmail')}';
+    messenger.showSnackBar(SnackBar(content: Text(note)));
   }
 
   Future<void> _shareInvite(ScaffoldMessengerState messenger, AppState state,
