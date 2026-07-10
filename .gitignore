@@ -24,3 +24,6 @@ macos/Flutter/ephemeral/
 firebase_options.dart
 GoogleService-Info.plist
 service-account*.json
+
+# Built APK artifacts
+dist/
