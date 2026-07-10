@@ -32,8 +32,14 @@ Deno.serve(async (req) => {
     const { data: prof } = await admin.from("profiles").select("platform_admin").eq("id", caller.id).maybeSingle();
     if (!prof?.platform_admin) return json({ error: "code:not_admin" }, 403);
 
-    const { businessName, ownerName, ownerEmail, phone, plan } = await req.json().catch(() => ({}));
+    const { businessName, ownerName, ownerEmail, phone, plan, durationDays } =
+      await req.json().catch(() => ({}));
     if (!businessName || !ownerEmail) return json({ error: "code:missing_fields" }, 400);
+
+    // Subscription window: default 30 days from now (free plan default).
+    const startsAt = new Date();
+    const days = Number(durationDays) > 0 ? Number(durationDays) : 30;
+    const expiresAt = new Date(startsAt.getTime() + days * 86400000);
 
     const { data: customer, error: custErr } = await admin.from("customers").insert({
       business_name: businessName,
@@ -41,6 +47,8 @@ Deno.serve(async (req) => {
       owner_email: ownerEmail,
       phone: phone ?? "",
       plan: plan ?? "free",
+      starts_at: startsAt.toISOString(),
+      expires_at: expiresAt.toISOString(),
     }).select("id").single();
     if (custErr || !customer) return json({ error: "code:server_error" }, 500);
 

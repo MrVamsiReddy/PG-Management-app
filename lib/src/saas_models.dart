@@ -74,6 +74,8 @@ class Customer {
     this.plan = 'free',
     required this.createdAt,
     this.disabledAt,
+    this.startsAt,
+    this.expiresAt,
   });
 
   final String id;
@@ -85,6 +87,14 @@ class Customer {
   final String plan;
   final DateTime createdAt;
   final DateTime? disabledAt;
+  final DateTime? startsAt;
+  final DateTime? expiresAt;
+
+  /// True once the subscription window has passed — login is then blocked.
+  bool get expired => expiresAt != null && DateTime.now().isAfter(expiresAt!);
+
+  /// Active means enabled AND within the subscription window.
+  bool get active => status == CustomerStatus.enabled && !expired;
 
   bool get enabled => status == CustomerStatus.enabled;
 
@@ -98,6 +108,8 @@ class Customer {
         'plan': plan,
         'createdAt': createdAt.toIso8601String(),
         'disabledAt': disabledAt?.toIso8601String(),
+        'startsAt': startsAt?.toIso8601String(),
+        'expiresAt': expiresAt?.toIso8601String(),
       };
 
   static Customer fromMap(Map<String, dynamic> map) => Customer(
@@ -112,6 +124,12 @@ class Customer {
         disabledAt: map['disabledAt'] == null
             ? null
             : DateTime.parse(map['disabledAt'] as String),
+        startsAt: map['startsAt'] == null
+            ? null
+            : DateTime.parse(map['startsAt'] as String),
+        expiresAt: map['expiresAt'] == null
+            ? null
+            : DateTime.parse(map['expiresAt'] as String),
       );
 }
 

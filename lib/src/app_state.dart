@@ -344,6 +344,12 @@ class AppState extends ChangeNotifier {
         disabledAt: r['disabled_at'] == null
             ? null
             : DateTime.tryParse(r['disabled_at'] as String),
+        startsAt: r['starts_at'] == null
+            ? null
+            : DateTime.tryParse(r['starts_at'] as String),
+        expiresAt: r['expires_at'] == null
+            ? null
+            : DateTime.tryParse(r['expires_at'] as String),
       );
 
   Future<List<Customer>> loadCustomers() async {
@@ -589,7 +595,7 @@ class AppState extends ChangeNotifier {
       if (linkedCustomer != null) {
         customer = await client
             .from('customers')
-            .select('status')
+            .select('status, expires_at')
             .eq('id', linkedCustomer)
             .maybeSingle();
       }

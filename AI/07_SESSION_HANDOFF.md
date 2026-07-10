@@ -36,6 +36,31 @@ Next task:
 
 ## Latest
 ```
+### Session: 2026-07-10 · Improvements #6 — subscription management
+Prompt/goal: Customer creation stores plan + starts_at + expires_at (free/30d default; admin picks plan); auto-disable + block login on expiry with a message.
+Commit(s): (this session)
+
+Summary:
+- 009_subscriptions.sql: add starts_at (default now) + expires_at to customers, backfill = created_at+30d, and redefine my_owner_customer_id() to also require c.expires_at > now().
+- create-customer: sets starts_at=now, expires_at=now+durationDays (default 30), plus admin-selected plan.
+- Customer model: startsAt/expiresAt fields + expired/active getters; _customerFromRow parses starts_at/expires_at; loadCustomers select() already returns them; _fetchAccessGate now selects status,expires_at.
+- Login gate (access.dart evaluateProfileAccess): blocks owner+tenant with "subscription has expired" when expires_at < now.
+- admin_customers UI: create dialog has a plan dropdown (free/pro/business); card shows plan + renews/expired date + Expired pill.
+
+Files modified:
+- supabase/009_subscriptions.sql (new), supabase/functions/create-customer/index.ts
+- lib/src/saas_models.dart, lib/src/app_state.dart (row parse + gate select), lib/src/access.dart, lib/src/admin_customers.dart
+- test/app_test.dart (expiry gate, model expired/active, migration/function content)
+- AI/05,06,07,11 updated
+
+Deploy: run 009_subscriptions.sql; redeploy create-customer. Enforcement is at login (no cron) — expired customers are blocked on next login/refresh.
+
+Tests: 113 passing; analyze clean; dart format applied.
+
+Next task: #7 dashboard improvements (spacing/typography/hierarchy + favorite tiles with gold star, favorites first, persisted per user).
+```
+
+```
 ### Session: 2026-07-10 · Improvements #5 — password management
 Prompt/goal: Reset links work; first login requires temp+new+confirm; enforce must_change_password front+back; gate access until password set.
 Commit(s): (this session)

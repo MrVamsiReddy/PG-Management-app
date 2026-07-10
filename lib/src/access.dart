@@ -46,6 +46,18 @@ AccessGate evaluateProfileAccess({
           'This account has been disabled. Please contact your administrator.',
     );
   }
+  final expiresAt = customer['expires_at'] as String?;
+  if (expiresAt != null) {
+    final expiry = DateTime.tryParse(expiresAt);
+    if (expiry != null && DateTime.now().isAfter(expiry)) {
+      return (
+        role: null,
+        customerId: null,
+        error:
+            'This subscription has expired. Please contact your administrator to renew.',
+      );
+    }
+  }
   return (
     role: profile['role'] == 'tenant' ? UserRole.tenant : UserRole.owner,
     customerId: customerId,

@@ -90,13 +90,17 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                         '${c.ownerName.isEmpty ? 'Owner' : c.ownerName} · ${c.ownerEmail}',
                         style: const TextStyle(fontSize: 12)),
                   ])),
-              StatusPill(c.enabled ? 'Enabled' : 'Disabled'),
+              StatusPill(
+                  c.expired ? 'Expired' : (c.enabled ? 'Enabled' : 'Disabled')),
             ]),
             const Divider(height: 22),
             Row(children: [
-              Text('Plan: ${c.plan}',
-                  style: const TextStyle(fontSize: 12, color: Colors.black54)),
-              const Spacer(),
+              Expanded(
+                child: Text(
+                    'Plan: ${c.plan}${c.expiresAt == null ? '' : ' · ${c.expired ? 'expired' : 'renews'} ${formatFullDate(c.expiresAt!)}'}',
+                    style:
+                        const TextStyle(fontSize: 12, color: Colors.black54)),
+              ),
               TextButton(
                   onPressed: () => _viewPgs(context, state, c),
                   child: const Text('View PGs')),
@@ -181,63 +185,84 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
     final ownerName = TextEditingController();
     final ownerEmail = TextEditingController();
     final phone = TextEditingController();
+    var plan = 'free';
     final messenger = ScaffoldMessenger.of(context);
     showAppSheet(
         context,
-        SingleChildScrollView(
-            child: Form(
-                key: formKey,
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const SheetHandle(),
-                      Text('New customer',
-                          style: Theme.of(context).textTheme.headlineMedium),
-                      const SizedBox(height: 6),
-                      const Text(
-                          'Creates the PG business and its owner login. The workspace starts empty.'),
-                      const FormLabel('Business name'),
-                      TextFormField(
-                          controller: business,
-                          validator: (v) => v == null || v.trim().isEmpty
-                              ? 'Enter a business name'
-                              : null),
-                      const FormLabel('Owner name'),
-                      TextFormField(
-                          controller: ownerName,
-                          textCapitalization: TextCapitalization.words),
-                      const FormLabel('Owner email'),
-                      TextFormField(
-                          controller: ownerEmail,
-                          keyboardType: TextInputType.emailAddress,
-                          validator: (v) => v == null || !v.contains('@')
-                              ? 'Enter a valid email'
-                              : null),
-                      const FormLabel('Phone'),
-                      TextFormField(
-                          controller: phone, keyboardType: TextInputType.phone),
-                      const SizedBox(height: 18),
-                      FilledButton(
-                          onPressed: () async {
-                            if (!formKey.currentState!.validate()) return;
-                            final result = await state.createCustomer(
-                                businessName: business.text,
-                                ownerName: ownerName.text,
-                                ownerEmail: ownerEmail.text,
-                                phone: phone.text);
-                            if (!context.mounted) return;
-                            if (result.error != null) {
-                              messenger.showSnackBar(
-                                  SnackBar(content: Text(result.error!)));
-                              return;
-                            }
-                            Navigator.pop(context);
-                            _reload(state);
-                            _showCredentials(context, ownerEmail.text.trim(),
-                                result.tempPassword);
-                          },
-                          child: const Text('Create customer')),
-                    ]))));
+        StatefulBuilder(
+            builder: (context, setSheet) => SingleChildScrollView(
+                child: Form(
+                    key: formKey,
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const SheetHandle(),
+                          Text('New customer',
+                              style:
+                                  Theme.of(context).textTheme.headlineMedium),
+                          const SizedBox(height: 6),
+                          const Text(
+                              'Creates the PG business and its owner login. The workspace starts empty. Subscription: 30 days from today.'),
+                          const FormLabel('Business name'),
+                          TextFormField(
+                              controller: business,
+                              validator: (v) => v == null || v.trim().isEmpty
+                                  ? 'Enter a business name'
+                                  : null),
+                          const FormLabel('Owner name'),
+                          TextFormField(
+                              controller: ownerName,
+                              textCapitalization: TextCapitalization.words),
+                          const FormLabel('Owner email'),
+                          TextFormField(
+                              controller: ownerEmail,
+                              keyboardType: TextInputType.emailAddress,
+                              validator: (v) => v == null || !v.contains('@')
+                                  ? 'Enter a valid email'
+                                  : null),
+                          const FormLabel('Phone'),
+                          TextFormField(
+                              controller: phone,
+                              keyboardType: TextInputType.phone),
+                          const FormLabel('Subscription plan'),
+                          DropdownButtonFormField<String>(
+                            initialValue: plan,
+                            items: const [
+                              DropdownMenuItem(
+                                  value: 'free', child: Text('Free')),
+                              DropdownMenuItem(
+                                  value: 'pro', child: Text('Pro')),
+                              DropdownMenuItem(
+                                  value: 'business', child: Text('Business')),
+                            ],
+                            onChanged: (v) =>
+                                setSheet(() => plan = v ?? 'free'),
+                          ),
+                          const SizedBox(height: 18),
+                          FilledButton(
+                              onPressed: () async {
+                                if (!formKey.currentState!.validate()) return;
+                                final result = await state.createCustomer(
+                                    businessName: business.text,
+                                    ownerName: ownerName.text,
+                                    ownerEmail: ownerEmail.text,
+                                    phone: phone.text,
+                                    plan: plan);
+                                if (!context.mounted) return;
+                                if (result.error != null) {
+                                  messenger.showSnackBar(
+                                      SnackBar(content: Text(result.error!)));
+                                  return;
+                                }
+                                Navigator.pop(context);
+                                _reload(state);
+                                _showCredentials(
+                                    context,
+                                    ownerEmail.text.trim(),
+                                    result.tempPassword);
+                              },
+                              child: const Text('Create customer')),
+                        ])))));
   }
 
   void _showCredentials(

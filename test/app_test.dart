@@ -415,6 +415,70 @@ void main() {
     expect(disabledTenant.error, contains('disabled'));
   });
 
+  test('an expired subscription blocks owner and tenant login', () {
+    final past =
+        DateTime.now().subtract(const Duration(days: 1)).toIso8601String();
+    final future =
+        DateTime.now().add(const Duration(days: 5)).toIso8601String();
+
+    final expiredOwner = evaluateProfileAccess(
+      profile: {'role': 'owner', 'customer_id': 'c1', 'platform_admin': false},
+      customer: {'status': 'enabled', 'expires_at': past},
+    );
+    expect(expiredOwner.role, isNull);
+    expect(expiredOwner.error, contains('expired'));
+
+    final expiredTenant = evaluateProfileAccess(
+      profile: {'role': 'tenant', 'customer_id': 'c1', 'platform_admin': false},
+      customer: {'status': 'enabled', 'expires_at': past},
+    );
+    expect(expiredTenant.role, isNull);
+    expect(expiredTenant.error, contains('expired'));
+
+    // Still within the window → allowed.
+    final active = evaluateProfileAccess(
+      profile: {'role': 'owner', 'customer_id': 'c1', 'platform_admin': false},
+      customer: {'status': 'enabled', 'expires_at': future},
+    );
+    expect(active.role, UserRole.owner);
+    expect(active.error, isNull);
+  });
+
+  test('Customer subscription window drives expired/active', () {
+    final now = DateTime.now();
+    final expired = Customer(
+        id: 'c1',
+        businessName: 'X',
+        createdAt: now,
+        startsAt: now.subtract(const Duration(days: 31)),
+        expiresAt: now.subtract(const Duration(days: 1)));
+    expect(expired.expired, isTrue);
+    expect(expired.active, isFalse);
+
+    final live = Customer(
+        id: 'c2',
+        businessName: 'Y',
+        createdAt: now,
+        startsAt: now,
+        expiresAt: now.add(const Duration(days: 30)));
+    expect(live.expired, isFalse);
+    expect(live.active, isTrue);
+    // Round-trips with the new fields.
+    expect(Customer.fromMap(live.toMap()).expiresAt, live.expiresAt);
+  });
+
+  test('the subscriptions migration adds the window and gates expiry', () {
+    final sql = File('supabase/009_subscriptions.sql').readAsStringSync();
+    expect(sql, contains('add column if not exists starts_at'));
+    expect(sql, contains('add column if not exists expires_at'));
+    expect(sql, contains("interval '30 days'"));
+    expect(sql, contains('c.expires_at > now()')); // helper is expiry-aware
+    final fn =
+        File('supabase/functions/create-customer/index.ts').readAsStringSync();
+    expect(fn, contains('starts_at'));
+    expect(fn, contains('expires_at'));
+  });
+
   test('each portal accepts only its own role', () {
     expect(portalError(UserRole.owner, LoginPortal.owner), isNull);
     expect(portalError(UserRole.tenant, LoginPortal.tenant), isNull);
