@@ -1,5 +1,5 @@
-/// Typed domain models. Persisted as plain maps (Hive today, shaped to move
-/// to a document store later), linked by IDs — never by display strings.
+/// Typed domain models. Persisted as plain maps in Supabase, linked by IDs —
+/// never by display strings.
 library;
 
 enum PaymentStatus { due, partial, paid }

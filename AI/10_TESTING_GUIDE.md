@@ -3,9 +3,9 @@
 ## Run
 ```bash
 flutter analyze          # must be clean (infos count)
-flutter test             # test/app_test.dart — 77 passing
-dart format lib test     # optional; codebase is intentionally dense in places
+flutter test             # test/app_test.dart — 75 passing
 ```
+> Do **not** run `dart format lib` — the codebase is intentionally dense (no formatter config / wide lines). A default 80-col `dart format` reflows every file and turns one-line `if`s into a `curly_braces_in_flow_control_structures` lint. Keep new code hand-dense to match.
 
 ## Strategy
 Single suite `test/app_test.dart`. Three kinds:
@@ -14,9 +14,9 @@ Single suite `test/app_test.dart`. Three kinds:
 3. **Artifact audits** — read `supabase/*.sql` and `functions/*/index.ts` as text and assert security-relevant invariants (RLS enabled, key from secret, no seed inserts, etc.), because Deno/Postgres can't run in `flutter test`.
 
 ## Harness conventions (important)
-- `setUp` sets `AppState.debugSeedDemoData = true`, opens a fresh Hive box per test, and calls `state.init()` so tests have seeded data. Production never seeds.
-- Use `state.login(UserRole.x)` (`@visibleForTesting`) to simulate a session — there is no real Supabase in tests, so `signInCloud`/customer/admin calls fail closed (assert the error path).
-- Widget tests use **bounded pumps** (`pump()` + `pump(Duration)`), not `pumpAndSettle`, because pending Hive IO never settles in the fake-async zone. Exception: pushing a route with no pending IO can use `pumpAndSettle`.
+- The app is cloud-only — there is no local store or seed path. `setUp` builds a bare `AppState()` and calls the test-file `seedFixture(state)` helper, which writes demo data straight into the public collections (`state.pgs = [...]`, etc.). Production never seeds.
+- Use `state.debugSignIn(UserRole.x, {tenantId})` (`@visibleForTesting`) to simulate a session — there is no real Supabase in tests, so `signInCloud`/customer/admin calls fail closed (assert the error path). Tenant tests pass `tenantId: 't1'` (or set `state.currentTenantId` directly for a non-session unit test).
+- Widget tests use **bounded pumps** (`pump()` + `pump(Duration)`), not `pumpAndSettle`, because pending fire-and-forget cloud IO never settles in the fake-async zone. Exception: pushing a route with no pending IO can use `pumpAndSettle`.
 - `StatCard` text sits inside a `FittedBox`; tap the enclosing `InkWell` (`find.ancestor(... find.byType(InkWell))`), not the text.
 
 ## What is covered

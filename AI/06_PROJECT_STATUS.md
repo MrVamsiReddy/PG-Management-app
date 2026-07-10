@@ -21,16 +21,18 @@ Roadmap = `app improvements.md` (Prompts 1–11). Details of each area live in `
 - **P11** Production safety QA + owner/tenant web/APK release builds.
 
 ## Known issues
-See `09_KNOWN_ISSUES.md` (P0: runtime on Hive/`app_data` not relational RLS; tenant marks payment paid).
+See `09_KNOWN_ISSUES.md` (P0: runtime on the `app_data` blob keyed by `owner_id`, not relational RLS; tenant marks payment paid).
 
 ## Technical debt
-- Two parallel data models (legacy `app_data` live vs relational unused).
-- Hive still a first-class store despite "cloud-only, no Hive" target.
+- Two parallel data models (`app_data` blob live vs relational unused).
 - `main.dart` combined app grants admin PG operations.
 - Localization partial; some Edge-Function messages are English strings mapped client-side.
 
+## Recently done (cloud-only)
+Removed the local Hive store, the demo/seed path (`_seed`, `debugSeedDemoData`), and the `cloudMode`/`'demo'` fallbacks. Supabase `app_data` is now the single source of truth; the app requires a connection and has no offline cache. Preferences (`language`/`pushEnabled`) are session-scoped. This satisfies the "No Demo / no local fallback / empty new customers" prerequisites but does **not** move enforcement onto the relational tables (still P0 below).
+
 ## Next recommended phase
-Before Prompts 7–11 add more features on the unenforced foundation, migrate the owner/tenant runtime from `app_data`/Hive onto the relational `customer_id`-scoped tables so `004` RLS becomes the enforcement boundary, and make `payRent` a submission (not a paid-mark). Then P9/P8/P7 land on solid ground.
+Before Prompts 7–11 add more features on the unenforced foundation, migrate the owner/tenant runtime from the `app_data` blob onto the relational `customer_id`-scoped tables so `004` RLS becomes the enforcement boundary, and make `payRent` a submission (not a paid-mark). Then P9/P8/P7 land on solid ground.
 
 ## Test status
-`test/app_test.dart` — 77 passing; `flutter analyze` clean. See `10_TESTING_GUIDE.md`.
+`test/app_test.dart` — 75 passing; `flutter analyze` clean. See `10_TESTING_GUIDE.md`.

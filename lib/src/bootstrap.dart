@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_state.dart';
@@ -10,7 +9,6 @@ import 'supabase_config.dart';
 
 Future<AppState> bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Hive.initFlutter();
   try {
     await Supabase.initialize(url: supabaseUrl, publishableKey: supabasePublishableKey);
     supabaseReady = true;
@@ -18,11 +16,9 @@ Future<AppState> bootstrap() async {
     supabaseReady = false;
   }
   await initPush();
-  final box = await Hive.openBox<dynamic>('pg_management');
-  final state = AppState(box);
-  await state.init();
+  final state = AppState();
   await state.restoreCloudSession();
-  if (state.cloudMode) unawaited(registerPushToken());
+  if (state.isLoggedIn) unawaited(registerPushToken());
   supabaseOrNull?.auth.onAuthStateChange.listen((change) {
     if (change.event == AuthChangeEvent.signedIn) unawaited(registerPushToken());
   });

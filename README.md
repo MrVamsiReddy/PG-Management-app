@@ -1,10 +1,10 @@
 # PG Management
 
-A mobile-first Flutter platform for PG owners, administrators, and tenants. It ships in a zero-setup local mode backed by Hive, with realistic seeded data and working CRUD/status workflows. Domain data is fully typed (models with IDs, enums and `DateTime`s) behind a repository layer, so a cloud backend can be added without touching the UI.
+A mobile-first Flutter platform for PG owners, administrators, and tenants. It is cloud-only: Supabase is the single source of truth (Auth + Postgres + row-level security), with no local store, demo mode or seeded data — accounts are provisioned top-down and new customers start empty. Domain data is fully typed (models with IDs, enums and `DateTime`s) behind a repository layer.
 
 ## Included
 
-- Role-based sign-in and sign-up for Owner, Tenant, and Admin
+- Role-based sign-in for Owner, Tenant, and Admin (no public sign-up; accounts are provisioned top-down)
 - PG listings, amenities, property photos entry point, rooms, floors, and bed occupancy
 - Tenant onboarding, KYC capture, and rental agreement/e-sign flow
 - Monthly rent dues generated automatically, a working demo checkout, PDF receipts, and owner-side payment recording
@@ -79,10 +79,7 @@ Deploy the function: Edge Functions → Deploy → name it exactly `create-custo
 
 ## Cloud accounts (Supabase)
 
-The app supports two modes side by side:
-
-- **Demo mode** — no account, data lives in the on-device Hive box, works offline.
-- **Cloud accounts** — real email/password sign-up and sign-in via Supabase Auth; each account's data syncs to Postgres and is isolated by row-level security.
+The app is cloud-only — every session signs in through Supabase Auth and all data lives in Postgres, isolated by row-level security. There is no demo mode or offline store; the app requires a connection. Accounts are provisioned top-down (platform admin → customer/owner → tenant); there is no public sign-up.
 
 Setup for a fresh Supabase project (free tier, no card):
 

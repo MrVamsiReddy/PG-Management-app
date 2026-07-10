@@ -60,7 +60,7 @@ class SettingsScreen extends StatelessWidget {
                 subtitle: Text(l.t('settings.pushSub')),
               ),
             ),
-            if (state.cloudMode) ...[
+            if (state.isLoggedIn) ...[
               const SizedBox(height: 22),
               _sectionLabel(context, l.t('settings.account')),
               Card(

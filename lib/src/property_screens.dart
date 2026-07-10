@@ -244,10 +244,8 @@ class _TenantsScreenState extends State<TenantsScreen> {
                 const SizedBox(height: 8),
               ],
               OutlinedButton.icon(onPressed: () => _call(tenant.phone), icon: const Icon(Icons.call_outlined), label: const Text('Call tenant')),
-              if (state.cloudMode) ...[
-                const SizedBox(height: 8),
-                SizedBox(width: double.infinity, child: FilledButton.tonalIcon(onPressed: () => _invite(context, state, tenant), icon: const Icon(Icons.send_outlined), label: const Text('Invite to app'))),
-              ],
+              const SizedBox(height: 8),
+              SizedBox(width: double.infinity, child: FilledButton.tonalIcon(onPressed: () => _invite(context, state, tenant), icon: const Icon(Icons.send_outlined), label: const Text('Invite to app'))),
             ]))],
           ),
         )),

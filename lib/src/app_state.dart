@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show AuthException, FunctionException, PostgrestException, User, UserAttributes;
 
 import 'access.dart';
@@ -40,38 +39,26 @@ T? _firstOrNull<T>(List<T> list, bool Function(T) test) {
 }
 
 class AppState extends ChangeNotifier {
-  AppState(this.box) {
-    _useHiveRepos();
-  }
+  AppState();
 
-  static const schemaVersion = 3;
   static const utilityRate = 8; // ₹ per unit
 
-  /// Demo/unlinked accounts act as this seeded tenant; a linked tenant
-  /// account gets the id from its membership instead.
-  static const defaultTenantId = 't1';
-  static const ownerName = 'Ananya Kapoor';
+  String currentTenantId = '';
 
-  String currentTenantId = defaultTenantId;
-
-  final Box<dynamic> box;
-  late Repository<Pg> _pgRepo;
-  late Repository<Room> _roomRepo;
-  late Repository<Tenant> _tenantRepo;
-  late Repository<Payment> _paymentRepo;
-  late Repository<MaintenanceRequest> _maintenanceRepo;
-  late Repository<Visitor> _visitorRepo;
-  late Repository<Announcement> _announcementRepo;
-  late Repository<AttendanceRecord> _attendanceRepo;
-  late Repository<UtilityBill> _utilityRepo;
-  late Repository<AppNotification> _notificationRepo;
+  Repository<Pg>? _pgRepo;
+  Repository<Room>? _roomRepo;
+  Repository<Tenant>? _tenantRepo;
+  Repository<Payment>? _paymentRepo;
+  Repository<MaintenanceRequest>? _maintenanceRepo;
+  Repository<Visitor>? _visitorRepo;
+  Repository<Announcement>? _announcementRepo;
+  Repository<AttendanceRecord>? _attendanceRepo;
+  Repository<UtilityBill>? _utilityRepo;
+  Repository<AppNotification>? _notificationRepo;
 
   bool isLoggedIn = false;
   UserRole role = UserRole.owner;
 
-  /// True when signed in with a real Supabase account; data then lives in the
-  /// cloud instead of the local Hive box.
-  bool cloudMode = false;
   String? accountEmail;
   String? _cloudName;
   String? _workspaceOwnerId;
@@ -87,24 +74,10 @@ class AppState extends ChangeNotifier {
 
   String? _activePgId;
 
-  /// User preferences (persisted locally, survive sign-out).
   AppLanguage language = AppLanguage.english;
   bool pushEnabled = true;
 
   Locale get locale => language.locale;
-
-  void _useHiveRepos() {
-    _pgRepo = HiveRepository<Pg>(box, 'pgs', fromMap: Pg.fromMap, toMap: (e) => e.toMap());
-    _roomRepo = HiveRepository<Room>(box, 'rooms', fromMap: Room.fromMap, toMap: (e) => e.toMap());
-    _tenantRepo = HiveRepository<Tenant>(box, 'tenants', fromMap: Tenant.fromMap, toMap: (e) => e.toMap());
-    _paymentRepo = HiveRepository<Payment>(box, 'payments', fromMap: Payment.fromMap, toMap: (e) => e.toMap());
-    _maintenanceRepo = HiveRepository<MaintenanceRequest>(box, 'maintenance', fromMap: MaintenanceRequest.fromMap, toMap: (e) => e.toMap());
-    _visitorRepo = HiveRepository<Visitor>(box, 'visitors', fromMap: Visitor.fromMap, toMap: (e) => e.toMap());
-    _announcementRepo = HiveRepository<Announcement>(box, 'announcements', fromMap: Announcement.fromMap, toMap: (e) => e.toMap());
-    _attendanceRepo = HiveRepository<AttendanceRecord>(box, 'attendance', fromMap: AttendanceRecord.fromMap, toMap: (e) => e.toMap());
-    _utilityRepo = HiveRepository<UtilityBill>(box, 'utilities', fromMap: UtilityBill.fromMap, toMap: (e) => e.toMap());
-    _notificationRepo = HiveRepository<AppNotification>(box, 'notifications', fromMap: AppNotification.fromMap, toMap: (e) => e.toMap());
-  }
 
   void _useSupabaseRepos(String workspaceOwnerId) {
     final client = supabaseOrNull!;
@@ -131,77 +104,53 @@ class AppState extends ChangeNotifier {
   List<UtilityBill> utilities = [];
   List<AppNotification> notifications = [];
 
-  /// Test-only: lets the test harness seed the local box with demo data.
-  /// Never set in production — new customers start empty and there is no
-  /// mock seed path outside tests.
-  static bool debugSeedDemoData = false;
-
-  Future<void> init() async {
-    if (box.get('schemaVersion') != schemaVersion) {
-      await box.clear();
-      await box.put('schemaVersion', schemaVersion);
-    }
-    // No local session restore: the only way to be signed in is a valid
-    // Supabase session resolved through restoreCloudSession.
-    _activePgId = box.get('activePgId') as String?;
-    language = AppLanguage.fromCode(box.get('language') as String?);
-    pushEnabled = box.get('pushEnabled') as bool? ?? true;
-    await _loadAll();
-    if (pgs.isEmpty && debugSeedDemoData) {
-      _seed();
-      await persistAll();
-    }
-    await _ensureMonthlyDuesAtStartup();
-  }
-
   Future<void> _loadAll() async {
-    pgs = await _pgRepo.loadAll();
-    rooms = await _roomRepo.loadAll();
-    tenants = await _tenantRepo.loadAll();
-    payments = await _paymentRepo.loadAll();
-    maintenance = await _maintenanceRepo.loadAll();
-    visitors = await _visitorRepo.loadAll();
-    announcements = await _announcementRepo.loadAll();
-    attendance = await _attendanceRepo.loadAll();
-    utilities = await _utilityRepo.loadAll();
-    notifications = await _notificationRepo.loadAll();
+    pgs = await _pgRepo?.loadAll() ?? [];
+    rooms = await _roomRepo?.loadAll() ?? [];
+    tenants = await _tenantRepo?.loadAll() ?? [];
+    payments = await _paymentRepo?.loadAll() ?? [];
+    maintenance = await _maintenanceRepo?.loadAll() ?? [];
+    visitors = await _visitorRepo?.loadAll() ?? [];
+    announcements = await _announcementRepo?.loadAll() ?? [];
+    attendance = await _attendanceRepo?.loadAll() ?? [];
+    utilities = await _utilityRepo?.loadAll() ?? [];
+    notifications = await _notificationRepo?.loadAll() ?? [];
   }
 
-  Future<void> persistAll() => _persist({
-        'pgs', 'rooms', 'tenants', 'payments', 'maintenance',
-        'visitors', 'announcements', 'attendance', 'utilities', 'notifications',
-      });
-
-  /// Saves only the collections that changed — with photos stored inline and
-  /// the cloud backend uploading whole collections, saving everything on
-  /// every action would get expensive.
+  /// Saves only the collections that changed. Persistence is best-effort: a
+  /// transient cloud error surfaces the in-memory change without corrupting
+  /// state, and there is no local fallback store to write to.
   Future<void> _persist(Set<String> keys) async {
-    await Future.wait([
-      if (keys.contains('pgs')) _pgRepo.saveAll(pgs),
-      if (keys.contains('rooms')) _roomRepo.saveAll(rooms),
-      if (keys.contains('tenants')) _tenantRepo.saveAll(tenants),
-      if (keys.contains('payments')) _paymentRepo.saveAll(payments),
-      if (keys.contains('maintenance')) _maintenanceRepo.saveAll(maintenance),
-      if (keys.contains('visitors')) _visitorRepo.saveAll(visitors),
-      if (keys.contains('announcements')) _announcementRepo.saveAll(announcements),
-      if (keys.contains('attendance')) _attendanceRepo.saveAll(attendance),
-      if (keys.contains('utilities')) _utilityRepo.saveAll(utilities),
-      if (keys.contains('notifications')) _notificationRepo.saveAll(notifications),
-    ]);
+    final saves = <Future<void>>[];
+    void save(String key, Repository? repo, List items) {
+      if (keys.contains(key) && repo != null) saves.add(repo.saveAll(items));
+    }
+
+    save('pgs', _pgRepo, pgs);
+    save('rooms', _roomRepo, rooms);
+    save('tenants', _tenantRepo, tenants);
+    save('payments', _paymentRepo, payments);
+    save('maintenance', _maintenanceRepo, maintenance);
+    save('visitors', _visitorRepo, visitors);
+    save('announcements', _announcementRepo, announcements);
+    save('attendance', _attendanceRepo, attendance);
+    save('utilities', _utilityRepo, utilities);
+    save('notifications', _notificationRepo, notifications);
+    try {
+      await Future.wait(saves);
+    } catch (_) {}
     notifyListeners();
   }
 
   Future<void> refresh() async {
-    if (cloudMode) {
-      final user = supabaseOrNull?.auth.currentUser;
-      if (user != null) {
-        final gate = await _fetchAccessGate(user);
-        if (gate.error != null) {
-          await logout();
-          authNotice = gate.error;
-          notifyListeners();
-          return;
-        }
+    final user = supabaseOrNull?.auth.currentUser;
+    if (user != null) {
+      final gate = await _fetchAccessGate(user);
+      if (gate.error != null) {
+        await logout();
+        authNotice = gate.error;
+        notifyListeners();
+        return;
       }
     }
     try {
@@ -213,30 +162,45 @@ class AppState extends ChangeNotifier {
   // ---- Session ----
 
   @visibleForTesting
-  void login(UserRole selectedRole) {
+  void debugSignIn(UserRole selectedRole, {String tenantId = ''}) {
     role = selectedRole;
+    currentTenantId = tenantId;
     isLoggedIn = true;
     notifyListeners();
     _ensureMonthlyDuesAtStartup();
   }
 
   Future<void> logout() async {
-    if (cloudMode) {
-      try {
-        await supabaseOrNull?.auth.signOut();
-      } catch (_) {}
-      cloudMode = false;
-      accountEmail = null;
-      _cloudName = null;
-      _workspaceOwnerId = null;
-      _resolvedCustomerId = null;
-      mustChangePassword = false;
-      currentTenantId = defaultTenantId;
-      _useHiveRepos();
-      await _loadAll();
-    }
+    try {
+      await supabaseOrNull?.auth.signOut();
+    } catch (_) {}
+    accountEmail = null;
+    _cloudName = null;
+    _workspaceOwnerId = null;
+    _resolvedCustomerId = null;
+    mustChangePassword = false;
+    currentTenantId = '';
+    _pgRepo = null;
+    _roomRepo = null;
+    _tenantRepo = null;
+    _paymentRepo = null;
+    _maintenanceRepo = null;
+    _visitorRepo = null;
+    _announcementRepo = null;
+    _attendanceRepo = null;
+    _utilityRepo = null;
+    _notificationRepo = null;
+    pgs = [];
+    rooms = [];
+    tenants = [];
+    payments = [];
+    maintenance = [];
+    visitors = [];
+    announcements = [];
+    attendance = [];
+    utilities = [];
+    notifications = [];
     isLoggedIn = false;
-    box.delete('sessionRole');
     notifyListeners();
   }
 
@@ -376,7 +340,7 @@ class AppState extends ChangeNotifier {
   /// password flag. Returns an error, or null.
   Future<String?> changePassword(String password) async {
     final client = supabaseOrNull;
-    if (client == null || !cloudMode) return 'Sign in with an account to change your password.';
+    if (client == null || !isLoggedIn) return 'Sign in with an account to change your password.';
     try {
       await client.auth.updateUser(UserAttributes(password: password, data: {'must_change_password': false}));
       mustChangePassword = false;
@@ -465,11 +429,10 @@ class AppState extends ChangeNotifier {
     }
 
     role = resolvedRole;
-    currentTenantId = linkedTenantId ?? defaultTenantId;
+    currentTenantId = linkedTenantId ?? '';
     _cloudName = user.userMetadata?['full_name'] as String?;
     accountEmail = user.email;
     mustChangePassword = user.userMetadata?['must_change_password'] == true;
-    cloudMode = true;
     authNotice = null;
     _workspaceOwnerId = workspaceOwnerId;
     _resolvedCustomerId = gate.customerId;
@@ -487,7 +450,7 @@ class AppState extends ChangeNotifier {
   /// [tempPassword] is null when the email already had an account.
   Future<({String? error, String? tempPassword})> inviteTenant({required String tenantId, required String email}) async {
     final client = supabaseOrNull;
-    if (client == null || !cloudMode) {
+    if (client == null || !isLoggedIn) {
       return (error: 'Sign in with a cloud account to invite tenants.', tempPassword: null);
     }
     final address = email.trim().toLowerCase();
@@ -535,8 +498,8 @@ class AppState extends ChangeNotifier {
   }
 
   /// SaaS scope stamped onto every record this session creates: the resolved
-  /// customer when known, else the workspace owner (interim), else 'demo'.
-  String get customerId => _resolvedCustomerId ?? (cloudMode ? (_workspaceOwnerId ?? 'demo') : 'demo');
+  /// customer when known, else the workspace owner.
+  String get customerId => _resolvedCustomerId ?? _workspaceOwnerId ?? '';
 
   // ---- Active property (multi-PG owners work one property at a time) ----
 
@@ -547,21 +510,18 @@ class AppState extends ChangeNotifier {
 
   void selectPg(String id) {
     _activePgId = id;
-    box.put('activePgId', id);
     notifyListeners();
   }
 
-  // ---- Preferences ----
+  // ---- Preferences (session-scoped; no local persistence) ----
 
   void setLanguage(AppLanguage lang) {
     language = lang;
-    box.put('language', lang.code);
     notifyListeners();
   }
 
   void setPushEnabled(bool value) {
     pushEnabled = value;
-    box.put('pushEnabled', value);
     notifyListeners();
   }
 
@@ -610,8 +570,7 @@ class AppState extends ChangeNotifier {
 
   String get displayName {
     if (role == UserRole.tenant) return currentTenant?.name ?? _cloudName ?? 'Tenant';
-    if (cloudMode) return _cloudName ?? accountEmail?.split('@').first ?? 'Account';
-    return box.get('ownerName') as String? ?? ownerName;
+    return _cloudName ?? accountEmail?.split('@').first ?? 'Account';
   }
   String get initials => displayName.split(' ').where((e) => e.isNotEmpty).map((e) => e[0]).take(2).join();
 
@@ -634,14 +593,10 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       return null;
     }
-    if (cloudMode) {
-      try {
-        await supabaseOrNull!.auth.updateUser(UserAttributes(data: {'full_name': cleanName}));
-      } catch (_) {}
-      _cloudName = cleanName;
-    } else {
-      box.put('ownerName', cleanName);
-    }
+    try {
+      await supabaseOrNull?.auth.updateUser(UserAttributes(data: {'full_name': cleanName}));
+    } catch (_) {}
+    _cloudName = cleanName;
     notifyListeners();
     return null;
   }
@@ -717,7 +672,7 @@ class AppState extends ChangeNotifier {
   void _pushToWorkspace(String title, String body, {required NotificationScope scope, String? tenantId}) {
     final client = supabaseOrNull;
     final owner = _workspaceOwnerId;
-    if (client == null || !cloudMode || owner == null || !pushEnabled) return;
+    if (client == null || owner == null || !pushEnabled) return;
     client.functions.invoke('push', body: {
       'workspaceOwnerId': owner,
       'title': title,
@@ -795,7 +750,6 @@ class AppState extends ChangeNotifier {
       rooms.add(Room(id: 'r${DateTime.now().microsecondsSinceEpoch}-${seq++}', pgId: pgId, number: s.number, floor: s.floor, beds: s.beds, occupied: 0, rent: s.rent, customerId: customerId));
     }
     _activePgId = pgId;
-    box.put('activePgId', pgId);
     _persist({'pgs', 'rooms'});
     return null;
   }
@@ -1094,7 +1048,7 @@ class AppState extends ChangeNotifier {
   void publishAnnouncement(String title, String body, {String? pgId, bool sendPush = true}) {
     final announcement = Announcement(
       id: _id('a'), title: title, body: body,
-      author: '$ownerName, ${role.label}', postedAt: DateTime.now(), pgId: pgId,
+      author: '$displayName, ${role.label}', postedAt: DateTime.now(), pgId: pgId,
       customerId: customerId,
     );
     announcements.insert(0, announcement);
@@ -1113,90 +1067,5 @@ class AppState extends ChangeNotifier {
     }
     final pgId = activePg?.id;
     return announcements.where((a) => a.pgId == null || a.pgId == pgId).toList();
-  }
-
-  // Utility billing and attendance were removed from the product. Their data
-  // models, seed rows and repositories are retained internally (loaded and
-  // persisted) so existing stores keep working, but no UI or action exposes
-  // them and nothing new is written.
-
-  // ---- Seed data ----
-
-  void _seed() {
-    final now = DateTime.now();
-    DateTime month(int offset) => DateTime(now.year, now.month + offset);
-
-    pgs = [
-      const Pg(id: 'p1', name: 'HSR Layout PG', address: '27th Main, HSR Layout, Bengaluru', beds: 48, occupied: 41, amenities: 'Wi-Fi • Food • Laundry • CCTV', rating: 4.8),
-      const Pg(id: 'p2', name: 'Koramangala PG', address: '5th Block, Koramangala, Bengaluru', beds: 36, occupied: 29, amenities: 'Wi-Fi • AC • Gym • Power backup', rating: 4.6),
-    ];
-    rooms = [
-      const Room(id: 'r1', pgId: 'p1', number: '101', floor: 1, beds: 2, occupied: 2, rent: 9500),
-      const Room(id: 'r2', pgId: 'p1', number: '102', floor: 1, beds: 3, occupied: 2, rent: 8200),
-      const Room(id: 'r3', pgId: 'p1', number: '201', floor: 2, beds: 1, occupied: 1, rent: 14500),
-      const Room(id: 'r4', pgId: 'p1', number: '202', floor: 2, beds: 2, occupied: 1, rent: 10000),
-      const Room(id: 'r5', pgId: 'p1', number: '301', floor: 3, beds: 3, occupied: 3, rent: 7800),
-    ];
-    tenants = [
-      Tenant(id: 't1', name: 'Aarav Mehta', phone: '98765 43210', roomId: 'r1', bed: 'A', kyc: KycStatus.verified, agreement: AgreementStatus.signed, joinDate: DateTime(month(-5).year, month(-5).month, 12)),
-      Tenant(id: 't2', name: 'Diya Sharma', phone: '99887 66110', roomId: 'r1', bed: 'B', kyc: KycStatus.verified, agreement: AgreementStatus.signed, joinDate: DateTime(month(-5).year, month(-5).month, 4)),
-      Tenant(id: 't3', name: 'Rohan Nair', phone: '90123 45678', roomId: 'r2', bed: 'A', kyc: KycStatus.pending, agreement: AgreementStatus.awaitingSign, joinDate: now.subtract(const Duration(days: 12))),
-      Tenant(id: 't4', name: 'Ishita Rao', phone: '91234 56780', roomId: 'r3', bed: 'A', kyc: KycStatus.verified, agreement: AgreementStatus.signed, joinDate: DateTime(month(-4).year, month(-4).month, 10)),
-    ];
-
-    var payId = 0;
-    Payment paid(String tenantId, DateTime m, int amount, String method) => Payment(
-          id: 'pay${++payId}', tenantId: tenantId, period: m, amount: amount,
-          status: PaymentStatus.paid,
-          dueDate: DateTime(m.year, m.month, 5), paidDate: DateTime(m.year, m.month, 3), method: method,
-        );
-    payments = [
-      // Current month: one collected, two due, one overdue.
-      Payment(id: 'pay${++payId}', tenantId: 't4', period: month(0), amount: 14500, status: PaymentStatus.paid, dueDate: DateTime(now.year, now.month, 5), paidDate: now.subtract(const Duration(days: 1)), method: 'UPI'),
-      Payment(id: 'pay${++payId}', tenantId: 't1', period: month(0), amount: 9500, status: PaymentStatus.due, dueDate: now.add(const Duration(days: 2))),
-      Payment(id: 'pay${++payId}', tenantId: 't2', period: month(0), amount: 9500, status: PaymentStatus.due, dueDate: now.add(const Duration(days: 2))),
-      Payment(id: 'pay${++payId}', tenantId: 't3', period: month(0), amount: 8200, status: PaymentStatus.due, dueDate: now.subtract(const Duration(days: 2))),
-      // History powering the revenue chart.
-      paid('t1', month(-1), 9500, 'UPI'), paid('t1', month(-2), 9500, 'UPI'),
-      paid('t1', month(-3), 9000, 'Bank transfer'), paid('t1', month(-4), 9000, 'UPI'), paid('t1', month(-5), 9000, 'Cash'),
-      paid('t2', month(-1), 9500, 'UPI'), paid('t2', month(-2), 9500, 'Card'),
-      paid('t2', month(-3), 9500, 'UPI'), paid('t2', month(-4), 9500, 'UPI'), paid('t2', month(-5), 9500, 'Bank transfer'),
-      paid('t4', month(-1), 14500, 'UPI'), paid('t4', month(-2), 14500, 'UPI'),
-      paid('t4', month(-3), 13500, 'Bank transfer'), paid('t4', month(-4), 13500, 'UPI'),
-      paid('t3', month(-1), 2500, 'UPI'), // prorated first month
-    ];
-    maintenance = [
-      MaintenanceRequest(id: 'm1', roomId: 'r2', title: 'Bathroom tap leaking', category: 'Plumbing', status: MaintenanceStatus.inProgress, priority: Priority.high, assignee: 'Ravi Kumar', createdAt: now.subtract(const Duration(hours: 4))),
-      MaintenanceRequest(id: 'm2', roomId: 'r3', title: 'Wi-Fi not connecting', category: 'Internet', status: MaintenanceStatus.open, priority: Priority.medium, createdAt: now.subtract(const Duration(days: 1))),
-      MaintenanceRequest(id: 'm3', roomId: 'r5', title: 'Tube light replacement', category: 'Electrical', status: MaintenanceStatus.resolved, priority: Priority.low, assignee: 'Suresh', createdAt: now.subtract(const Duration(days: 3))),
-    ];
-    visitors = [
-      Visitor(id: 'v1', tenantId: 't1', name: 'Karan Mehta', purpose: 'Family', status: VisitorStatus.inside, expectedAt: now.subtract(const Duration(hours: 1))),
-      Visitor(id: 'v2', tenantId: 't2', name: 'Maya Singh', purpose: 'Friend', status: VisitorStatus.awaitingApproval, expectedAt: now.subtract(const Duration(hours: 2))),
-      Visitor(id: 'v3', tenantId: 't3', name: 'Delivery partner', purpose: 'Delivery', status: VisitorStatus.checkedOut, expectedAt: now.subtract(const Duration(hours: 5))),
-    ];
-    announcements = [
-      Announcement(id: 'a1', title: 'Water tank cleaning', body: 'Water supply will be paused from 10 AM to 12 PM this Sunday.', author: 'Management', postedAt: now.subtract(const Duration(hours: 2))),
-      Announcement(id: 'a2', title: 'Community dinner', body: 'Join us on the terrace this Saturday at 7:30 PM.', author: '$ownerName, Owner', postedAt: now.subtract(const Duration(days: 2))),
-    ];
-    attendance = [
-      AttendanceRecord(id: 'at1', tenantId: 't1', checkIn: now.subtract(const Duration(hours: 3))),
-      AttendanceRecord(id: 'at2', tenantId: 't2', checkIn: now.subtract(const Duration(hours: 6)), checkOut: now.subtract(const Duration(minutes: 30))),
-      AttendanceRecord(id: 'at3', tenantId: 't3', checkIn: now.subtract(const Duration(hours: 2))),
-    ];
-    utilities = [
-      const UtilityBill(id: 'u1', roomId: 'r1', previous: 1280, current: 1384, rate: utilityRate, status: BillStatus.generated),
-      const UtilityBill(id: 'u2', roomId: 'r2', previous: 988, current: 1108, rate: utilityRate, status: BillStatus.generated),
-      const UtilityBill(id: 'u3', roomId: 'r3', previous: 740, current: 807, rate: utilityRate, status: BillStatus.pendingReading),
-    ];
-    notifications = [
-      // Manager-facing (owner/admin of HSR Layout PG only).
-      AppNotification(id: 'n1', title: 'Rent received', body: '₹14,500 received from Ishita Rao.', type: NotificationType.payment, createdAt: now.subtract(const Duration(minutes: 12)), roleScope: NotificationScope.managers, pgId: 'p1', tenantId: 't4', relatedEntityId: 'pay1'),
-      AppNotification(id: 'n2', title: 'Visitor awaiting approval', body: 'Maya Singh is waiting at the reception.', type: NotificationType.visitor, createdAt: now.subtract(const Duration(hours: 1)), roleScope: NotificationScope.managers, pgId: 'p1', tenantId: 't2', relatedEntityId: 'v2'),
-      // Workspace-wide announcement (everyone).
-      AppNotification(id: 'n3', title: 'Water tank cleaning', body: 'Water supply paused 10 AM–12 PM this Sunday.', type: NotificationType.announcement, createdAt: now.subtract(const Duration(hours: 3)), roleScope: NotificationScope.everyone, relatedEntityId: 'a1'),
-      // Personal to the demo tenant (t1) — only they see it.
-      AppNotification(id: 'n4', title: 'Rent reminder', body: 'Your rent of ₹9,500 is due soon.', type: NotificationType.payment, createdAt: now.subtract(const Duration(hours: 5)), roleScope: NotificationScope.tenant, tenantId: 't1', pgId: 'p1'),
-    ];
   }
 }

@@ -6,7 +6,7 @@ Implementation structure only. Roles → `04`; rules → `05`.
 - `lib/main.dart` → `PgManagementApp` — combined app; shows all three login portals; admin lands on the PG `HomeShell`. Used for dev/tests. (Not role-clean; see `09`.)
 - `lib/main_owner.dart` → `OwnerAdminApp` — owner + admin portals only; admin → `CustomerManagementScreen`, owner → `HomeShell`, tenant session blocked.
 - `lib/main_tenant.dart` → `TenantApp` — tenant login only; `TenantShell`; non-tenant session blocked.
-- All three call `lib/src/bootstrap.dart` `bootstrap()` (Hive init, Supabase init, `AppState.init`, `restoreCloudSession`, push registration).
+- All three call `lib/src/bootstrap.dart` `bootstrap()` (Supabase init, `AppState()`, `restoreCloudSession`, push registration). No local store to initialise.
 
 ## State management
 - Single `AppState extends ChangeNotifier` (`lib/src/app_state.dart`), exposed via `AppScope` (an `InheritedNotifier`). `AppScope.of(context)` reads it.
@@ -14,17 +14,16 @@ Implementation structure only. Roles → `04`; rules → `05`.
 - `AnimatedBuilder(animation: state)` at the app root rebuilds `MaterialApp` so locale changes apply.
 
 ## AppState responsibilities
-- Session: `signInCloud(portal)`, `restoreCloudSession`, `logout`, `changePassword`, `createAdmin`, customer methods (`loadCustomers`/`createCustomer`/`setCustomerStatus`/`loadCustomerPgNames`), `login` (`@visibleForTesting`).
+- Session: `signInCloud(portal)`, `restoreCloudSession`, `logout`, `changePassword`, `createAdmin`, customer methods (`loadCustomers`/`createCustomer`/`setCustomerStatus`/`loadCustomerPgNames`), `debugSignIn` (`@visibleForTesting`).
 - Access gate: `_fetchAccessGate` + `access.dart` (`evaluateProfileAccess`, `portalError`).
 - Business ops: property/room CRUD (`createProperty`, `addRoom`, `removeRoom`, `setRoomBeds`, `setRoomRent`), `onboardTenant`, rent (`recordPayment`, `payRent`, `generateMonthlyDues`), maintenance, visitors, announcements, notifications.
 - Scoping getters: `activePg`, `pgRooms/pgTenants/pgPayments/pgMaintenance/pgVisitors`, `tenantPayments`, `visibleNotifications`, `visibleAnnouncements`.
-- Preferences: `language`, `pushEnabled` (persisted in Hive box).
+- Preferences: `language`, `pushEnabled` (session-scoped, in memory; not persisted across launches).
 
 ## Repository pattern
-- `lib/src/repositories.dart`: `Repository<T>` interface with two impls:
-  - `HiveRepository<T>` — local Hive box (live default / offline).
-  - `SupabaseRepository<T>` — reads/writes the `app_data` table (one JSONB row per `(owner_id, key)`), **not** the relational tables.
-- `AppState` swaps Hive→Supabase repos on cloud sign-in (`_useHiveRepos`/`_useSupabaseRepos`).
+- `lib/src/repositories.dart`: `Repository<T>` interface with one impl:
+  - `SupabaseRepository<T>` — reads/writes the `app_data` table (one JSONB row per `(owner_id, key)`), **not** the relational tables. Cloud-only; there is no local/offline store.
+- `AppState` holds nullable repos, set on cloud sign-in (`_useSupabaseRepos`) and cleared on `logout`. Signed out, collections are empty and persistence no-ops.
 - The relational customer-scoped tables (`04` migration) are **not** accessed by these repos. Admin customer management queries `customers`/`pgs`/`profiles` directly via the Supabase client.
 
 ## Navigation
@@ -63,4 +62,4 @@ AI/  (this kit)
 ```
 
 ## Dependency flow
-UI screens → `AppScope.of` → `AppState` → `Repository` (Hive/`app_data`) and/or Supabase client/functions. Pure logic (`access.dart`, `format.dart`) has no Flutter/Supabase deps and is unit-tested directly.
+UI screens → `AppScope.of` → `AppState` → `Repository` (`app_data`) and/or Supabase client/functions. Pure logic (`access.dart`, `format.dart`) has no Flutter/Supabase deps and is unit-tested directly.

@@ -36,6 +36,38 @@ Next task:
 
 ## Latest
 ```
+### Session: 2026-07-10 · Cloud-only data layer (remove Hive/demo/seed)
+Prompt/goal: Make Supabase the single source of truth — remove the local store, demo mode and mock seed path.
+Commit(s): (this session)
+
+Summary:
+- Deleted the Hive local store, HiveRepository, the _seed() demo data, debugSeedDemoData, and the cloudMode/'demo'/defaultTenantId/ownerName fallbacks. app_data (cloud) is now the only store; repos are nullable and set on login, cleared on logout. Preferences are session-scoped.
+
+Files modified:
+- lib/src/repositories.dart (drop HiveRepository; SupabaseRepository only)
+- lib/src/app_state.dart (remove box/init/seed/schemaVersion/_useHiveRepos; nullable repos; login→debugSignIn; logout clears state; best-effort _persist)
+- lib/src/bootstrap.dart, lib/main.dart (no Hive; main.dart reuses bootstrap)
+- lib/src/property_screens.dart, lib/src/settings_screen.dart (cloudMode→isLoggedIn)
+- lib/src/models.dart (doc comment)
+- pubspec.yaml (remove hive_flutter)
+- test/app_test.dart (in-memory seedFixture + debugSignIn; drop Hive/persistence tests)
+- AI/01,02,03,06,08,09,10 (reflect cloud-only reality)
+
+Architecture changes:
+- No local/offline store. AppState repos nullable; populated in _useSupabaseRepos on sign-in, nulled on logout. cloudMode removed (== isLoggedIn).
+
+Database changes: none (still writes app_data blob keyed by owner_id).
+
+Tests added: none new; suite reshaped to cloud-only. 75 passing; analyze clean.
+
+Remaining work: migrate runtime to relational customer_id tables (06 "Next recommended phase"); Prompts 7–11.
+
+Known issues introduced/affected: 09 P0 (still app_data, not relational RLS) narrowed — Hive/seed debt items removed; new P3: signed-out prefs don't persist.
+
+Next task: Prompt 7 (tenant invite tokens + profiles row) or the relational-runtime migration.
+```
+
+```
 ### Session: 2026-07 · AI documentation kit
 Prompt/goal: Generate permanent AI/ docs from current implementation.
 Commit(s): (docs only)

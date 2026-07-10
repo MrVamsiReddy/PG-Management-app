@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:pg_management/main.dart';
 import 'package:pg_management/src/access.dart';
 import 'package:pg_management/src/app_state.dart';
@@ -16,25 +15,326 @@ import 'package:pg_management/src/owner_app.dart';
 import 'package:pg_management/src/tenant_app.dart';
 import 'package:pg_management/src/theme.dart';
 
-void main() {
-  late Box<dynamic> box;
-  late AppState state;
-  var testRun = 0;
+// Cloud-only build: there is no local store, seed path or demo login in the
+// product. Tests inject an in-memory fixture directly into the public
+// collections and use the @visibleForTesting debugSignIn seam to set a role.
+void seedFixture(AppState s) {
+  final now = DateTime.now();
+  DateTime month(int offset) => DateTime(now.year, now.month + offset);
 
-  // Each test gets its own box in a fresh temp directory. Nothing is torn
-  // down between tests: awaiting real Hive IO inside a widget test's
-  // fake-async zone deadlocks, and the OS reclaims the temp files anyway.
-  setUp(() async {
-    final tempDir = await Directory.systemTemp.createTemp('pg_test');
-    Hive.init(tempDir.path);
-    box = await Hive.openBox<dynamic>('pg_test_${testRun++}');
-    AppState.debugSeedDemoData = true;
-    state = AppState(box);
-    await state.init();
+  s.pgs = [
+    const Pg(
+        id: 'p1',
+        name: 'HSR Layout PG',
+        address: '27th Main, HSR Layout, Bengaluru',
+        beds: 48,
+        occupied: 41,
+        amenities: 'Wi-Fi • Food • Laundry • CCTV',
+        rating: 4.8),
+    const Pg(
+        id: 'p2',
+        name: 'Koramangala PG',
+        address: '5th Block, Koramangala, Bengaluru',
+        beds: 36,
+        occupied: 29,
+        amenities: 'Wi-Fi • AC • Gym • Power backup',
+        rating: 4.6),
+  ];
+  s.rooms = [
+    const Room(
+        id: 'r1',
+        pgId: 'p1',
+        number: '101',
+        floor: 1,
+        beds: 2,
+        occupied: 2,
+        rent: 9500),
+    const Room(
+        id: 'r2',
+        pgId: 'p1',
+        number: '102',
+        floor: 1,
+        beds: 3,
+        occupied: 2,
+        rent: 8200),
+    const Room(
+        id: 'r3',
+        pgId: 'p1',
+        number: '201',
+        floor: 2,
+        beds: 1,
+        occupied: 1,
+        rent: 14500),
+    const Room(
+        id: 'r4',
+        pgId: 'p1',
+        number: '202',
+        floor: 2,
+        beds: 2,
+        occupied: 1,
+        rent: 10000),
+    const Room(
+        id: 'r5',
+        pgId: 'p1',
+        number: '301',
+        floor: 3,
+        beds: 3,
+        occupied: 3,
+        rent: 7800),
+  ];
+  s.tenants = [
+    Tenant(
+        id: 't1',
+        name: 'Aarav Mehta',
+        phone: '98765 43210',
+        roomId: 'r1',
+        bed: 'A',
+        kyc: KycStatus.verified,
+        agreement: AgreementStatus.signed,
+        joinDate: DateTime(month(-5).year, month(-5).month, 12)),
+    Tenant(
+        id: 't2',
+        name: 'Diya Sharma',
+        phone: '99887 66110',
+        roomId: 'r1',
+        bed: 'B',
+        kyc: KycStatus.verified,
+        agreement: AgreementStatus.signed,
+        joinDate: DateTime(month(-5).year, month(-5).month, 4)),
+    Tenant(
+        id: 't3',
+        name: 'Rohan Nair',
+        phone: '90123 45678',
+        roomId: 'r2',
+        bed: 'A',
+        kyc: KycStatus.pending,
+        agreement: AgreementStatus.awaitingSign,
+        joinDate: now.subtract(const Duration(days: 12))),
+    Tenant(
+        id: 't4',
+        name: 'Ishita Rao',
+        phone: '91234 56780',
+        roomId: 'r3',
+        bed: 'A',
+        kyc: KycStatus.verified,
+        agreement: AgreementStatus.signed,
+        joinDate: DateTime(month(-4).year, month(-4).month, 10)),
+  ];
+
+  var payId = 0;
+  Payment paid(String tenantId, DateTime m, int amount, String method) =>
+      Payment(
+        id: 'pay${++payId}',
+        tenantId: tenantId,
+        period: m,
+        amount: amount,
+        status: PaymentStatus.paid,
+        dueDate: DateTime(m.year, m.month, 5),
+        paidDate: DateTime(m.year, m.month, 3),
+        method: method,
+      );
+  s.payments = [
+    Payment(
+        id: 'pay${++payId}',
+        tenantId: 't4',
+        period: month(0),
+        amount: 14500,
+        status: PaymentStatus.paid,
+        dueDate: DateTime(now.year, now.month, 5),
+        paidDate: now.subtract(const Duration(days: 1)),
+        method: 'UPI'),
+    Payment(
+        id: 'pay${++payId}',
+        tenantId: 't1',
+        period: month(0),
+        amount: 9500,
+        status: PaymentStatus.due,
+        dueDate: now.add(const Duration(days: 2))),
+    Payment(
+        id: 'pay${++payId}',
+        tenantId: 't2',
+        period: month(0),
+        amount: 9500,
+        status: PaymentStatus.due,
+        dueDate: now.add(const Duration(days: 2))),
+    Payment(
+        id: 'pay${++payId}',
+        tenantId: 't3',
+        period: month(0),
+        amount: 8200,
+        status: PaymentStatus.due,
+        dueDate: now.subtract(const Duration(days: 2))),
+    paid('t1', month(-1), 9500, 'UPI'),
+    paid('t1', month(-2), 9500, 'UPI'),
+    paid('t1', month(-3), 9000, 'Bank transfer'),
+    paid('t1', month(-4), 9000, 'UPI'),
+    paid('t1', month(-5), 9000, 'Cash'),
+    paid('t2', month(-1), 9500, 'UPI'),
+    paid('t2', month(-2), 9500, 'Card'),
+    paid('t2', month(-3), 9500, 'UPI'),
+    paid('t2', month(-4), 9500, 'UPI'),
+    paid('t2', month(-5), 9500, 'Bank transfer'),
+    paid('t4', month(-1), 14500, 'UPI'),
+    paid('t4', month(-2), 14500, 'UPI'),
+    paid('t4', month(-3), 13500, 'Bank transfer'),
+    paid('t4', month(-4), 13500, 'UPI'),
+    paid('t3', month(-1), 2500, 'UPI'),
+  ];
+  s.maintenance = [
+    MaintenanceRequest(
+        id: 'm1',
+        roomId: 'r2',
+        title: 'Bathroom tap leaking',
+        category: 'Plumbing',
+        status: MaintenanceStatus.inProgress,
+        priority: Priority.high,
+        assignee: 'Ravi Kumar',
+        createdAt: now.subtract(const Duration(hours: 4))),
+    MaintenanceRequest(
+        id: 'm2',
+        roomId: 'r3',
+        title: 'Wi-Fi not connecting',
+        category: 'Internet',
+        status: MaintenanceStatus.open,
+        priority: Priority.medium,
+        createdAt: now.subtract(const Duration(days: 1))),
+    MaintenanceRequest(
+        id: 'm3',
+        roomId: 'r5',
+        title: 'Tube light replacement',
+        category: 'Electrical',
+        status: MaintenanceStatus.resolved,
+        priority: Priority.low,
+        assignee: 'Suresh',
+        createdAt: now.subtract(const Duration(days: 3))),
+  ];
+  s.visitors = [
+    Visitor(
+        id: 'v1',
+        tenantId: 't1',
+        name: 'Karan Mehta',
+        purpose: 'Family',
+        status: VisitorStatus.inside,
+        expectedAt: now.subtract(const Duration(hours: 1))),
+    Visitor(
+        id: 'v2',
+        tenantId: 't2',
+        name: 'Maya Singh',
+        purpose: 'Friend',
+        status: VisitorStatus.awaitingApproval,
+        expectedAt: now.subtract(const Duration(hours: 2))),
+    Visitor(
+        id: 'v3',
+        tenantId: 't3',
+        name: 'Delivery partner',
+        purpose: 'Delivery',
+        status: VisitorStatus.checkedOut,
+        expectedAt: now.subtract(const Duration(hours: 5))),
+  ];
+  s.announcements = [
+    Announcement(
+        id: 'a1',
+        title: 'Water tank cleaning',
+        body: 'Water supply will be paused from 10 AM to 12 PM this Sunday.',
+        author: 'Management',
+        postedAt: now.subtract(const Duration(hours: 2))),
+    Announcement(
+        id: 'a2',
+        title: 'Community dinner',
+        body: 'Join us on the terrace this Saturday at 7:30 PM.',
+        author: 'Management, Owner',
+        postedAt: now.subtract(const Duration(days: 2))),
+  ];
+  s.attendance = [
+    AttendanceRecord(
+        id: 'at1',
+        tenantId: 't1',
+        checkIn: now.subtract(const Duration(hours: 3))),
+    AttendanceRecord(
+        id: 'at2',
+        tenantId: 't2',
+        checkIn: now.subtract(const Duration(hours: 6)),
+        checkOut: now.subtract(const Duration(minutes: 30))),
+    AttendanceRecord(
+        id: 'at3',
+        tenantId: 't3',
+        checkIn: now.subtract(const Duration(hours: 2))),
+  ];
+  s.utilities = [
+    const UtilityBill(
+        id: 'u1',
+        roomId: 'r1',
+        previous: 1280,
+        current: 1384,
+        rate: AppState.utilityRate,
+        status: BillStatus.generated),
+    const UtilityBill(
+        id: 'u2',
+        roomId: 'r2',
+        previous: 988,
+        current: 1108,
+        rate: AppState.utilityRate,
+        status: BillStatus.generated),
+    const UtilityBill(
+        id: 'u3',
+        roomId: 'r3',
+        previous: 740,
+        current: 807,
+        rate: AppState.utilityRate,
+        status: BillStatus.pendingReading),
+  ];
+  s.notifications = [
+    AppNotification(
+        id: 'n1',
+        title: 'Rent received',
+        body: '₹14,500 received from Ishita Rao.',
+        type: NotificationType.payment,
+        createdAt: now.subtract(const Duration(minutes: 12)),
+        roleScope: NotificationScope.managers,
+        pgId: 'p1',
+        tenantId: 't4',
+        relatedEntityId: 'pay1'),
+    AppNotification(
+        id: 'n2',
+        title: 'Visitor awaiting approval',
+        body: 'Maya Singh is waiting at the reception.',
+        type: NotificationType.visitor,
+        createdAt: now.subtract(const Duration(hours: 1)),
+        roleScope: NotificationScope.managers,
+        pgId: 'p1',
+        tenantId: 't2',
+        relatedEntityId: 'v2'),
+    AppNotification(
+        id: 'n3',
+        title: 'Water tank cleaning',
+        body: 'Water supply paused 10 AM–12 PM this Sunday.',
+        type: NotificationType.announcement,
+        createdAt: now.subtract(const Duration(hours: 3)),
+        roleScope: NotificationScope.everyone,
+        relatedEntityId: 'a1'),
+    AppNotification(
+        id: 'n4',
+        title: 'Rent reminder',
+        body: 'Your rent of ₹9,500 is due soon.',
+        type: NotificationType.payment,
+        createdAt: now.subtract(const Duration(hours: 5)),
+        roleScope: NotificationScope.tenant,
+        tenantId: 't1',
+        pgId: 'p1'),
+  ];
+}
+
+void main() {
+  late AppState state;
+
+  setUp(() {
+    state = AppState();
+    seedFixture(state);
   });
 
   test('all supported roles have user-facing labels', () {
-    expect(UserRole.values.map((role) => role.label).toList(), ['Owner', 'Tenant', 'Admin']);
+    expect(UserRole.values.map((role) => role.label).toList(),
+        ['Owner', 'Tenant', 'Admin']);
   });
 
   test('app theme uses Material 3 and the brand primary colour', () {
@@ -43,26 +343,12 @@ void main() {
     expect(theme.colorScheme.primary.toARGB32(), primary.toARGB32());
   });
 
-  test('init seeds every collection, stamps the schema version and persists', () {
-    expect(state.pgs, isNotEmpty);
-    expect(state.rooms, isNotEmpty);
-    expect(state.tenants, isNotEmpty);
-    expect(state.payments, isNotEmpty);
-    expect(box.get('schemaVersion'), AppState.schemaVersion);
-    expect(box.get('pgs'), isNotEmpty);
-    expect(box.get('payments'), isNotEmpty);
-  });
-
-  test('init wipes and reseeds when the stored schema is outdated', () async {
-    await box.put('schemaVersion', 1);
-    await box.put('pgs', [{'legacy': true}]);
-
-    final fresh = AppState(box);
-    await fresh.init();
-
-    expect(box.get('schemaVersion'), AppState.schemaVersion);
-    expect(fresh.pgs, isNotEmpty);
-    expect(fresh.pgs.first.name, isNot(''));
+  test('a fresh AppState holds no data and is signed out', () {
+    final fresh = AppState();
+    expect(fresh.isLoggedIn, isFalse);
+    expect(fresh.pgs, isEmpty);
+    expect(fresh.tenants, isEmpty);
+    expect(fresh.payments, isEmpty);
   });
 
   test('models survive a toMap/fromMap round trip', () {
@@ -72,15 +358,6 @@ void main() {
     expect(Tenant.fromMap(tenant.toMap()).toMap(), tenant.toMap());
     final record = state.attendance.first;
     expect(AttendanceRecord.fromMap(record.toMap()).toMap(), record.toMap());
-  });
-
-  test('there is no local session restore across restarts', () async {
-    state.login(UserRole.tenant);
-    expect(state.isLoggedIn, isTrue);
-
-    final restored = AppState(box);
-    await restored.init();
-    expect(restored.isLoggedIn, isFalse);
   });
 
   test('evaluateProfileAccess resolves role, customer and status', () {
@@ -143,33 +420,41 @@ void main() {
     expect(portalError(UserRole.tenant, LoginPortal.admin), isNotNull);
   });
 
-  test('offline sign-in never creates a local session', () async {
-    final error = await state.signInCloud(email: 'a@b.c', password: 'password', portal: LoginPortal.owner);
+  test(
+      'sign-in fails closed and creates no session when Supabase is unavailable',
+      () async {
+    final error = await state.signInCloud(
+        email: 'a@b.c', password: 'password', portal: LoginPortal.owner);
     expect(error, isNotNull);
     expect(state.isLoggedIn, isFalse);
-    expect(state.cloudMode, isFalse);
   });
 
   test('payments are linked to real tenants and rooms by id', () {
     for (final payment in state.payments) {
-      expect(state.tenantById(payment.tenantId), isNotNull, reason: 'payment ${payment.id} has an orphan tenantId');
+      expect(state.tenantById(payment.tenantId), isNotNull,
+          reason: 'payment ${payment.id} has an orphan tenantId');
     }
     for (final tenant in state.tenants) {
-      expect(state.roomById(tenant.roomId), isNotNull, reason: 'tenant ${tenant.id} has an orphan roomId');
+      expect(state.roomById(tenant.roomId), isNotNull,
+          reason: 'tenant ${tenant.id} has an orphan roomId');
     }
   });
 
   test('overdue is computed from the due date, not stored', () {
-    final overdue = state.payments.firstWhere((p) => p.tenantId == 't3' && p.status == PaymentStatus.due);
+    final overdue = state.payments
+        .firstWhere((p) => p.tenantId == 't3' && p.status == PaymentStatus.due);
     expect(overdue.isOverdue, isTrue);
     expect(overdue.displayStatus, 'Overdue');
 
+    state.currentTenantId = 't1';
     final upcoming = state.tenantDuePayment!;
     expect(upcoming.isOverdue, isFalse);
     expect(upcoming.displayStatus, 'Due');
   });
 
-  test('payRent marks the payment paid, stores method and date, and notifies', () {
+  test('payRent marks the payment paid, stores method and date, and notifies',
+      () {
+    state.currentTenantId = 't1';
     final due = state.tenantDuePayment!;
     final collectedBefore = state.collectedAmount;
 
@@ -181,57 +466,64 @@ void main() {
     expect(paid.paidDate, isNotNull);
     expect(state.tenantDuePayment, isNull);
     expect(state.collectedAmount, collectedBefore + due.amount);
-    expect(state.notifications.any((n) => n.title == 'Rent received' && n.type == NotificationType.payment), isTrue);
+    expect(
+        state.notifications.any((n) =>
+            n.title == 'Rent received' && n.type == NotificationType.payment),
+        isTrue);
   });
 
   test('recordPayment settles a matching current-month due in place', () {
     final collectedBefore = state.collectedAmount;
     final before = state.payments.length;
-    final due = state.payments.firstWhere((p) => p.tenantId == 't2' && p.status == PaymentStatus.due);
+    final due = state.payments
+        .firstWhere((p) => p.tenantId == 't2' && p.status == PaymentStatus.due);
 
     state.recordPayment(tenantId: 't2', amount: due.amount, method: 'Cash');
 
-    // No duplicate row — the existing due was updated.
     expect(state.payments.length, before);
     final settled = state.payments.firstWhere((p) => p.id == due.id);
     expect(settled.status, PaymentStatus.paid);
     expect(settled.method, 'Cash');
     expect(settled.balance, 0);
     expect(state.collectedAmount, collectedBefore + due.amount);
-    expect(state.notifications.any((n) => n.title == 'Payment recorded'), isTrue);
+    expect(
+        state.notifications.any((n) => n.title == 'Payment recorded'), isTrue);
   });
 
   test('recordPayment below the due amount marks it partial', () {
-    final due = state.payments.firstWhere((p) => p.tenantId == 't2' && p.status == PaymentStatus.due);
+    final due = state.payments
+        .firstWhere((p) => p.tenantId == 't2' && p.status == PaymentStatus.due);
     final before = state.payments.length;
 
     state.recordPayment(tenantId: 't2', amount: 2000, method: 'Cash');
 
-    expect(state.payments.length, before); // still no new row
+    expect(state.payments.length, before);
     final partial = state.payments.firstWhere((p) => p.id == due.id);
     expect(partial.status, PaymentStatus.partial);
     expect(partial.collected, 2000);
     expect(partial.balance, due.amount - 2000);
     expect(partial.displayStatus, 'Partial');
-    expect(state.notifications.any((n) => n.title == 'Part payment recorded'), isTrue);
+    expect(state.notifications.any((n) => n.title == 'Part payment recorded'),
+        isTrue);
 
-    // A follow-up payment covering the rest settles it.
-    state.recordPayment(tenantId: 't2', amount: due.amount - 2000, method: 'UPI');
+    state.recordPayment(
+        tenantId: 't2', amount: due.amount - 2000, method: 'UPI');
     final done = state.payments.firstWhere((p) => p.id == due.id);
     expect(done.status, PaymentStatus.paid);
     expect(done.balance, 0);
     expect(state.payments.length, before);
   });
 
-  test('recordPayment with no matching due creates a standalone advance row', () {
-    // t2's current-month due settled first, so the next payment has no match.
-    final due = state.payments.firstWhere((p) => p.tenantId == 't2' && p.status == PaymentStatus.due);
+  test('recordPayment with no matching due creates a standalone advance row',
+      () {
+    final due = state.payments
+        .firstWhere((p) => p.tenantId == 't2' && p.status == PaymentStatus.due);
     state.recordPayment(tenantId: 't2', amount: due.amount, method: 'Cash');
     final after = state.payments.length;
 
     state.recordPayment(tenantId: 't2', amount: 5000, method: 'UPI');
 
-    expect(state.payments.length, after + 1); // advance row added
+    expect(state.payments.length, after + 1);
     final advance = state.payments.first;
     expect(advance.tenantId, 't2');
     expect(advance.status, PaymentStatus.paid);
@@ -242,7 +534,6 @@ void main() {
     final revenue = state.monthlyRevenue();
     expect(revenue, hasLength(6));
     expect(revenue.last.total, state.collectedAmount);
-    // History months carry seeded income.
     expect(revenue[4].total, greaterThan(0));
     expect(state.revenueGrowth, isNotNull);
   });
@@ -252,7 +543,11 @@ void main() {
     final occupiedBefore = room.occupied;
     final pgBefore = state.pgById(room.pgId)!.occupied;
 
-    final error = state.onboardTenant(name: 'Neha Verma', phone: '90000 00001', roomId: room.id, bed: state.suggestBed(room.id));
+    final error = state.onboardTenant(
+        name: 'Neha Verma',
+        phone: '90000 00001',
+        roomId: room.id,
+        bed: state.suggestBed(room.id));
 
     expect(error, isNull);
     expect(state.tenants.first.name, 'Neha Verma');
@@ -262,12 +557,13 @@ void main() {
   });
 
   test('onboarding into a full room is blocked and changes nothing', () {
-    final full = state.rooms.firstWhere((r) => r.occupied >= r.beds); // r1 (2/2)
+    final full = state.rooms.firstWhere((r) => r.occupied >= r.beds);
     final tenantsBefore = state.tenants.length;
     final occupiedBefore = full.occupied;
     final pgBefore = state.pgById(full.pgId)!.occupied;
 
-    final error = state.onboardTenant(name: 'Full Roomer', phone: '90000 12345', roomId: full.id, bed: 'C');
+    final error = state.onboardTenant(
+        name: 'Full Roomer', phone: '90000 12345', roomId: full.id, bed: 'C');
 
     expect(error, isNotNull);
     expect(error, contains('full'));
@@ -277,45 +573,60 @@ void main() {
   });
 
   test('onboarding onto a taken bed label in the same room is blocked', () {
-    // r2 has Rohan (t3) on bed A and a free bed.
-    final error = state.onboardTenant(name: 'Bed Clash', phone: '90000 22222', roomId: 'r2', bed: 'a');
+    final error = state.onboardTenant(
+        name: 'Bed Clash', phone: '90000 22222', roomId: 'r2', bed: 'a');
     expect(error, isNotNull);
     expect(error, contains('taken'));
     expect(state.tenants.any((t) => t.name == 'Bed Clash'), isFalse);
 
-    // A different free bed in the same room succeeds.
-    final ok = state.onboardTenant(name: 'Bed Ok', phone: '90000 22223', roomId: 'r2', bed: state.suggestBed('r2'));
+    final ok = state.onboardTenant(
+        name: 'Bed Ok',
+        phone: '90000 22223',
+        roomId: 'r2',
+        bed: state.suggestBed('r2'));
     expect(ok, isNull);
     expect(state.tenants.first.name, 'Bed Ok');
   });
 
   test('onboarding validates name and phone before touching data', () {
     final before = state.tenants.length;
-    expect(state.onboardTenant(name: '   ', phone: '90000 00001', roomId: 'r4', bed: 'B'), contains('name'));
-    expect(state.onboardTenant(name: 'Shorty', phone: '12345', roomId: 'r4', bed: 'B'), contains('phone'));
-    expect(state.tenants.length, before); // nothing added on invalid input
+    expect(
+        state.onboardTenant(
+            name: '   ', phone: '90000 00001', roomId: 'r4', bed: 'B'),
+        contains('name'));
+    expect(
+        state.onboardTenant(
+            name: 'Shorty', phone: '12345', roomId: 'r4', bed: 'B'),
+        contains('phone'));
+    expect(state.tenants.length, before);
   });
 
-  test('suggestBed returns the first free bed and empty when the room is full', () {
-    expect(state.suggestBed('r2'), 'B'); // A taken by Rohan
-    expect(state.suggestBed('r1'), ''); // full
+  test('suggestBed returns the first free bed and empty when the room is full',
+      () {
+    expect(state.suggestBed('r2'), 'B');
+    expect(state.suggestBed('r1'), '');
   });
 
   test('setVisitorStatus updates the visitor and raises a notification', () {
-    final awaiting = state.visitors.firstWhere((e) => e.status == VisitorStatus.awaitingApproval);
+    final awaiting = state.visitors
+        .firstWhere((e) => e.status == VisitorStatus.awaitingApproval);
 
     state.setVisitorStatus(awaiting.id, VisitorStatus.inside);
-    expect(state.visitors.firstWhere((e) => e.id == awaiting.id).status, VisitorStatus.inside);
+    expect(state.visitors.firstWhere((e) => e.id == awaiting.id).status,
+        VisitorStatus.inside);
     expect(state.notifications.first.title, 'Visitor checked in');
 
     state.setVisitorStatus(awaiting.id, VisitorStatus.declined);
     expect(state.notifications.first.title, 'Visitor declined');
   });
 
-  test('setMaintenanceStatus advances the request and assigns a technician', () {
-    final open = state.maintenance.firstWhere((e) => e.status == MaintenanceStatus.open);
+  test('setMaintenanceStatus advances the request and assigns a technician',
+      () {
+    final open =
+        state.maintenance.firstWhere((e) => e.status == MaintenanceStatus.open);
 
-    state.setMaintenanceStatus(open.id, MaintenanceStatus.inProgress, assignee: 'Ravi Kumar');
+    state.setMaintenanceStatus(open.id, MaintenanceStatus.inProgress,
+        assignee: 'Ravi Kumar');
 
     final updated = state.maintenance.firstWhere((e) => e.id == open.id);
     expect(updated.status, MaintenanceStatus.inProgress);
@@ -324,7 +635,8 @@ void main() {
   });
 
   test('publishAnnouncement adds the post and a notification', () {
-    state.publishAnnouncement('Lift maintenance', 'Lift unavailable on Sunday morning.');
+    state.publishAnnouncement(
+        'Lift maintenance', 'Lift unavailable on Sunday morning.');
 
     expect(state.announcements.first.title, 'Lift maintenance');
     expect(state.notifications.first.type, NotificationType.announcement);
@@ -333,72 +645,91 @@ void main() {
   test('notifications can be marked read individually and in bulk', () {
     final unread = state.notifications.firstWhere((n) => !n.read);
     state.markNotificationRead(unread.id);
-    expect(state.notifications.firstWhere((n) => n.id == unread.id).read, isTrue);
+    expect(
+        state.notifications.firstWhere((n) => n.id == unread.id).read, isTrue);
 
     state.markAllNotificationsRead();
     expect(state.hasUnread, isFalse);
   });
 
-  test('monthly dues generation is idempotent over seeded data', () {
-    // Every seeded tenant already has a current-month payment.
+  test('monthly dues generation is idempotent over the current data', () {
     expect(state.generateMonthlyDues(), isFalse);
   });
 
   test('a missing monthly due is generated at the room rent', () {
     final now = DateTime.now();
-    state.payments.removeWhere((p) => p.tenantId == 't1' && p.period.year == now.year && p.period.month == now.month);
+    state.payments.removeWhere((p) =>
+        p.tenantId == 't1' &&
+        p.period.year == now.year &&
+        p.period.month == now.month);
     expect(state.generateMonthlyDues(), isTrue);
 
-    final due = state.payments.firstWhere((p) => p.id == 'pay-${now.year}-${now.month}-t1');
-    expect(due.amount, 9500); // room r1 rent
+    final due = state.payments
+        .firstWhere((p) => p.id == 'pay-${now.year}-${now.month}-t1');
+    expect(due.amount, 9500);
     expect(due.status, PaymentStatus.due);
-    expect(state.generateMonthlyDues(), isFalse); // deterministic id → no duplicates
+    expect(state.generateMonthlyDues(), isFalse);
   });
 
-  test('generateMonthlyDues never duplicates when a partial or paid row exists', () {
+  test('generateMonthlyDues never duplicates when a partial or paid row exists',
+      () {
     final now = DateTime.now();
-    // Turn t1's current due into a partial payment, then regenerate.
-    final i = state.payments.indexWhere((p) => p.tenantId == 't1' && p.period.year == now.year && p.period.month == now.month);
-    state.payments[i] = state.payments[i].copyWith(status: PaymentStatus.partial, paidAmount: 1000);
+    final i = state.payments.indexWhere((p) =>
+        p.tenantId == 't1' &&
+        p.period.year == now.year &&
+        p.period.month == now.month);
+    state.payments[i] = state.payments[i]
+        .copyWith(status: PaymentStatus.partial, paidAmount: 1000);
 
     expect(state.generateMonthlyDues(), isFalse);
-    final t1ThisMonth = state.payments.where((p) => p.tenantId == 't1' && p.period.year == now.year && p.period.month == now.month);
-    expect(t1ThisMonth, hasLength(1)); // still exactly one row
+    final t1ThisMonth = state.payments.where((p) =>
+        p.tenantId == 't1' &&
+        p.period.year == now.year &&
+        p.period.month == now.month);
+    expect(t1ThisMonth, hasLength(1));
   });
 
-  test('startup materialises a tenant\'s own due without generating owner-wide rows', () {
+  test(
+      'a tenant session materialises its own due without generating owner-wide rows',
+      () {
     final now = DateTime.now();
-    // Wipe every current-month due so there is something to generate.
-    state.payments.removeWhere((p) => p.period.year == now.year && p.period.month == now.month);
+    state.payments.removeWhere(
+        (p) => p.period.year == now.year && p.period.month == now.month);
 
-    state.login(UserRole.tenant); // demo tenant t1
+    state.debugSignIn(UserRole.tenant, tenantId: 't1');
 
-    // t1's due exists in memory for display…
-    expect(state.tenantPayments.any((p) => p.status == PaymentStatus.due), isTrue);
-    // …but the tenant session did not generate other tenants' dues.
+    expect(
+        state.tenantPayments.any((p) => p.status == PaymentStatus.due), isTrue);
     final others = state.payments.where((p) =>
-        p.tenantId != 't1' && p.period.year == now.year && p.period.month == now.month);
+        p.tenantId != 't1' &&
+        p.period.year == now.year &&
+        p.period.month == now.month);
     expect(others, isEmpty);
   });
 
   test('onboarding a tenant creates their first monthly due', () {
-    state.onboardTenant(name: 'Kiran Kumar', phone: '90000 00002', roomId: 'r4', bed: 'B');
+    state.onboardTenant(
+        name: 'Kiran Kumar', phone: '90000 00002', roomId: 'r4', bed: 'B');
     final tenant = state.tenants.first;
     final due = state.payments.firstWhere((p) => p.tenantId == tenant.id);
-    expect(due.amount, 10000); // room r4 rent
+    expect(due.amount, 10000);
     expect(due.status, PaymentStatus.due);
   });
 
-  test('demo sessions act as the default seeded tenant', () async {
-    expect(state.currentTenantId, AppState.defaultTenantId);
-    state.login(UserRole.tenant);
+  test('a tenant session resolves to its linked tenant and logout clears it',
+      () async {
+    state.debugSignIn(UserRole.tenant, tenantId: 't1');
     expect(state.currentTenant?.name, 'Aarav Mehta');
     await state.logout();
-    expect(state.currentTenantId, AppState.defaultTenantId);
+    expect(state.currentTenantId, '');
+    expect(state.isLoggedIn, isFalse);
+    expect(state.pgs, isEmpty);
   });
 
-  test('inviteTenant reports a friendly error without a cloud connection', () async {
-    final result = await state.inviteTenant(tenantId: 't1', email: 'someone@example.com');
+  test('inviteTenant reports a friendly error without a cloud connection',
+      () async {
+    final result =
+        await state.inviteTenant(tenantId: 't1', email: 'someone@example.com');
     expect(result.error, isNotNull);
     expect(result.error, contains('cloud account'));
     expect(result.tempPassword, isNull);
@@ -410,7 +741,7 @@ void main() {
     expect(state.pgTenants, hasLength(4));
     expect(state.pgCollectedAmount, state.collectedAmount);
 
-    state.selectPg('p2'); // seeded second property has no rooms yet
+    state.selectPg('p2');
     expect(state.activePg?.id, 'p2');
     expect(state.pgRooms, isEmpty);
     expect(state.pgTenants, isEmpty);
@@ -423,97 +754,110 @@ void main() {
 
   test('fresh sessions never start on the set-password gate', () {
     expect(state.mustChangePassword, isFalse);
-    state.login(UserRole.owner);
+    state.debugSignIn(UserRole.owner);
     expect(state.mustChangePassword, isFalse);
   });
 
-  test('a tenant cannot see other tenants notifications or manager activity', () {
-    state.login(UserRole.tenant); // demo tenant is t1
+  test('a tenant cannot see other tenants notifications or manager activity',
+      () {
+    state.debugSignIn(UserRole.tenant, tenantId: 't1');
     final visible = state.visibleNotifications;
 
-    // Never a manager-scoped notification, and never one addressed to another tenant.
-    expect(visible.every((n) => n.roleScope != NotificationScope.managers), isTrue);
-    expect(visible.every((n) => n.roleScope != NotificationScope.tenant || n.tenantId == 't1'), isTrue);
+    expect(visible.every((n) => n.roleScope != NotificationScope.managers),
+        isTrue);
+    expect(
+        visible.every((n) =>
+            n.roleScope != NotificationScope.tenant || n.tenantId == 't1'),
+        isTrue);
 
-    // The seeded "Rent received from Ishita Rao" (manager, t4) is hidden.
     expect(visible.any((n) => n.body.contains('Ishita Rao')), isFalse);
-    // The workspace announcement and the tenant's own reminder are visible.
-    expect(visible.any((n) => n.roleScope == NotificationScope.everyone), isTrue);
+    expect(
+        visible.any((n) => n.roleScope == NotificationScope.everyone), isTrue);
     expect(visible.any((n) => n.tenantId == 't1'), isTrue);
   });
 
-  test('an owner sees managerial and workspace notifications for the active PG', () {
-    state.login(UserRole.owner);
+  test('an owner sees managerial and workspace notifications for the active PG',
+      () {
+    state.debugSignIn(UserRole.owner);
     final visible = state.visibleNotifications;
 
-    expect(visible.any((n) => n.body.contains('Ishita Rao')), isTrue); // manager notification
-    expect(visible.any((n) => n.roleScope == NotificationScope.everyone), isTrue); // announcement
-    // A tenant's private reminder is never in a manager's list.
-    expect(visible.any((n) => n.roleScope == NotificationScope.tenant), isFalse);
+    expect(visible.any((n) => n.body.contains('Ishita Rao')), isTrue);
+    expect(
+        visible.any((n) => n.roleScope == NotificationScope.everyone), isTrue);
+    expect(
+        visible.any((n) => n.roleScope == NotificationScope.tenant), isFalse);
   });
 
   test('a tenant only ever sees their own payments', () {
-    state.login(UserRole.tenant);
+    state.debugSignIn(UserRole.tenant, tenantId: 't1');
     expect(state.tenantPayments, isNotEmpty);
     expect(state.tenantPayments.every((p) => p.tenantId == 't1'), isTrue);
-    // Other tenants' payments exist in the workspace but are not exposed.
     expect(state.payments.any((p) => p.tenantId != 't1'), isTrue);
     expect(state.tenantPayments.any((p) => p.tenantId != 't1'), isFalse);
   });
 
   test('paying rent notifies managers and the payer separately', () {
-    state.login(UserRole.tenant);
+    state.debugSignIn(UserRole.tenant, tenantId: 't1');
     final due = state.tenantDuePayment!;
     state.payRent(due.id, 'UPI');
 
-    final managerNote = state.notifications.firstWhere((n) => n.title == 'Rent received');
+    final managerNote =
+        state.notifications.firstWhere((n) => n.title == 'Rent received');
     expect(managerNote.roleScope, NotificationScope.managers);
     expect(managerNote.tenantId, 't1');
     expect(managerNote.pgId, 'p1');
 
-    final tenantNote = state.notifications.firstWhere((n) => n.title == 'Payment successful');
+    final tenantNote =
+        state.notifications.firstWhere((n) => n.title == 'Payment successful');
     expect(tenantNote.roleScope, NotificationScope.tenant);
     expect(tenantNote.tenantId, 't1');
 
-    // The tenant does not see the manager-facing "Rent received" note.
-    expect(state.visibleNotifications.any((n) => n.title == 'Rent received'), isFalse);
-    expect(state.visibleNotifications.any((n) => n.title == 'Payment successful'), isTrue);
+    expect(state.visibleNotifications.any((n) => n.title == 'Rent received'),
+        isFalse);
+    expect(
+        state.visibleNotifications.any((n) => n.title == 'Payment successful'),
+        isTrue);
   });
 
   test('maintenance updates reach only tenants in that room', () {
-    state.login(UserRole.owner);
-    final open = state.maintenance.firstWhere((m) => m.roomId == 'r2'); // Rohan (t3) lives in r2
-    state.setMaintenanceStatus(open.id, MaintenanceStatus.inProgress, assignee: 'Ravi');
+    state.debugSignIn(UserRole.owner);
+    final open = state.maintenance.firstWhere((m) => m.roomId == 'r2');
+    state.setMaintenanceStatus(open.id, MaintenanceStatus.inProgress,
+        assignee: 'Ravi');
 
-    final note = state.notifications.firstWhere((n) => n.title == 'Maintenance updated');
+    final note =
+        state.notifications.firstWhere((n) => n.title == 'Maintenance updated');
     expect(note.roleScope, NotificationScope.tenant);
-    expect(note.tenantId, 't3'); // the room's occupant, not t1
+    expect(note.tenantId, 't3');
 
-    // t1 (a different room) must not see it.
-    state.login(UserRole.tenant);
-    expect(state.visibleNotifications.any((n) => n.title == 'Maintenance updated'), isFalse);
+    state.debugSignIn(UserRole.tenant, tenantId: 't1');
+    expect(
+        state.visibleNotifications.any((n) => n.title == 'Maintenance updated'),
+        isFalse);
   });
 
-  testWidgets('tenant notification centre hides other tenants activity', (tester) async {
-    state.login(UserRole.tenant);
+  testWidgets('tenant notification centre hides other tenants activity',
+      (tester) async {
+    state.debugSignIn(UserRole.tenant, tenantId: 't1');
     await tester.pumpWidget(AppScope(
       notifier: state,
-      child: MaterialApp(theme: buildAppTheme(), home: const NotificationsScreen()),
+      child: MaterialApp(
+          theme: buildAppTheme(), home: const NotificationsScreen()),
     ));
     await tester.pump();
-    expect(find.textContaining('Ishita Rao'), findsNothing); // another tenant's rent
-    expect(find.textContaining('Maya Singh'), findsNothing); // another tenant's visitor
-    expect(find.text('Rent reminder'), findsOneWidget); // the tenant's own
+    expect(find.textContaining('Ishita Rao'), findsNothing);
+    expect(find.textContaining('Maya Singh'), findsNothing);
+    expect(find.text('Rent reminder'), findsOneWidget);
   });
 
   test('payments export as spreadsheet-ready CSV', () {
     final csv = state.paymentsCsv();
     final lines = csv.split('\n');
-    expect(lines.first, 'Receipt,Tenant,Month,Amount,Collected,Balance,Status,Due date,Paid date,Method');
+    expect(lines.first,
+        'Receipt,Tenant,Month,Amount,Collected,Balance,Status,Due date,Paid date,Method');
     expect(lines.length, state.payments.length + 1);
     expect(csv, contains('"Aarav Mehta"'));
     expect(csv, contains('"9500"'));
-    // Values with quotes/commas stay one cell.
     expect(state.paymentsCsv(), isNot(contains('""Aarav')));
   });
 
@@ -521,12 +865,14 @@ void main() {
     expect(inr(9500), '₹9,500');
     expect(inr(384000), '₹3,84,000');
     expect(relativeTime(DateTime.now()), 'Just now');
-    expect(relativeTime(DateTime.now().subtract(const Duration(minutes: 12))), '12 min ago');
-    expect(relativeTime(DateTime.now().subtract(const Duration(hours: 3))), '3 hrs ago');
+    expect(relativeTime(DateTime.now().subtract(const Duration(minutes: 12))),
+        '12 min ago');
+    expect(relativeTime(DateTime.now().subtract(const Duration(hours: 3))),
+        '3 hrs ago');
   });
 
   testWidgets('owner navigation shows the management tabs', (tester) async {
-    state.login(UserRole.owner);
+    state.debugSignIn(UserRole.owner);
     await tester.pumpWidget(PgManagementApp(state: state));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Manage'), findsOneWidget);
@@ -536,7 +882,7 @@ void main() {
   });
 
   testWidgets('tenant navigation shows only tenant tabs', (tester) async {
-    state.login(UserRole.tenant);
+    state.debugSignIn(UserRole.tenant, tenantId: 't1');
     await tester.pumpWidget(PgManagementApp(state: state));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('My Rent'), findsOneWidget);
@@ -547,7 +893,7 @@ void main() {
   });
 
   testWidgets('admin navigation is property-centric', (tester) async {
-    state.login(UserRole.admin);
+    state.debugSignIn(UserRole.admin);
     await tester.pumpWidget(PgManagementApp(state: state));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Properties'), findsOneWidget);
@@ -556,7 +902,7 @@ void main() {
   });
 
   testWidgets('tenants are blocked from owner-only screens', (tester) async {
-    state.login(UserRole.tenant);
+    state.debugSignIn(UserRole.tenant, tenantId: 't1');
     await tester.pumpWidget(AppScope(
       notifier: state,
       child: MaterialApp(theme: buildAppTheme(), home: const TenantsScreen()),
@@ -566,167 +912,257 @@ void main() {
     expect(find.text('Onboard'), findsNothing);
   });
 
-  testWidgets('utility billing and attendance are gone from the module grid', (tester) async {
-    state.login(UserRole.owner);
+  testWidgets('utility billing and attendance are gone from the module grid',
+      (tester) async {
+    state.debugSignIn(UserRole.owner);
     await tester.pumpWidget(AppScope(
       notifier: state,
-      child: MaterialApp(theme: buildAppTheme(), home: const ModulesHubScreen()),
+      child:
+          MaterialApp(theme: buildAppTheme(), home: const ModulesHubScreen()),
     ));
     await tester.pump();
     expect(find.text('Utility billing'), findsNothing);
     expect(find.text('Attendance'), findsNothing);
-    // Surviving modules still render.
     expect(find.text('Maintenance'), findsOneWidget);
     expect(find.text('Announcements'), findsOneWidget);
   });
 
-  test('every record a session creates is stamped with its customer id', () {
-    state.login(UserRole.owner); // local demo session => customer 'demo'
-    expect(state.customerId, 'demo');
+  test('every record a session creates is stamped with its customer scope', () {
+    state.debugSignIn(UserRole.owner);
+    final scope = state.customerId;
 
     final room = state.rooms.firstWhere((r) => r.occupied < r.beds);
-    state.onboardTenant(name: 'Stamp Test', phone: '90000 12399', roomId: room.id, bed: state.suggestBed(room.id));
+    state.onboardTenant(
+        name: 'Stamp Test',
+        phone: '90000 12399',
+        roomId: room.id,
+        bed: state.suggestBed(room.id));
     final tenant = state.tenants.first;
-    expect(tenant.customerId, 'demo');
-    // The tenant's generated monthly due carries the scope too.
-    expect(state.payments.firstWhere((p) => p.tenantId == tenant.id).customerId, 'demo');
+    expect(tenant.customerId, scope);
+    expect(state.payments.firstWhere((p) => p.tenantId == tenant.id).customerId,
+        scope);
 
     state.publishAnnouncement('Scoped', 'Body');
-    expect(state.announcements.first.customerId, 'demo');
-    expect(state.notifications.first.customerId, 'demo');
+    expect(state.announcements.first.customerId, scope);
+    expect(state.notifications.first.customerId, scope);
 
-    state.addVisitor(name: 'Scoped Visitor', tenantId: tenant.id, purpose: 'Family');
-    expect(state.visitors.first.customerId, 'demo');
+    state.addVisitor(
+        name: 'Scoped Visitor', tenantId: tenant.id, purpose: 'Family');
+    expect(state.visitors.first.customerId, scope);
 
-    state.addMaintenanceRequest(title: 'Scoped issue', roomId: room.id, category: 'Other', priority: Priority.low);
-    expect(state.maintenance.first.customerId, 'demo');
+    state.addMaintenanceRequest(
+        title: 'Scoped issue',
+        roomId: room.id,
+        category: 'Other',
+        priority: Priority.low);
+    expect(state.maintenance.first.customerId, scope);
 
-    state.addRoom(const Room(id: 'r-scope', pgId: 'p1', number: '999', floor: 9, beds: 2, occupied: 0, rent: 5000));
-    expect(state.rooms.last.customerId, 'demo');
+    state.addRoom(const Room(
+        id: 'r-scope',
+        pgId: 'p1',
+        number: '999',
+        floor: 9,
+        beds: 2,
+        occupied: 0,
+        rent: 5000));
+    expect(state.rooms.last.customerId, scope);
 
-    state.savePg(const Pg(id: 'p-scope', name: 'Scoped PG', address: 'X', beds: 10, occupied: 0, amenities: '', rating: 4.0));
-    expect(state.pgs.first.customerId, 'demo');
+    state.savePg(const Pg(
+        id: 'p-scope',
+        name: 'Scoped PG',
+        address: 'X',
+        beds: 10,
+        occupied: 0,
+        amenities: '',
+        rating: 4.0));
+    expect(state.pgs.first.customerId, scope);
   });
 
   test('SaaS models survive a toMap/fromMap round trip', () {
     final now = DateTime.now();
-    final customer = Customer(id: 'c1', businessName: 'Acme PG', ownerName: 'A', ownerEmail: 'a@b.c', phone: '9', status: CustomerStatus.disabled, plan: 'pro', createdAt: now, disabledAt: now);
+    final customer = Customer(
+        id: 'c1',
+        businessName: 'Acme PG',
+        ownerName: 'A',
+        ownerEmail: 'a@b.c',
+        phone: '9',
+        status: CustomerStatus.disabled,
+        plan: 'pro',
+        createdAt: now,
+        disabledAt: now);
     expect(Customer.fromMap(customer.toMap()).toMap(), customer.toMap());
     expect(customer.enabled, isFalse);
 
-    final invite = TenantInvite(id: 'i1', customerId: 'c1', tenantId: 't1', email: 'x@y.z', token: 'tok', status: InviteStatus.pending, expiresAt: now.add(const Duration(days: 7)));
+    final invite = TenantInvite(
+        id: 'i1',
+        customerId: 'c1',
+        tenantId: 't1',
+        email: 'x@y.z',
+        token: 'tok',
+        status: InviteStatus.pending,
+        expiresAt: now.add(const Duration(days: 7)));
     expect(TenantInvite.fromMap(invite.toMap()).toMap(), invite.toMap());
     expect(invite.usable, isTrue);
-    expect(TenantInvite.fromMap({...invite.toMap(), 'status': 'revoked'}).usable, isFalse);
+    expect(
+        TenantInvite.fromMap({...invite.toMap(), 'status': 'revoked'}).usable,
+        isFalse);
 
-    final submission = PaymentSubmission(id: 's1', customerId: 'c1', pgId: 'p1', tenantId: 't1', dueId: 'd1', amount: 9500, utr: 'UTR123', submittedAt: now);
-    expect(PaymentSubmission.fromMap(submission.toMap()).toMap(), submission.toMap());
+    final submission = PaymentSubmission(
+        id: 's1',
+        customerId: 'c1',
+        pgId: 'p1',
+        tenantId: 't1',
+        dueId: 'd1',
+        amount: 9500,
+        utr: 'UTR123',
+        submittedAt: now);
+    expect(PaymentSubmission.fromMap(submission.toMap()).toMap(),
+        submission.toMap());
     expect(submission.status, SubmissionStatus.pendingConfirmation);
 
-    const bed = Bed(id: 'b1', customerId: 'c1', pgId: 'p1', roomId: 'r1', label: 'A');
+    const bed =
+        Bed(id: 'b1', customerId: 'c1', pgId: 'p1', roomId: 'r1', label: 'A');
     expect(Bed.fromMap(bed.toMap()).toMap(), bed.toMap());
 
-    final rule = RentRule(id: 'rr1', customerId: 'c1', pgId: 'p1', sharingType: 2, amount: 9500, effectiveFrom: now);
+    final rule = RentRule(
+        id: 'rr1',
+        customerId: 'c1',
+        pgId: 'p1',
+        sharingType: 2,
+        amount: 9500,
+        effectiveFrom: now);
     expect(RentRule.fromMap(rule.toMap()).toMap(), rule.toMap());
 
-    final log = AuditLog(id: 'l1', customerId: null, actorUserId: 'u1', actorRole: 'admin', action: 'customer_created', entityType: 'customer', entityId: 'c1', afterJson: const {'status': 'enabled'}, createdAt: now);
+    final log = AuditLog(
+        id: 'l1',
+        customerId: null,
+        actorUserId: 'u1',
+        actorRole: 'admin',
+        action: 'customer_created',
+        entityType: 'customer',
+        entityId: 'c1',
+        afterJson: const {'status': 'enabled'},
+        createdAt: now);
     expect(AuditLog.fromMap(log.toMap()).toMap(), log.toMap());
   });
 
   test('the SaaS migration scopes and locks down every business table', () {
     final sql = File('supabase/004_saas_core.sql').readAsStringSync();
     const tables = [
-      'customers', 'profiles', 'pgs', 'floors', 'rooms', 'beds', 'tenants',
-      'tenant_invites', 'rent_rules', 'pg_payment_settings', 'payment_dues',
-      'payments', 'payment_submissions', 'payment_proof_files', 'complaints',
-      'notices', 'visitors', 'audit_logs',
+      'customers',
+      'profiles',
+      'pgs',
+      'floors',
+      'rooms',
+      'beds',
+      'tenants',
+      'tenant_invites',
+      'rent_rules',
+      'pg_payment_settings',
+      'payment_dues',
+      'payments',
+      'payment_submissions',
+      'payment_proof_files',
+      'complaints',
+      'notices',
+      'visitors',
+      'audit_logs',
     ];
     for (final table in tables) {
-      expect(sql, contains('create table if not exists public.$table'), reason: '$table must exist');
-      expect(sql, contains('alter table public.$table enable row level security'), reason: '$table must enable RLS');
+      expect(sql, contains('create table if not exists public.$table'),
+          reason: '$table must exist');
+      expect(
+          sql, contains('alter table public.$table enable row level security'),
+          reason: '$table must enable RLS');
     }
-    // Every business table carries the customer scope (customers is the scope).
-    for (final table in tables.where((t) => t != 'customers' && t != 'profiles' && t != 'audit_logs')) {
-      expect(sql, contains(RegExp('create table if not exists public\\.$table[^;]*customer_id\\s+uuid not null', dotAll: true)), reason: '$table must require customer_id');
+    for (final table in tables.where(
+        (t) => t != 'customers' && t != 'profiles' && t != 'audit_logs')) {
+      expect(
+          sql,
+          contains(RegExp(
+              'create table if not exists public\\.$table[^;]*customer_id\\s+uuid not null',
+              dotAll: true)),
+          reason: '$table must require customer_id');
     }
-    // Disabled customers are excluded at the helper level, tenants never
-    // write dues, and the proofs bucket exists with scoped policies.
     expect(sql, contains("c.status = 'enabled'"));
     expect(sql.contains('payment_dues_tenant_read'), isTrue);
-    expect(sql.contains('payment_dues_tenant_insert'), isFalse, reason: 'tenants must never write dues');
+    expect(sql.contains('payment_dues_tenant_insert'), isFalse,
+        reason: 'tenants must never write dues');
     expect(sql, contains("'payment-proofs'"));
     expect(sql, contains('pp_tenant_insert'));
     expect(sql, contains('unique (tenant_id, period)'));
   });
 
-  test('language preference persists across restarts', () async {
+  test('setLanguage switches the active language and locale', () {
     expect(state.language, AppLanguage.english);
     state.setLanguage(AppLanguage.telugu);
-    expect(box.get('language'), 'te');
-
-    final restored = AppState(box);
-    await restored.init();
-    expect(restored.language, AppLanguage.telugu);
-    expect(restored.locale.languageCode, 'te');
+    expect(state.language, AppLanguage.telugu);
+    expect(state.locale.languageCode, 'te');
   });
 
-  test('push preference gates and persists', () async {
+  test('setPushEnabled toggles the push preference', () {
     expect(state.pushEnabled, isTrue);
     state.setPushEnabled(false);
-    expect(box.get('pushEnabled'), isFalse);
-
-    final restored = AppState(box);
-    await restored.init();
-    expect(restored.pushEnabled, isFalse);
+    expect(state.pushEnabled, isFalse);
   });
 
   test('announcement audience filtering respects property and tenant', () {
-    // A property-specific announcement for p1, and a workspace-wide one.
     state.publishAnnouncement('HSR only', 'For HSR tenants', pgId: 'p1');
     state.publishAnnouncement('Everyone', 'For all tenants');
 
-    // Owner on p1 sees both; switching to p2 hides the p1-only one.
-    state.login(UserRole.owner);
+    state.debugSignIn(UserRole.owner);
     state.selectPg('p1');
-    expect(state.visibleAnnouncements.any((a) => a.title == 'HSR only'), isTrue);
-    expect(state.visibleAnnouncements.any((a) => a.title == 'Everyone'), isTrue);
+    expect(
+        state.visibleAnnouncements.any((a) => a.title == 'HSR only'), isTrue);
+    expect(
+        state.visibleAnnouncements.any((a) => a.title == 'Everyone'), isTrue);
     state.selectPg('p2');
-    expect(state.visibleAnnouncements.any((a) => a.title == 'HSR only'), isFalse);
-    expect(state.visibleAnnouncements.any((a) => a.title == 'Everyone'), isTrue);
+    expect(
+        state.visibleAnnouncements.any((a) => a.title == 'HSR only'), isFalse);
+    expect(
+        state.visibleAnnouncements.any((a) => a.title == 'Everyone'), isTrue);
 
-    // Tenant t1 lives in p1, so sees both.
-    state.login(UserRole.tenant);
-    expect(state.visibleAnnouncements.any((a) => a.title == 'HSR only'), isTrue);
-    expect(state.visibleAnnouncements.any((a) => a.title == 'Everyone'), isTrue);
+    state.debugSignIn(UserRole.tenant, tenantId: 't1');
+    expect(
+        state.visibleAnnouncements.any((a) => a.title == 'HSR only'), isTrue);
+    expect(
+        state.visibleAnnouncements.any((a) => a.title == 'Everyone'), isTrue);
   });
 
   test('updatePersonalDetails edits a tenant record', () async {
-    state.login(UserRole.tenant);
-    final error = await state.updatePersonalDetails(name: 'Aarav M', phone: '90000 99999');
+    state.debugSignIn(UserRole.tenant, tenantId: 't1');
+    final error = await state.updatePersonalDetails(
+        name: 'Aarav M', phone: '90000 99999');
     expect(error, isNull);
     expect(state.currentTenant?.name, 'Aarav M');
     expect(state.currentTenant?.phone, '90000 99999');
     expect(state.displayName, 'Aarav M');
   });
 
-  testWidgets('navigation labels localize to the selected language', (tester) async {
-    state.login(UserRole.owner);
+  testWidgets('navigation labels localize to the selected language',
+      (tester) async {
+    state.debugSignIn(UserRole.owner);
     state.setLanguage(AppLanguage.hindi);
     await tester.pumpWidget(PgManagementApp(state: state));
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('प्रबंधन'), findsOneWidget); // Manage
-    expect(find.text('किराया'), findsOneWidget); // Rent
+    expect(find.text('प्रबंधन'), findsOneWidget);
+    expect(find.text('किराया'), findsOneWidget);
     expect(find.text('Manage'), findsNothing);
   });
 
-  testWidgets('profile personal-details row opens an editable sheet', (tester) async {
-    state.login(UserRole.tenant);
+  testWidgets('profile personal-details row opens an editable sheet',
+      (tester) async {
+    state.debugSignIn(UserRole.tenant, tenantId: 't1');
     await tester.pumpWidget(AppScope(
       notifier: state,
       child: MaterialApp(
         theme: buildAppTheme(),
         locale: state.locale,
-        localizationsDelegates: const [AppLocalizations.delegate, GlobalMaterialLocalizations.delegate, GlobalWidgetsLocalizations.delegate],
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate
+        ],
         supportedLocales: AppLocalizations.supportedLocales,
         home: const Scaffold(body: ProfileScreen()),
       ),
@@ -739,25 +1175,26 @@ void main() {
     expect(find.widgetWithText(FilledButton, 'Save'), findsOneWidget);
   });
 
-  testWidgets('rental agreement is gone from the tenant details and profile', (tester) async {
-    state.login(UserRole.owner);
+  testWidgets('rental agreement is gone from the tenant details and profile',
+      (tester) async {
+    state.debugSignIn(UserRole.owner);
     await tester.pumpWidget(AppScope(
       notifier: state,
       child: MaterialApp(theme: buildAppTheme(), home: const TenantsScreen()),
     ));
     await tester.pump();
-    await tester.tap(find.text('Aarav Mehta')); // expand the first tenant
+    await tester.tap(find.text('Aarav Mehta'));
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Agreement'), findsNothing);
     expect(find.textContaining('e-sign'), findsNothing);
     expect(find.text('Call tenant'), findsOneWidget);
   });
 
-  // Renders the dashboard alone under a real Navigator so tile taps can
-  // push their destination screens.
   Widget dashboardHarness() => AppScope(
         notifier: state,
-        child: MaterialApp(theme: buildAppTheme(), home: const Scaffold(body: DashboardScreen())),
+        child: MaterialApp(
+            theme: buildAppTheme(),
+            home: const Scaffold(body: DashboardScreen())),
       );
 
   Future<void> settle(WidgetTester tester) async {
@@ -765,47 +1202,59 @@ void main() {
     await tester.pump(const Duration(milliseconds: 700));
   }
 
-  // Stat/label text sits inside a FittedBox transform, so tap the enclosing
-  // full-tile InkWell rather than the scaled text.
-  Finder tileFor(Finder label) => find.ancestor(of: label, matching: find.byType(InkWell)).first;
+  Finder tileFor(Finder label) =>
+      find.ancestor(of: label, matching: find.byType(InkWell)).first;
 
-  testWidgets('owner stat tiles navigate to their scoped screens', (tester) async {
-    state.login(UserRole.owner);
+  testWidgets('owner stat tiles navigate to their scoped screens',
+      (tester) async {
+    state.debugSignIn(UserRole.owner);
     await tester.pumpWidget(dashboardHarness());
     await settle(tester);
 
     await tester.tap(tileFor(find.text('Occupancy')));
     await settle(tester);
-    expect(find.text('Bed occupancy'), findsOneWidget); // Rooms & Beds
+    expect(find.text('Bed occupancy'), findsOneWidget);
     await tester.pageBack();
     await settle(tester);
 
     await tester.tap(tileFor(find.text('Collected')));
     await settle(tester);
     expect(find.text('Rent collection'), findsOneWidget);
-    expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Paid')).selected, isTrue);
+    expect(
+        tester
+            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Paid'))
+            .selected,
+        isTrue);
     await tester.pageBack();
     await settle(tester);
 
     await tester.tap(tileFor(find.text('Outstanding')));
     await settle(tester);
     expect(find.text('Rent collection'), findsOneWidget);
-    expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Due')).selected, isTrue);
+    expect(
+        tester
+            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Due'))
+            .selected,
+        isTrue);
     await tester.pageBack();
     await settle(tester);
 
     await tester.tap(tileFor(find.text('Open requests')));
     await settle(tester);
-    expect(find.text('Service desk'), findsOneWidget); // Maintenance
-    expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Open')).selected, isTrue);
+    expect(find.text('Service desk'), findsOneWidget);
+    expect(
+        tester
+            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Open'))
+            .selected,
+        isTrue);
   });
 
-  testWidgets('tenant rent card and quick cards navigate to tenant screens', (tester) async {
-    state.login(UserRole.tenant);
+  testWidgets('tenant rent card and quick cards navigate to tenant screens',
+      (tester) async {
+    state.debugSignIn(UserRole.tenant, tenantId: 't1');
     await tester.pumpWidget(dashboardHarness());
     await settle(tester);
 
-    // The rent hero card is tappable via its enclosing InkWell.
     await tester.tap(tileFor(find.textContaining('RENT')));
     await settle(tester);
     expect(find.text('My rent'), findsOneWidget);
@@ -814,10 +1263,11 @@ void main() {
 
     await tester.tap(tileFor(find.text('Raise issue')));
     await settle(tester);
-    expect(find.text('My requests'), findsOneWidget); // Maintenance (tenant)
+    expect(find.text('My requests'), findsOneWidget);
   });
 
-  testWidgets('auth screen shows role portals and no demo or sign-up', (tester) async {
+  testWidgets('auth screen shows role portals and no demo or sign-up',
+      (tester) async {
     await tester.pumpWidget(PgManagementApp(state: state));
     await tester.pump();
 
@@ -833,8 +1283,9 @@ void main() {
     expect(find.text('Forgot password?'), findsOneWidget);
   });
 
-  testWidgets('tenant app shows only tenant surfaces and no owner routes', (tester) async {
-    state.login(UserRole.tenant);
+  testWidgets('tenant app shows only tenant surfaces and no owner routes',
+      (tester) async {
+    state.debugSignIn(UserRole.tenant, tenantId: 't1');
     await tester.pumpWidget(TenantApp(state: state));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('My Rent'), findsOneWidget);
@@ -845,14 +1296,15 @@ void main() {
   });
 
   testWidgets('tenant app blocks a non-tenant account', (tester) async {
-    state.login(UserRole.owner);
+    state.debugSignIn(UserRole.owner);
     await tester.pumpWidget(TenantApp(state: state));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Sign out'), findsOneWidget);
     expect(find.text('My Rent'), findsNothing);
   });
 
-  testWidgets('owner/admin app auth offers no tenant portal or sign-up', (tester) async {
+  testWidgets('owner/admin app auth offers no tenant portal or sign-up',
+      (tester) async {
     await tester.pumpWidget(OwnerAdminApp(state: state));
     await tester.pump();
     expect(find.text('Owner login'), findsOneWidget);
@@ -861,8 +1313,13 @@ void main() {
     expect(find.text('Create account'), findsNothing);
   });
 
-  test('createAdmin fails without a server and never needs a hardcoded key', () async {
-    final error = await state.createAdmin(fullName: 'A', email: 'a@b.c', password: 'password1', setupKey: 'whatever');
+  test('createAdmin fails without a server and never needs a hardcoded key',
+      () async {
+    final error = await state.createAdmin(
+        fullName: 'A',
+        email: 'a@b.c',
+        password: 'password1',
+        setupKey: 'whatever');
     expect(error, isNotNull);
   });
 
@@ -874,8 +1331,10 @@ void main() {
     expect(adminSetupMessage(null), isNotEmpty);
   });
 
-  test('the create-admin function reads the key from a secret and guards it', () {
-    final fn = File('supabase/functions/create-admin/index.ts').readAsStringSync();
+  test('the create-admin function reads the key from a secret and guards it',
+      () {
+    final fn =
+        File('supabase/functions/create-admin/index.ts').readAsStringSync();
     expect(fn, contains('Deno.env.get("ADMIN_SETUP_KEY")'));
     expect(fn, contains('timingSafeEqual'));
     expect(fn, contains('ADMIN_SETUP_KEY_EXPIRES_AT'));
@@ -884,18 +1343,25 @@ void main() {
     expect(fn, contains('"code:rate_limited"'));
     expect(fn, contains('platform_admin: true'));
     expect(fn, contains('must_change_password: false'));
-    for (final line in fn.split('\n').where((l) => l.contains('return json('))) {
-      expect(line.contains('setupKey'), isFalse, reason: 'the setup key must never be returned');
+    for (final line
+        in fn.split('\n').where((l) => l.contains('return json('))) {
+      expect(line.contains('setupKey'), isFalse,
+          reason: 'the setup key must never be returned');
     }
   });
 
   test('the admin-setup migration locks its attempts table', () {
     final sql = File('supabase/005_admin_setup.sql').readAsStringSync();
-    expect(sql, contains('create table if not exists public.admin_setup_attempts'));
-    expect(sql, contains('alter table public.admin_setup_attempts enable row level security'));
+    expect(sql,
+        contains('create table if not exists public.admin_setup_attempts'));
+    expect(
+        sql,
+        contains(
+            'alter table public.admin_setup_attempts enable row level security'));
   });
 
-  testWidgets('admin login offers admin setup with a setup-key field', (tester) async {
+  testWidgets('admin login offers admin setup with a setup-key field',
+      (tester) async {
     await tester.pumpWidget(PgManagementApp(state: state));
     await tester.pump();
     await tester.tap(find.text('Admin login'));
@@ -917,27 +1383,31 @@ void main() {
   });
 
   test('the create-customer function is admin-only and seeds no data', () {
-    final fn = File('supabase/functions/create-customer/index.ts').readAsStringSync();
+    final fn =
+        File('supabase/functions/create-customer/index.ts').readAsStringSync();
     expect(fn, contains('platform_admin'));
     expect(fn, contains('"code:not_admin"'));
     expect(fn, contains('from("customers").insert'));
     expect(fn, contains('role: "owner"'));
     expect(fn, contains('customer_id: customer.id'));
     expect(fn, contains('must_change_password: true'));
-    expect(fn.contains('.from("pgs")'), isFalse, reason: 'new customers must start empty');
+    expect(fn.contains('.from("pgs")'), isFalse,
+        reason: 'new customers must start empty');
     expect(fn.contains('.from("rooms")'), isFalse);
     expect(fn.contains('.from("tenants")'), isFalse);
   });
 
   test('customer admin actions fail closed without a server', () async {
     expect(await state.loadCustomers(), isEmpty);
-    final created = await state.createCustomer(businessName: 'B', ownerName: 'O', ownerEmail: 'o@b.c', phone: '9');
+    final created = await state.createCustomer(
+        businessName: 'B', ownerName: 'O', ownerEmail: 'o@b.c', phone: '9');
     expect(created.error, isNotNull);
     expect(await state.setCustomerStatus('c1', false), isNotNull);
   });
 
-  testWidgets('a platform admin sees customer management, not PG screens', (tester) async {
-    state.login(UserRole.admin);
+  testWidgets('a platform admin sees customer management, not PG screens',
+      (tester) async {
+    state.debugSignIn(UserRole.admin);
     await tester.pumpWidget(OwnerAdminApp(state: state));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
@@ -947,8 +1417,9 @@ void main() {
     expect(find.text('Properties'), findsNothing);
   });
 
-  testWidgets('a new owner with no PGs is guided into the setup wizard', (tester) async {
-    state.login(UserRole.owner);
+  testWidgets('a new owner with no PGs is guided into the setup wizard',
+      (tester) async {
+    state.debugSignIn(UserRole.owner);
     state.pgs.clear();
     await tester.pumpWidget(OwnerAdminApp(state: state));
     await tester.pump();
@@ -964,7 +1435,9 @@ void main() {
   test('createProperty builds the PG with floors, rooms, beds and rent', () {
     final pgsBefore = state.pgs.length;
     final error = state.createProperty(
-      name: 'Indiranagar PG', address: 'X', amenities: 'Wi-Fi',
+      name: 'Indiranagar PG',
+      address: 'X',
+      amenities: 'Wi-Fi',
       specs: [
         (number: '101', floor: 1, beds: 2, rent: 9500),
         (number: '102', floor: 1, beds: 3, rent: 7800),
@@ -986,22 +1459,28 @@ void main() {
   });
 
   test('changing a room rent never rewrites existing payments', () {
-    final room = state.rooms.firstWhere((r) => r.id == 'r1'); // rent 9500
-    final due = state.payments.firstWhere((p) => p.tenantId == 't1' && p.status == PaymentStatus.due);
+    final room = state.rooms.firstWhere((r) => r.id == 'r1');
+    final due = state.payments
+        .firstWhere((p) => p.tenantId == 't1' && p.status == PaymentStatus.due);
     final originalAmount = due.amount;
 
     expect(state.setRoomRent(room.id, 12000), isNull);
     expect(state.roomById(room.id)!.rent, 12000);
-    expect(state.payments.firstWhere((p) => p.id == due.id).amount, originalAmount);
+    expect(state.payments.firstWhere((p) => p.id == due.id).amount,
+        originalAmount);
   });
 
   test('structure reduction is blocked when beds are occupied', () {
-    final occupied = state.rooms.firstWhere((r) => r.id == 'r1'); // 2 beds, occupied
+    final occupied = state.rooms.firstWhere((r) => r.id == 'r1');
     expect(state.removeRoom(occupied.id), contains('active tenants'));
     expect(state.setRoomBeds(occupied.id, 1), contains('below occupied'));
     expect(state.rooms.any((r) => r.id == occupied.id), isTrue);
 
-    state.createProperty(name: 'Fresh', address: 'X', amenities: '', specs: [(number: '901', floor: 9, beds: 3, rent: 5000)]);
+    state.createProperty(
+        name: 'Fresh',
+        address: 'X',
+        amenities: '',
+        specs: [(number: '901', floor: 9, beds: 3, rent: 5000)]);
     final empty = state.rooms.firstWhere((r) => r.number == '901');
     expect(state.setRoomBeds(empty.id, 1), isNull);
     expect(state.removeRoom(empty.id), isNull);

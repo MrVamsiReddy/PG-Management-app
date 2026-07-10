@@ -2,10 +2,10 @@
 
 Concise ADRs for decisions already made. Status: Accepted unless noted.
 
-## ADR-001 · Keep legacy `app_data` runtime during the SaaS migration
-Context: The app shipped on a single-workspace Hive/`app_data` model before multi-tenancy.
-Decision: Introduce the relational customer-scoped schema (`004`) alongside, but keep the owner/tenant runtime on `app_data` so the app stays working end-to-end each phase.
-Consequences: Two data models coexist; customer isolation and RLS are not runtime-enforced yet (`09` P0). Revisit: migrate runtime to relational tables. Status: Accepted (transitional).
+## ADR-001 · Keep the `app_data` blob runtime during the SaaS migration
+Context: The app shipped on a single-workspace `app_data` blob model (originally mirrored to a local Hive box) before multi-tenancy.
+Decision: Introduce the relational customer-scoped schema (`004`) alongside, but keep the owner/tenant runtime on `app_data` so the app stays working end-to-end each phase. The local Hive store and the demo/seed path were later removed, making Supabase `app_data` the single source of truth (cloud-only, no offline cache; collections held in memory only while signed in).
+Consequences: Two data models coexist; customer isolation and RLS are still not runtime-enforced (`09` P0 — data flows through `app_data` keyed by `owner_id`, not the relational `customer_id` tables). Revisit: migrate runtime to relational tables. Status: Accepted (transitional).
 
 ## ADR-002 · Map-backed localization, not gen_l10n
 Decision: `l10n.dart` with a `Map<lang,Map<key,String>>` and a synchronous `LocalizationsDelegate`.

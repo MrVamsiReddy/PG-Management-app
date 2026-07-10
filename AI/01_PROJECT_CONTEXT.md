@@ -11,7 +11,7 @@ Let a PG business (a "customer") run its properties end to end, let residents (t
 - Cloud-only (Supabase). Security enforced by Supabase RLS, not frontend filtering.
 - No public sign-up. Accounts are provisioned top-down.
 
-> Reality note: the target model is only partially realised. See `06_PROJECT_STATUS.md` and `09_KNOWN_ISSUES.md` for what is actually enforced today (the live runtime still uses Hive/`app_data`, not the relational customer-scoped tables).
+> Reality note: the target model is only partially realised. See `06_PROJECT_STATUS.md` and `09_KNOWN_ISSUES.md` for what is actually enforced today (the live runtime uses the cloud `app_data` blob keyed by `owner_id`, not the relational customer-scoped tables).
 
 ## Platform hierarchy
 Platform Admin → Customers → (each customer runs the Customer hierarchy).
@@ -28,9 +28,8 @@ Full allowed/forbidden matrix: `04_ROLES_AND_PERMISSIONS.md`.
 
 ## Technology stack
 - Flutter (Material 3), Dart.
-- Supabase (Postgres + Auth + Edge Functions + Storage).
-- Hive (local store — legacy, still the live business store; slated for removal).
-- Packages: `supabase_flutter`, `hive_flutter`, `firebase_core`/`firebase_messaging` (FCM push), `flutter_localizations`, `intl`, `image_picker`, `pdf`, `printing`, `share_plus`, `url_launcher`.
+- Supabase (Postgres + Auth + Edge Functions + Storage) — the single source of truth; cloud-only, no local store or offline cache.
+- Packages: `supabase_flutter`, `firebase_core`/`firebase_messaging` (FCM push), `flutter_localizations`, `intl`, `image_picker`, `pdf`, `printing`, `share_plus`, `url_launcher`.
 
 ## High-level architecture
 Three build surfaces over one shared `AppState`: combined (`main.dart`), owner/admin (`main_owner.dart`), tenant (`main_tenant.dart`). Details in `02_ARCHITECTURE.md`.

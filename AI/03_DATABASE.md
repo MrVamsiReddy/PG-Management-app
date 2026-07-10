@@ -2,14 +2,14 @@
 
 Two coexisting models. RLS design → assumptions below; runtime gap → `09_KNOWN_ISSUES.md`.
 
-## A. Legacy store (LIVE at runtime)
+## A. `app_data` blob store (LIVE at runtime)
 Files: `supabase/schema.sql`, `002_members.sql`, `003_push_tokens.sql`.
 
 - **`app_data`** — one JSONB row per `(owner_id, key)`; `key` ∈ {pgs, rooms, tenants, payments, maintenance, visitors, announcements, attendance, utilities, notifications}. Whole collections stored as JSON blobs. RLS: owner reads/writes own rows; invited members (via `members`) may read the workspace and write tenant-facing keys.
 - **`members`** — `(owner_id, member_email, tenant_id)`; links an invited tenant email to a workspace + tenant record.
 - **`push_tokens`** — `(token, user_id, email)`; FCM device tokens; owner-only RLS.
 
-This is the store the owner/tenant apps actually read and write. It is **not** `customer_id`-scoped (scoping is by `owner_id`).
+This is the store the owner/tenant apps actually read and write, **cloud-only** — Supabase is the single source of truth; there is no local store or offline cache (Hive was removed). Collections live in memory only while signed in (`SupabaseRepository`, populated on login, cleared on logout). It is **not** `customer_id`-scoped (scoping is by `owner_id`).
 
 ## B. Relational SaaS schema (DEFINED, mostly UNUSED at runtime)
 File: `supabase/004_saas_core.sql`. Every business table has `NOT NULL customer_id` (except `customers`, `profiles`, `audit_logs` where `customer_id` is the scope or nullable).
@@ -51,7 +51,7 @@ admin_setup_attempts (service-role only)
 
 ## customer_id usage
 - Relational tables: real `NOT NULL customer_id` FKs + RLS scoping (schema B).
-- App runtime: `customer_id` is stamped into `app_data` JSON records as metadata (`AppState.customerId`, interim = resolved customer id / workspace owner id / `'demo'`) but is **not** used in any query or policy.
+- App runtime: `customer_id` is stamped into `app_data` JSON records as metadata (`AppState.customerId`, interim = resolved customer id / workspace owner id / `''`) but is **not** used in any query or policy.
 
 ## Foreign keys
 Schema B uses `on delete cascade` down the hierarchy; `set null` for optional links (tenant→room/bed, audit actor). Schema A has no FKs (JSON blobs).
