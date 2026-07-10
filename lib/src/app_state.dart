@@ -1,12 +1,12 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'
     show
         AuthException,
         FileOptions,
         FunctionException,
-        PostgrestException,
         SupabaseClient,
         User,
         UserAttributes;
@@ -265,9 +265,7 @@ class AppState extends ChangeNotifier {
       required String password,
       required LoginPortal portal}) async {
     final client = supabaseOrNull;
-    if (client == null) {
-      return 'Cannot reach the server. Check your connection and try again.';
-    }
+    if (client == null) return 'code:network';
     try {
       final result = await client.auth
           .signInWithPassword(email: email, password: password);
@@ -280,12 +278,11 @@ class AppState extends ChangeNotifier {
       }
       return null;
     } on AuthException catch (e) {
-      return e.message;
-    } on PostgrestException catch (e) {
-      return 'Signed in, but the database rejected the request: ${e.message}. '
-          'If this mentions app_data, run supabase/schema.sql in the Supabase SQL Editor.';
+      return e.message.toLowerCase().contains('invalid login')
+          ? 'code:bad_credentials'
+          : 'code:generic';
     } catch (_) {
-      return 'Cannot reach the server. Check your connection and try again.';
+      return 'code:network';
     }
   }
 
@@ -779,11 +776,29 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ---- Preferences (session-scoped; no local persistence) ----
+  // ---- Preferences (language persists on-device via SharedPreferences) ----
+
+  static const _langKey = 'app_language';
+
+  Future<void> loadLanguage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final code = prefs.getString(_langKey);
+      if (code != null) {
+        language = AppLanguage.fromCode(code);
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
 
   void setLanguage(AppLanguage lang) {
     language = lang;
     notifyListeners();
+    try {
+      SharedPreferences.getInstance()
+          .then((p) => p.setString(_langKey, lang.code))
+          .catchError((_) => false);
+    } catch (_) {}
   }
 
   void setPushEnabled(bool value) {

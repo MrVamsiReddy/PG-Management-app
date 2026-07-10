@@ -48,5 +48,12 @@ Enforced in current code unless marked Pending. Roles → `04`; schema → `03`.
 - payment_submitted/confirmed/rejected reserved for the P9 UPI flow. App-side owner logs depend on the owner having a resolved `customer_id` (RLS owner-insert requires `customer_id = my_owner_customer_id()`); legacy owners without a profile write nothing. ⚠️
 - Permissions (RLS): platform admin → all; owner → own customer read+append; tenant → none. Viewer: `AuditLogScreen` (admin appbar, owner settings). ✅
 
+## Localization (P10)
+- Map-backed `AppLocalizations.t(key)` over `_strings` (en/hi/te); English is source + fallback. No ICU/placeholders — dynamic values are concatenated in Dart. ✅
+- Language **persists on-device** via `shared_preferences` (`AppState.loadLanguage` at bootstrap, `setLanguage` writes). Chosen language survives restarts. ✅
+- Localized flows: navigation, settings, profile, announcements, UPI payment (P9), **auth (portals/login/set-password/admin-setup), dashboard, PG wizard, tenant invite dialog**, plus status/error strings. ✅
+- Backend/auth **error codes → localized text**: `signInCloud` returns `code:network|bad_credentials|generic`; `AppLocalizations.error(code)` maps them (and admin/invite `code:*`), passing through already-human strings. ✅
+- ⚠️ Not every secondary owner/ops screen is fully delocalized yet (some operations/community/room detail strings remain English); the tested and highest-traffic flows are done.
+
 ## Disabled customer behaviour
 See `04` and `09`: owners blocked, profile-less tenants not blocked.

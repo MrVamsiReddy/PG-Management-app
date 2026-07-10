@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pg_management/main.dart';
 import 'package:pg_management/src/access.dart';
@@ -13,6 +14,7 @@ import 'package:pg_management/src/invite_message.dart';
 import 'package:pg_management/src/l10n.dart';
 import 'package:pg_management/src/module_screens.dart';
 import 'package:pg_management/src/owner_app.dart';
+import 'package:pg_management/src/pg_wizard.dart';
 import 'package:pg_management/src/supabase_config.dart';
 import 'package:pg_management/src/tenant_app.dart';
 import 'package:pg_management/src/theme.dart';
@@ -1392,8 +1394,7 @@ void main() {
   test('the payments migration enforces UPI RLS and tenant restrictions', () {
     final sql = File('supabase/007_payments.sql').readAsStringSync();
     expect(sql, contains('create table if not exists public.pg_upi_settings'));
-    expect(
-        sql, contains('create table if not exists public.upi_submissions'));
+    expect(sql, contains('create table if not exists public.upi_submissions'));
     for (final s in ['pending_confirmation', 'confirmed', 'rejected']) {
       expect(sql, contains("'$s'"));
     }
@@ -1472,6 +1473,111 @@ void main() {
     expect(find.text('प्रबंधन'), findsOneWidget);
     expect(find.text('किराया'), findsOneWidget);
     expect(find.text('Manage'), findsNothing);
+  });
+
+  // ---- Prompt 10: full localization ----
+
+  test('the chosen language is read back on startup (persistence)', () async {
+    SharedPreferences.setMockInitialValues({'app_language': 'te'});
+    final fresh = AppState();
+    expect(fresh.language, AppLanguage.english);
+    await fresh.loadLanguage();
+    expect(fresh.language, AppLanguage.telugu);
+  });
+
+  test('setLanguage writes the selection to shared preferences', () async {
+    SharedPreferences.setMockInitialValues({});
+    state.setLanguage(AppLanguage.hindi);
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('app_language'), 'hi');
+  });
+
+  test('backend error codes map to localized messages', () {
+    const en = AppLocalizations(Locale('en'));
+    const hi = AppLocalizations(Locale('hi'));
+    expect(en.error('code:bad_credentials'), 'Wrong email or password.');
+    expect(hi.error('code:bad_credentials'), isNot('Wrong email or password.'));
+    expect(en.error('code:network'), contains('server'));
+    // A non-code string is returned unchanged (already a message).
+    expect(en.error('Already readable'), 'Already readable');
+    expect(en.error(null), contains('went wrong'));
+  });
+
+  test('every added key is translated in Hindi and Telugu', () {
+    const keys = [
+      'auth.choose',
+      'auth.ownerLogin',
+      'auth.signIn',
+      'dash.quickActions',
+      'wiz.title',
+      'wiz.stepReview',
+      'inv.inviteToApp',
+      'upi.pay',
+      'status.pending',
+    ];
+    for (final code in ['hi', 'te']) {
+      final l = AppLocalizations(Locale(code));
+      const en = AppLocalizations(Locale('en'));
+      for (final k in keys) {
+        expect(l.t(k), isNotEmpty, reason: '$code missing $k');
+        expect(l.t(k), isNot(en.t(k)), reason: '$code not translated: $k');
+      }
+    }
+  });
+
+  Widget localized(AppState s, Widget home, {bool wrap = false}) => AppScope(
+        notifier: s,
+        child: MaterialApp(
+          theme: buildAppTheme(),
+          locale: s.locale,
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: wrap ? Scaffold(body: home) : home,
+        ),
+      );
+
+  testWidgets('auth portals render in the selected language', (tester) async {
+    state.setLanguage(AppLanguage.hindi);
+    await tester.pumpWidget(PgManagementApp(state: state));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('मालिक लॉगिन'), findsOneWidget);
+    expect(find.text('किरायेदार लॉगिन'), findsOneWidget);
+    expect(find.text('Owner login'), findsNothing);
+  });
+
+  testWidgets('dashboard is localized for the owner', (tester) async {
+    state.debugSignIn(UserRole.owner);
+    state.setLanguage(AppLanguage.telugu);
+    await tester
+        .pumpWidget(localized(state, const DashboardScreen(), wrap: true));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('త్వరిత చర్యలు'), findsOneWidget);
+    expect(find.text('Quick actions'), findsNothing);
+  });
+
+  testWidgets('the PG setup wizard is localized', (tester) async {
+    state.debugSignIn(UserRole.owner);
+    state.setLanguage(AppLanguage.hindi);
+    await tester.pumpWidget(localized(state, const PgSetupWizard()));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('अपना पीजी सेट करें'), findsWidgets);
+    expect(find.text('संपत्ति विवरण'), findsOneWidget);
+  });
+
+  testWidgets('the invite action is localized', (tester) async {
+    state.debugSignIn(UserRole.owner);
+    state.setLanguage(AppLanguage.hindi);
+    await tester.pumpWidget(localized(state, const TenantsScreen()));
+    await tester.pump();
+    await tester.tap(find.text('Aarav Mehta'));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('ऐप में आमंत्रित करें'), findsOneWidget);
   });
 
   testWidgets('profile personal-details row opens an editable sheet',

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
+import 'l10n.dart';
 import 'widgets.dart';
 
 class _Draft {
@@ -84,15 +85,17 @@ class _PgSetupWizardState extends State<PgSetupWizard> {
       return;
     }
     Navigator.pop(context);
+    final l = AppLocalizations.of(context);
     messenger.showSnackBar(SnackBar(
-        content:
-            Text('${name.text.trim()} created with ${drafts.length} rooms.')));
+        content: Text(
+            '${name.text.trim()} ${l.t('wiz.createdWith')} ${drafts.length} ${l.t('wiz.roomsSuffix')}')));
   }
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Set up your PG')),
+      appBar: AppBar(title: Text(l.t('wiz.title'))),
       body: Stepper(
         currentStep: step,
         onStepContinue: _onContinue,
@@ -102,43 +105,45 @@ class _PgSetupWizardState extends State<PgSetupWizard> {
           child: Row(children: [
             FilledButton(
                 onPressed: details.onStepContinue,
-                child: Text(step == 3 ? 'Create' : 'Continue')),
+                child:
+                    Text(step == 3 ? l.t('wiz.create') : l.t('wiz.continue'))),
             if (step > 0) ...[
               const SizedBox(width: 8),
               TextButton(
-                  onPressed: details.onStepCancel, child: const Text('Back')),
+                  onPressed: details.onStepCancel,
+                  child: Text(l.t('wiz.back'))),
             ],
           ]),
         ),
         steps: [
           Step(
-            title: const Text('Property details'),
+            title: Text(l.t('wiz.stepDetails')),
             isActive: step >= 0,
             content: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const FormLabel('Property name'),
+                  FormLabel(l.t('wiz.propName')),
                   TextField(
                       controller: name,
-                      decoration: const InputDecoration(
-                          hintText: 'e.g. Indiranagar PG')),
-                  const FormLabel('Full address'),
+                      decoration:
+                          InputDecoration(hintText: l.t('wiz.propNameHint'))),
+                  FormLabel(l.t('wiz.address')),
                   TextField(controller: address, maxLines: 2),
-                  const FormLabel('Amenities'),
+                  FormLabel(l.t('wiz.amenities')),
                   TextField(controller: amenities, maxLines: 2),
                 ]),
           ),
           Step(
-            title: const Text('Rent by sharing'),
+            title: Text(l.t('wiz.stepRent')),
             isActive: step >= 1,
             content: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  for (final e in const [
-                    (1, 'Single'),
-                    (2, 'Double sharing'),
-                    (3, 'Triple sharing'),
-                    (4, 'Four sharing')
+                  for (final e in [
+                    (1, l.t('wiz.single')),
+                    (2, l.t('wiz.double')),
+                    (3, l.t('wiz.triple')),
+                    (4, l.t('wiz.four'))
                   ]) ...[
                     FormLabel(e.$2),
                     TextField(
@@ -149,7 +154,7 @@ class _PgSetupWizardState extends State<PgSetupWizard> {
                 ]),
           ),
           Step(
-            title: const Text('Floors, rooms & beds'),
+            title: Text(l.t('wiz.stepStructure')),
             isActive: step >= 2,
             content: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -159,7 +164,7 @@ class _PgSetupWizardState extends State<PgSetupWizard> {
                         child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                          const FormLabel('Floors'),
+                          FormLabel(l.t('wiz.floors')),
                           TextField(
                               controller: floors,
                               keyboardType: TextInputType.number)
@@ -169,20 +174,23 @@ class _PgSetupWizardState extends State<PgSetupWizard> {
                         child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                          const FormLabel('Rooms / floor'),
+                          FormLabel(l.t('wiz.roomsPerFloor')),
                           TextField(
                               controller: roomsPerFloor,
                               keyboardType: TextInputType.number)
                         ])),
                   ]),
-                  const FormLabel('Beds per room'),
+                  FormLabel(l.t('wiz.bedsPerRoom')),
                   DropdownButtonFormField<int>(
                     initialValue: sharing,
-                    items: const [
-                      DropdownMenuItem(value: 1, child: Text('Single')),
-                      DropdownMenuItem(value: 2, child: Text('Double sharing')),
-                      DropdownMenuItem(value: 3, child: Text('Triple sharing')),
-                      DropdownMenuItem(value: 4, child: Text('Four sharing'))
+                    items: [
+                      DropdownMenuItem(
+                          value: 1, child: Text(l.t('wiz.single'))),
+                      DropdownMenuItem(
+                          value: 2, child: Text(l.t('wiz.double'))),
+                      DropdownMenuItem(
+                          value: 3, child: Text(l.t('wiz.triple'))),
+                      DropdownMenuItem(value: 4, child: Text(l.t('wiz.four')))
                     ],
                     onChanged: (v) => setState(() => sharing = v ?? 2),
                   ),
@@ -190,19 +198,19 @@ class _PgSetupWizardState extends State<PgSetupWizard> {
                   OutlinedButton.icon(
                       onPressed: _generate,
                       icon: const Icon(Icons.auto_awesome_outlined),
-                      label: const Text('Generate rooms')),
+                      label: Text(l.t('wiz.generate'))),
                   const SizedBox(height: 8),
                   if (drafts.isEmpty)
-                    const Text(
-                        'Generate rooms, then fine-tune rent per room below.',
-                        style: TextStyle(fontSize: 12, color: Colors.black54))
+                    Text(l.t('wiz.generateHint'),
+                        style: const TextStyle(
+                            fontSize: 12, color: Colors.black54))
                   else
                     ...drafts.map((d) => Padding(
                           padding: const EdgeInsets.only(bottom: 8),
                           child: Row(children: [
                             Expanded(
                                 child: Text(
-                                    'Room ${d.number} · Floor ${d.floor} · ${d.beds}-share',
+                                    '${l.t('dash.room')} ${d.number} · ${l.t('wiz.floor')} ${d.floor} · ${d.beds}-${l.t('wiz.share')}',
                                     style: const TextStyle(
                                         fontSize: 13,
                                         fontWeight: FontWeight.w600))),
@@ -226,22 +234,21 @@ class _PgSetupWizardState extends State<PgSetupWizard> {
                 ]),
           ),
           Step(
-            title: const Text('Review & create'),
+            title: Text(l.t('wiz.stepReview')),
             isActive: step >= 3,
             content:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(
                   name.text.trim().isEmpty
-                      ? 'Unnamed property'
+                      ? l.t('wiz.unnamed')
                       : name.text.trim(),
                   style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 8),
               Text(
-                  '${drafts.map((d) => d.floor).toSet().length} floors · ${drafts.length} rooms · $_totalBeds beds'),
+                  '${drafts.map((d) => d.floor).toSet().length} ${l.t('wiz.floorsWord')} · ${drafts.length} ${l.t('wiz.roomsWord')} · $_totalBeds ${l.t('wiz.bedsWord')}'),
               const SizedBox(height: 6),
-              const Text(
-                  'Rent is stored per room now; changing rent later never alters past payments.',
-                  style: TextStyle(fontSize: 12, color: Colors.black54)),
+              Text(l.t('wiz.rentNote'),
+                  style: const TextStyle(fontSize: 12, color: Colors.black54)),
             ]),
           ),
         ],
@@ -251,14 +258,13 @@ class _PgSetupWizardState extends State<PgSetupWizard> {
 
   void _onContinue() {
     final messenger = ScaffoldMessenger.of(context);
+    final l = AppLocalizations.of(context);
     if (step == 0 && name.text.trim().isEmpty) {
-      messenger.showSnackBar(
-          const SnackBar(content: Text('Enter a property name.')));
+      messenger.showSnackBar(SnackBar(content: Text(l.t('wiz.enterName'))));
       return;
     }
     if (step == 2 && drafts.isEmpty) {
-      messenger.showSnackBar(
-          const SnackBar(content: Text('Generate at least one room.')));
+      messenger.showSnackBar(SnackBar(content: Text(l.t('wiz.generateOne'))));
       return;
     }
     if (step == 3) {

@@ -29,7 +29,7 @@ Full allowed/forbidden matrix: `04_ROLES_AND_PERMISSIONS.md`.
 ## Technology stack
 - Flutter (Material 3), Dart.
 - Supabase (Postgres + Auth + Edge Functions + Storage) — the single source of truth; cloud-only, no local store or offline cache.
-- Packages: `supabase_flutter`, `firebase_core`/`firebase_messaging` (FCM push), `flutter_localizations`, `intl`, `image_picker`, `pdf`, `printing`, `share_plus`, `url_launcher`.
+- Packages: `supabase_flutter`, `firebase_core`/`firebase_messaging` (FCM push), `flutter_localizations`, `intl`, `image_picker`, `pdf`, `printing`, `share_plus`, `shared_preferences` (language persistence), `url_launcher`.
 
 ## High-level architecture
 Three build surfaces over one shared `AppState`: combined (`main.dart`), owner/admin (`main_owner.dart`), tenant (`main_tenant.dart`). Details in `02_ARCHITECTURE.md`.

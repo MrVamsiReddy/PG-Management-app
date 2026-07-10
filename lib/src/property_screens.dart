@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'app_state.dart';
 import 'invite_message.dart';
+import 'l10n.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -526,25 +527,31 @@ class _TenantsScreenState extends State<TenantsScreen> {
                                       onPressed: () =>
                                           _invite(context, state, tenant),
                                       icon: const Icon(Icons.send_outlined),
-                                      label: const Text('Invite to app'))),
+                                      label: Text(AppLocalizations.of(context)
+                                          .t('inv.inviteToApp')))),
                               PopupMenuButton<String>(
                                 icon: const Icon(Icons.more_vert),
-                                tooltip: 'Invite options',
+                                tooltip: AppLocalizations.of(context)
+                                    .t('inv.options'),
                                 onSelected: (value) => value == 'resend'
                                     ? _resendInvite(context, state, tenant)
                                     : _revokeInvite(context, state, tenant),
-                                itemBuilder: (context) => const [
+                                itemBuilder: (context) => [
                                   PopupMenuItem(
                                       value: 'resend',
                                       child: ListTile(
-                                          leading: Icon(Icons.refresh),
-                                          title: Text('Resend invite'),
+                                          leading: const Icon(Icons.refresh),
+                                          title: Text(
+                                              AppLocalizations.of(context)
+                                                  .t('inv.resend')),
                                           contentPadding: EdgeInsets.zero)),
                                   PopupMenuItem(
                                       value: 'revoke',
                                       child: ListTile(
-                                          leading: Icon(Icons.link_off),
-                                          title: Text('Revoke invite'),
+                                          leading: const Icon(Icons.link_off),
+                                          title: Text(
+                                              AppLocalizations.of(context)
+                                                  .t('inv.revoke')),
                                           contentPadding: EdgeInsets.zero)),
                                 ],
                               ),
@@ -575,34 +582,33 @@ class _TenantsScreenState extends State<TenantsScreen> {
   void _invite(BuildContext context, AppState state, Tenant tenant) {
     final email = TextEditingController();
     final messenger = ScaffoldMessenger.of(context);
+    final l = AppLocalizations.of(context);
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text('Add ${tenant.name.split(' ').first} to the app'),
+        title: Text(
+            '${l.t('inv.add')} ${tenant.name.split(' ').first} ${l.t('inv.toApp')}'),
         content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                  'Their login is created for you, with a one-time password they must replace at first sign-in.',
-                  style: TextStyle(fontSize: 13)),
+              Text(l.t('inv.desc'), style: const TextStyle(fontSize: 13)),
               const SizedBox(height: 14),
               TextField(
                   controller: email,
                   autofocus: true,
                   keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                      labelText: 'Tenant email address',
-                      prefixIcon: Icon(Icons.mail_outline))),
+                  decoration: InputDecoration(
+                      labelText: l.t('inv.emailLabel'),
+                      prefixIcon: const Icon(Icons.mail_outline))),
               const SizedBox(height: 10),
-              const Text(
-                  'Next, the message with the app link and their credentials opens in WhatsApp/SMS/email for you to send.',
-                  style: TextStyle(fontSize: 11, color: Colors.black45)),
+              Text(l.t('inv.next'),
+                  style: const TextStyle(fontSize: 11, color: Colors.black45)),
             ]),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel')),
+              child: Text(l.t('common.cancel'))),
           FilledButton.icon(
               onPressed: () async {
                 final address = email.text.trim();
@@ -618,7 +624,7 @@ class _TenantsScreenState extends State<TenantsScreen> {
                 await _shareInvite(messenger, state, tenant, address, result);
               },
               icon: const Icon(Icons.send_outlined),
-              label: const Text('Create login & share')),
+              label: Text(l.t('inv.createShare'))),
         ],
       ),
     );
@@ -638,30 +644,31 @@ class _TenantsScreenState extends State<TenantsScreen> {
   void _revokeInvite(
       BuildContext context, AppState state, Tenant tenant) async {
     final messenger = ScaffoldMessenger.of(context);
+    final l = AppLocalizations.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Revoke invite?'),
-        content: Text(
-            '${tenant.name.split(' ').first}\'s pending invite stops working immediately. A temporary password they never used is disabled too.'),
+        title: Text(l.t('inv.revokeTitle')),
+        content: Text(l.t('inv.revokeBody')),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
+              child: Text(l.t('common.cancel'))),
           FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Revoke')),
+              child: Text(l.t('inv.revoke'))),
         ],
       ),
     );
     if (confirmed != true) return;
     final result = await state.revokeInvite(tenantId: tenant.id);
     messenger.showSnackBar(
-        SnackBar(content: Text(result.error ?? 'Invite revoked.')));
+        SnackBar(content: Text(result.error ?? l.t('inv.revokeDone'))));
   }
 
   Future<void> _shareInvite(ScaffoldMessengerState messenger, AppState state,
       Tenant tenant, String email, InviteResult result) async {
+    final copied = AppLocalizations.of(messenger.context).t('inv.copied');
     final message = buildInviteMessage(
       tenantName: tenant.name,
       pgName: state.pgNameForTenant(tenant.id),
@@ -676,9 +683,7 @@ class _TenantsScreenState extends State<TenantsScreen> {
     } catch (_) {
       // Share sheet unavailable (e.g. desktop browser): copy instead.
       await Clipboard.setData(ClipboardData(text: message));
-      messenger.showSnackBar(const SnackBar(
-          content: Text(
-              'Message with the login details copied — paste it into WhatsApp or email.')));
+      messenger.showSnackBar(SnackBar(content: Text(copied)));
     }
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
+import 'l10n.dart';
 import 'module_screens.dart';
 import 'pg_wizard.dart';
 import 'theme.dart';
@@ -12,66 +13,67 @@ class DashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
+    final l = AppLocalizations.of(context);
     if (state.role != UserRole.tenant && state.pgs.isEmpty) {
-      return _ownerEmpty(context, state);
+      return _ownerEmpty(context, state, l);
     }
     return RefreshIndicator(
       onRefresh: state.refresh,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 40),
         children: [
-          Text(_greeting(), style: Theme.of(context).textTheme.bodyMedium),
+          Text(_greeting(l), style: Theme.of(context).textTheme.bodyMedium),
           const SizedBox(height: 3),
           Text(
               state.role == UserRole.tenant
-                  ? 'Hello, ${state.displayName.split(' ').first} 👋'
-                  : 'Here’s the pulse of your PG',
+                  ? '${l.t('dash.hello')}, ${state.displayName.split(' ').first} 👋'
+                  : l.t('dash.pulse'),
               style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 22),
           if (state.role == UserRole.tenant)
-            _tenantHero(context, state)
+            _tenantHero(context, state, l)
           else
-            _managerStats(context, state),
+            _managerStats(context, state, l),
           const SizedBox(height: 25),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text('Quick actions',
+            Text(l.t('dash.quickActions'),
                 style: Theme.of(context).textTheme.titleLarge),
             TextButton(
                 onPressed: () => Navigator.push(
                     context,
                     MaterialPageRoute(
                         builder: (_) => const ModulesHubScreen())),
-                child: const Text('View all')),
+                child: Text(l.t('dash.viewAll'))),
           ]),
           const SizedBox(height: 10),
-          _quickActions(context, state.role),
+          _quickActions(context, state.role, l),
           const SizedBox(height: 28),
           if (state.role != UserRole.tenant) ...[
-            Text('Revenue overview',
+            Text(l.t('dash.revenue'),
                 style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 12),
-            _revenueCard(context, state),
+            _revenueCard(context, state, l),
             const SizedBox(height: 28),
           ],
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text('Recent activity',
+            Text(l.t('dash.recent'),
                 style: Theme.of(context).textTheme.titleLarge),
             TextButton(
                 onPressed: () => Navigator.push(
                     context,
                     MaterialPageRoute(
                         builder: (_) => const NotificationsScreen())),
-                child: const Text('See all')),
+                child: Text(l.t('dash.seeAll'))),
           ]),
           const SizedBox(height: 8),
           Builder(builder: (context) {
             final recent = state.visibleNotifications.take(3).toList();
             if (recent.isEmpty) {
-              return const Card(
+              return Card(
                 clipBehavior: Clip.antiAlias,
                 child: EmptyState(
                     icon: Icons.notifications_none_rounded,
-                    title: 'Nothing new yet'),
+                    title: l.t('empty.nothingNew')),
               );
             }
             return Card(
@@ -103,7 +105,8 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _revenueCard(BuildContext context, AppState state) {
+  Widget _revenueCard(
+      BuildContext context, AppState state, AppLocalizations l) {
     final revenue = state.monthlyRevenue(source: state.pgPayments);
     final total = revenue.fold(0, (sum, e) => sum + e.total);
     final previous = revenue[revenue.length - 3].total;
@@ -121,13 +124,14 @@ class DashboardScreen extends StatelessWidget {
                   style: Theme.of(context).textTheme.headlineMedium),
               Text(
                 growth == null
-                    ? 'Last 6 months'
-                    : 'Last 6 months · ${growth >= 0 ? '+' : ''}${growth.toStringAsFixed(1)}%',
+                    ? l.t('dash.last6')
+                    : '${l.t('dash.last6')} · ${growth >= 0 ? '+' : ''}${growth.toStringAsFixed(1)}%',
                 style: const TextStyle(
                     color: primary, fontWeight: FontWeight.w700, fontSize: 12),
               ),
             ]),
-            StatusPill((growth ?? 0) >= 0 ? 'On track' : 'Dipping'),
+            StatusPill(
+                (growth ?? 0) >= 0 ? l.t('dash.onTrack') : l.t('dash.dipping')),
           ]),
           const SizedBox(height: 20),
           SizedBox(
@@ -139,7 +143,8 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _managerStats(BuildContext context, AppState state) {
+  Widget _managerStats(
+      BuildContext context, AppState state, AppLocalizations l) {
     final pg = state.activePg;
     final beds = pg?.beds ?? 0;
     final occupied = pg?.occupied ?? 0;
@@ -155,39 +160,39 @@ class DashboardScreen extends StatelessWidget {
         childAspectRatio: constraints.maxWidth > 680 ? 1.25 : .92,
         children: [
           StatCard(
-            label: 'Occupancy',
+            label: l.t('dash.occupancy'),
             value: '$occupancy%',
             icon: Icons.bed_rounded,
             tint: primary,
-            caption: '$occupied/$beds beds',
+            caption: '$occupied/$beds ${l.t('dash.beds')}',
             onTap: () => _open(context, const RoomsScreen()),
           ),
           StatCard(
-            label: 'Collected',
+            label: l.t('dash.collected'),
             value: inr(state.pgCollectedAmount),
             icon: Icons.savings_outlined,
             tint: const Color(0xFF3478C7),
-            caption: 'This month',
+            caption: l.t('dash.thisMonth'),
             onTap: () =>
                 _open(context, const PaymentsScreen(initialFilter: 'Paid')),
           ),
           StatCard(
-            label: 'Outstanding',
+            label: l.t('dash.outstanding'),
             value: inr(state.pgDueAmount),
             icon: Icons.pending_actions,
             tint: coral,
             caption:
-                '${state.pgPayments.where((e) => e.status != PaymentStatus.paid).length} dues',
+                '${state.pgPayments.where((e) => e.status != PaymentStatus.paid).length} ${l.t('dash.dues')}',
             onTap: () =>
                 _open(context, const PaymentsScreen(initialFilter: 'Due')),
           ),
           StatCard(
-            label: 'Open requests',
+            label: l.t('dash.openRequests'),
             value:
                 '${state.pgMaintenance.where((e) => e.status != MaintenanceStatus.resolved).length}',
             icon: Icons.build_circle_outlined,
             tint: warning,
-            caption: 'Needs attention',
+            caption: l.t('dash.needsAttention'),
             onTap: () =>
                 _open(context, const MaintenanceScreen(initialFilter: 'Open')),
           ),
@@ -196,7 +201,7 @@ class DashboardScreen extends StatelessWidget {
     });
   }
 
-  Widget _tenantHero(BuildContext context, AppState state) {
+  Widget _tenantHero(BuildContext context, AppState state, AppLocalizations l) {
     final due = state.tenantDuePayment;
     final latest = due ?? _latestTenantPayment(state);
     if (latest == null) {
@@ -204,7 +209,7 @@ class DashboardScreen extends StatelessWidget {
           color: ink,
           child: Padding(
             padding: const EdgeInsets.all(22),
-            child: Text('No rent scheduled yet',
+            child: Text(l.t('dash.noRent'),
                 style: Theme.of(context)
                     .textTheme
                     .titleLarge
@@ -222,7 +227,8 @@ class DashboardScreen extends StatelessWidget {
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Text('${formatMonthName(latest.period).toUpperCase()} RENT',
+              Text(
+                  '${formatMonthName(latest.period).toUpperCase()} ${l.t('dash.rent')}',
                   style: const TextStyle(
                       color: Colors.white54,
                       letterSpacing: 1.2,
@@ -239,8 +245,8 @@ class DashboardScreen extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               paid
-                  ? 'Paid on ${formatDay(latest.paidDate!)} · Room ${state.currentTenantRoomLabel}'
-                  : 'Due by ${formatDay(latest.dueDate)} · Room ${state.currentTenantRoomLabel}',
+                  ? '${l.t('dash.paidOn')} ${formatDay(latest.paidDate!)} · ${l.t('dash.room')} ${state.currentTenantRoomLabel}'
+                  : '${l.t('dash.dueBy')} ${formatDay(latest.dueDate)} · ${l.t('dash.room')} ${state.currentTenantRoomLabel}',
               style: const TextStyle(color: Colors.white60),
             ),
             const SizedBox(height: 18),
@@ -248,7 +254,7 @@ class DashboardScreen extends StatelessWidget {
               onPressed: () => _open(context, const PaymentsScreen()),
               icon:
                   Icon(paid ? Icons.receipt_long_outlined : Icons.lock_outline),
-              label: Text(paid ? 'View receipt' : 'Pay now'),
+              label: Text(paid ? l.t('dash.viewReceipt') : l.t('dash.payNow')),
               style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.white,
                   side: const BorderSide(color: Colors.white30)),
@@ -264,28 +270,53 @@ class DashboardScreen extends StatelessWidget {
     return mine.isEmpty ? null : mine.first;
   }
 
-  Widget _quickActions(BuildContext context, UserRole role) {
+  Widget _quickActions(
+      BuildContext context, UserRole role, AppLocalizations l) {
     // Shortcuts to the most common tasks per role.
     final actions = role == UserRole.tenant
         ? [
             (
-              'Pay rent',
+              l.t('qa.payRent'),
               Icons.account_balance_wallet_outlined,
               const PaymentsScreen()
             ),
-            ('Raise issue', Icons.build_outlined, const MaintenanceScreen()),
-            ('Add visitor', Icons.badge_outlined, const VisitorsScreen()),
-            ('Updates', Icons.campaign_outlined, const AnnouncementsScreen()),
+            (
+              l.t('qa.raiseIssue'),
+              Icons.build_outlined,
+              const MaintenanceScreen()
+            ),
+            (
+              l.t('qa.addVisitor'),
+              Icons.badge_outlined,
+              const VisitorsScreen()
+            ),
+            (
+              l.t('qa.updates'),
+              Icons.campaign_outlined,
+              const AnnouncementsScreen()
+            ),
           ]
         : [
             (
-              'Add tenant',
+              l.t('qa.addTenant'),
               Icons.person_add_alt_1_outlined,
               const TenantsScreen()
             ),
-            ('Record rent', Icons.payments_outlined, const PaymentsScreen()),
-            ('Maintenance', Icons.build_outlined, const MaintenanceScreen()),
-            ('Broadcast', Icons.campaign_outlined, const AnnouncementsScreen()),
+            (
+              l.t('qa.recordRent'),
+              Icons.payments_outlined,
+              const PaymentsScreen()
+            ),
+            (
+              l.t('qa.maintenance'),
+              Icons.build_outlined,
+              const MaintenanceScreen()
+            ),
+            (
+              l.t('qa.broadcast'),
+              Icons.campaign_outlined,
+              const AnnouncementsScreen()
+            ),
           ];
     return Row(
       children: actions
@@ -323,35 +354,37 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _ownerEmpty(BuildContext context, AppState state) => ListView(
+  Widget _ownerEmpty(
+          BuildContext context, AppState state, AppLocalizations l) =>
+      ListView(
         padding: const EdgeInsets.fromLTRB(20, 60, 20, 40),
         children: [
           const Icon(Icons.apartment_outlined, size: 56, color: Colors.black26),
           const SizedBox(height: 16),
-          Text('Welcome, ${state.displayName.split(' ').first}',
+          Text(
+              '${l.t('dash.welcomeUser')}, ${state.displayName.split(' ').first}',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 8),
-          const Text(
-              'Your workspace is empty. Set up your first PG to get started.',
+          Text(l.t('dash.emptyWorkspace'),
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.black54)),
+              style: const TextStyle(color: Colors.black54)),
           const SizedBox(height: 22),
           FilledButton.icon(
             onPressed: () => _open(context, const PgSetupWizard()),
             icon: const Icon(Icons.add),
-            label: const Text('Set up your PG'),
+            label: Text(l.t('dash.setupPg')),
           ),
         ],
       );
 
-  String _greeting() {
+  String _greeting(AppLocalizations l) {
     final hour = DateTime.now().hour;
     return hour < 12
-        ? 'Good morning'
+        ? l.t('dash.morning')
         : hour < 17
-            ? 'Good afternoon'
-            : 'Good evening';
+            ? l.t('dash.afternoon')
+            : l.t('dash.evening');
   }
 
   static void _open(BuildContext context, Widget screen) =>

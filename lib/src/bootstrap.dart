@@ -18,6 +18,7 @@ Future<AppState> bootstrap() async {
   }
   await initPush();
   final state = AppState();
+  await state.loadLanguage();
   await state.restoreCloudSession();
   if (state.isLoggedIn) unawaited(registerPushToken());
   supabaseOrNull?.auth.onAuthStateChange.listen((change) {

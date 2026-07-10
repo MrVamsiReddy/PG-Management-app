@@ -36,6 +36,36 @@ Next task:
 
 ## Latest
 ```
+### Session: 2026-07-10 · Prompt 10 — full localization
+Prompt/goal: Localize the core/tested flows in en/hi/te, persist language, map backend error codes to localized text.
+Commit(s): (this session)
+
+Summary:
+- Added shared_preferences; language persists (AppState.loadLanguage at bootstrap, setLanguage writes). Expanded l10n _strings with ~90 keys × 3 languages (auth, setpw, adminSetup, dash, qa, wiz, inv, err, status). Localized auth_screen, dashboard_screen, pg_wizard, and the tenant invite dialog in property_screens. signInCloud now returns code:network|bad_credentials|generic; AppLocalizations.error(code) maps backend/auth codes (and passes through human strings).
+
+Files modified:
+- pubspec.yaml (+shared_preferences)
+- lib/src/app_state.dart (loadLanguage/setLanguage persist; signInCloud → codes; dropped unused PostgrestException show)
+- lib/src/bootstrap.dart (await loadLanguage)
+- lib/src/l10n.dart (big key expansion en/hi/te + error(code) mapper)
+- lib/src/auth_screen.dart, dashboard_screen.dart, pg_wizard.dart, property_screens.dart (use l.t / l.error)
+- test/app_test.dart (persistence, error-code map, key-parity, auth/dashboard/wizard/invite widget tests)
+- AI/01,05,06 updated
+
+Architecture changes: AppLocalizations.error(code) is the single code→string mapper. Language is the only on-device persisted preference.
+
+Database changes: none.
+
+Tests added: 8 (persistence read/write, error mapping, hi/te key parity, 4 localized-screen widget tests). 101 passing; analyze clean.
+
+Remaining work: P11 (release QA). Localization coverage: some secondary ops/community/room-detail screens still English.
+
+Known issues introduced/affected: none new.
+
+Next task: Prompt 11 (production safety QA + release builds).
+```
+
+```
 ### Session: 2026-07-10 · Prompt 9 — manual UPI rent payments
 Prompt/goal: UPI config per PG, tenant submit-proof flow (never auto-confirm / never mark paid), owner confirm/reject, RLS + storage + audit + localization.
 Commit(s): (this session)

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
+import 'l10n.dart';
 import 'theme.dart';
 
 class AuthScreen extends StatelessWidget {
@@ -10,6 +11,7 @@ class AuthScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
+    final l = AppLocalizations.of(context);
     final shown = portals ?? LoginPortal.values;
     return Scaffold(
       body: SafeArea(
@@ -39,17 +41,16 @@ class AuthScreen extends StatelessWidget {
                               ?.copyWith(letterSpacing: -1.2)),
                     ]),
                     const SizedBox(height: 40),
-                    Text('Choose how to sign in',
+                    Text(l.t('auth.choose'),
                         textAlign: TextAlign.center,
                         style: Theme.of(context)
                             .textTheme
                             .headlineLarge
                             ?.copyWith(fontSize: 26)),
                     const SizedBox(height: 8),
-                    const Text(
-                        'Accounts are created by your administrator. There is no public sign-up.',
+                    Text(l.t('auth.chooseSub'),
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.black54)),
+                        style: const TextStyle(color: Colors.black54)),
                     if (state.authNotice != null) ...[
                       const SizedBox(height: 18),
                       Container(
@@ -72,8 +73,8 @@ class AuthScreen extends StatelessWidget {
                     ],
                     const SizedBox(height: 28),
                     for (final p in shown) ...[
-                      _portal(context, p, _portalIcon(p), '${p.label} login',
-                          _portalSubtitle(p)),
+                      _portal(context, p, _portalIcon(p), _portalTitle(l, p),
+                          _portalSubtitle(l, p)),
                       const SizedBox(height: 12),
                     ],
                   ]),
@@ -90,10 +91,16 @@ class AuthScreen extends StatelessWidget {
         LoginPortal.admin => Icons.admin_panel_settings_outlined,
       };
 
-  String _portalSubtitle(LoginPortal p) => switch (p) {
-        LoginPortal.owner => 'Manage your PG business',
-        LoginPortal.tenant => 'View your rent, notices and requests',
-        LoginPortal.admin => 'Platform administration',
+  String _portalTitle(AppLocalizations l, LoginPortal p) => switch (p) {
+        LoginPortal.owner => l.t('auth.ownerLogin'),
+        LoginPortal.tenant => l.t('auth.tenantLogin'),
+        LoginPortal.admin => l.t('auth.adminLogin'),
+      };
+
+  String _portalSubtitle(AppLocalizations l, LoginPortal p) => switch (p) {
+        LoginPortal.owner => l.t('auth.ownerSub'),
+        LoginPortal.tenant => l.t('auth.tenantSub'),
+        LoginPortal.admin => l.t('auth.adminSub'),
       };
 
   Widget _portal(BuildContext context, LoginPortal portal, IconData icon,
@@ -140,21 +147,23 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> forgotPassword() async {
+    final l = AppLocalizations.of(context);
     final address = email.text.trim();
     if (!address.contains('@')) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Enter your email address above first.')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(l.t('auth.enterEmailFirst'))));
       return;
     }
     final error = await AppScope.of(context).sendPasswordReset(address);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error ?? 'Reset link sent to $address.')));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error ?? '${l.t('auth.resetSentTo')} $address.')));
   }
 
   Future<void> submit() async {
     if (!formKey.currentState!.validate()) return;
     final state = AppScope.of(context);
+    final l = AppLocalizations.of(context);
     setState(() => busy = true);
     final error = await state.signInCloud(
         email: email.text.trim(),
@@ -164,7 +173,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => busy = false);
     if (error != null) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(error)));
+          .showSnackBar(SnackBar(content: Text(l.error(error))));
       return;
     }
     Navigator.pop(context);
@@ -172,8 +181,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final loginTitle = switch (widget.portal) {
+      LoginPortal.owner => l.t('auth.ownerLogin'),
+      LoginPortal.tenant => l.t('auth.tenantLogin'),
+      LoginPortal.admin => l.t('auth.adminLogin'),
+    };
     return Scaffold(
-      appBar: AppBar(title: Text('${widget.portal.label} login')),
+      appBar: AppBar(title: Text(loginTitle)),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -185,14 +200,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text('Welcome back',
+                      Text(l.t('auth.welcome'),
                           style: Theme.of(context)
                               .textTheme
                               .headlineLarge
                               ?.copyWith(fontSize: 30)),
                       const SizedBox(height: 8),
-                      Text(
-                          'Sign in to your ${widget.portal.label.toLowerCase()} account.',
+                      Text(l.t('auth.welcomeSub'),
                           style: Theme.of(context)
                               .textTheme
                               .bodyLarge
@@ -201,11 +215,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       TextFormField(
                         controller: email,
                         keyboardType: TextInputType.emailAddress,
-                        decoration: const InputDecoration(
-                            labelText: 'Email address',
-                            prefixIcon: Icon(Icons.mail_outline)),
+                        decoration: InputDecoration(
+                            labelText: l.t('auth.email'),
+                            prefixIcon: const Icon(Icons.mail_outline)),
                         validator: (v) => v == null || !v.contains('@')
-                            ? 'Enter a valid email'
+                            ? l.t('auth.emailInvalid')
                             : null,
                       ),
                       const SizedBox(height: 16),
@@ -213,7 +227,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         controller: password,
                         obscureText: obscure,
                         decoration: InputDecoration(
-                          labelText: 'Password',
+                          labelText: l.t('auth.password'),
                           prefixIcon: const Icon(Icons.lock_outline),
                           suffixIcon: IconButton(
                               icon: Icon(obscure
@@ -223,14 +237,14 @@ class _LoginScreenState extends State<LoginScreen> {
                                   setState(() => obscure = !obscure)),
                         ),
                         validator: (v) => v == null || v.length < 6
-                            ? 'Use at least 6 characters'
+                            ? l.t('auth.passwordShort')
                             : null,
                       ),
                       Align(
                           alignment: Alignment.centerRight,
                           child: TextButton(
                               onPressed: busy ? null : forgotPassword,
-                              child: const Text('Forgot password?'))),
+                              child: Text(l.t('auth.forgot')))),
                       const SizedBox(height: 10),
                       FilledButton(
                         onPressed: busy ? null : submit,
@@ -240,7 +254,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 height: 20,
                                 child: CircularProgressIndicator(
                                     strokeWidth: 2.4, color: Colors.white))
-                            : const Text('Sign in'),
+                            : Text(l.t('auth.signIn')),
                       ),
                       if (widget.portal == LoginPortal.admin) ...[
                         const SizedBox(height: 8),
@@ -252,7 +266,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   MaterialPageRoute(
                                       builder: (_) =>
                                           const AdminSetupScreen())),
-                          child: const Text('Set up a platform admin'),
+                          child: Text(l.t('auth.setupAdminLink')),
                         ),
                       ],
                     ]),
@@ -288,19 +302,25 @@ class _SetPasswordScreenState extends State<SetPasswordScreen> {
   Future<void> submit() async {
     if (!formKey.currentState!.validate()) return;
     final state = AppScope.of(context);
+    final l = AppLocalizations.of(context);
     setState(() => busy = true);
     final error = await state.changePassword(password.text);
     if (!mounted) return;
     setState(() => busy = false);
     if (error != null) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(error)));
+          .showSnackBar(SnackBar(content: Text(l.error(error))));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
+    final l = AppLocalizations.of(context);
+    final first = state.displayName.split(' ').first;
+    final greeting = state.displayName.isEmpty
+        ? l.t('setpw.hello')
+        : '${l.t('setpw.hello')}, $first';
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -315,7 +335,7 @@ class _SetPasswordScreenState extends State<SetPasswordScreen> {
                     children: [
                       const Icon(Icons.lock_reset, size: 54, color: primary),
                       const SizedBox(height: 16),
-                      Text('Set your password',
+                      Text(l.t('setpw.title'),
                           textAlign: TextAlign.center,
                           style: Theme.of(context)
                               .textTheme
@@ -323,7 +343,7 @@ class _SetPasswordScreenState extends State<SetPasswordScreen> {
                               ?.copyWith(fontSize: 28)),
                       const SizedBox(height: 8),
                       Text(
-                        'Welcome${state.displayName.isEmpty ? '' : ', ${state.displayName.split(' ').first}'}! Your temporary password worked — now choose your own. You will use it for every sign-in from here on.',
+                        '$greeting! ${l.t('setpw.sub')}',
                         textAlign: TextAlign.center,
                         style: Theme.of(context)
                             .textTheme
@@ -335,7 +355,7 @@ class _SetPasswordScreenState extends State<SetPasswordScreen> {
                         controller: password,
                         obscureText: obscure,
                         decoration: InputDecoration(
-                          labelText: 'New password',
+                          labelText: l.t('setpw.newPassword'),
                           prefixIcon: const Icon(Icons.lock_outline),
                           suffixIcon: IconButton(
                               icon: Icon(obscure
@@ -345,19 +365,18 @@ class _SetPasswordScreenState extends State<SetPasswordScreen> {
                                   setState(() => obscure = !obscure)),
                         ),
                         validator: (v) => v == null || v.length < 6
-                            ? 'Use at least 6 characters'
+                            ? l.t('auth.passwordShort')
                             : null,
                       ),
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: confirm,
                         obscureText: obscure,
-                        decoration: const InputDecoration(
-                            labelText: 'Confirm password',
-                            prefixIcon: Icon(Icons.lock_outline)),
-                        validator: (v) => v != password.text
-                            ? 'Passwords do not match'
-                            : null,
+                        decoration: InputDecoration(
+                            labelText: l.t('setpw.confirm'),
+                            prefixIcon: const Icon(Icons.lock_outline)),
+                        validator: (v) =>
+                            v != password.text ? l.t('setpw.mismatch') : null,
                       ),
                       const SizedBox(height: 18),
                       FilledButton(
@@ -368,12 +387,12 @@ class _SetPasswordScreenState extends State<SetPasswordScreen> {
                                 height: 20,
                                 child: CircularProgressIndicator(
                                     strokeWidth: 2.4, color: Colors.white))
-                            : const Text('Save & continue'),
+                            : Text(l.t('setpw.save')),
                       ),
                       const SizedBox(height: 8),
                       TextButton(
                           onPressed: busy ? null : state.logout,
-                          child: const Text('Sign out')),
+                          child: Text(l.t('common.signOut'))),
                     ]),
               ),
             ),
@@ -425,14 +444,16 @@ class _AdminSetupScreenState extends State<AdminSetupScreen> {
       return;
     }
     Navigator.pop(context);
-    messenger.showSnackBar(const SnackBar(
-        content: Text('Admin account created. You can now sign in.')));
+    if (!mounted) return;
+    messenger.showSnackBar(SnackBar(
+        content: Text(AppLocalizations.of(context).t('adminSetup.created'))));
   }
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Set up platform admin')),
+      appBar: AppBar(title: Text(l.t('adminSetup.title'))),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -444,29 +465,28 @@ class _AdminSetupScreenState extends State<AdminSetupScreen> {
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Text(
-                          'Create a platform admin using the server setup key. The key is verified on the server and never stored in the app.',
-                          style: TextStyle(color: Colors.black54)),
+                      Text(l.t('adminSetup.intro'),
+                          style: const TextStyle(color: Colors.black54)),
                       const SizedBox(height: 20),
                       TextFormField(
                         controller: name,
                         textCapitalization: TextCapitalization.words,
-                        decoration: const InputDecoration(
-                            labelText: 'Full name',
-                            prefixIcon: Icon(Icons.person_outline)),
+                        decoration: InputDecoration(
+                            labelText: l.t('adminSetup.fullName'),
+                            prefixIcon: const Icon(Icons.person_outline)),
                         validator: (v) => v == null || v.trim().isEmpty
-                            ? 'Enter a name'
+                            ? l.t('adminSetup.nameReq')
                             : null,
                       ),
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: email,
                         keyboardType: TextInputType.emailAddress,
-                        decoration: const InputDecoration(
-                            labelText: 'Email address',
-                            prefixIcon: Icon(Icons.mail_outline)),
+                        decoration: InputDecoration(
+                            labelText: l.t('auth.email'),
+                            prefixIcon: const Icon(Icons.mail_outline)),
                         validator: (v) => v == null || !v.contains('@')
-                            ? 'Enter a valid email'
+                            ? l.t('auth.emailInvalid')
                             : null,
                       ),
                       const SizedBox(height: 16),
@@ -474,7 +494,7 @@ class _AdminSetupScreenState extends State<AdminSetupScreen> {
                         controller: password,
                         obscureText: obscure,
                         decoration: InputDecoration(
-                          labelText: 'Password (8+ characters)',
+                          labelText: l.t('adminSetup.pwLabel'),
                           prefixIcon: const Icon(Icons.lock_outline),
                           suffixIcon: IconButton(
                               icon: Icon(obscure
@@ -484,18 +504,18 @@ class _AdminSetupScreenState extends State<AdminSetupScreen> {
                                   setState(() => obscure = !obscure)),
                         ),
                         validator: (v) => v == null || v.length < 8
-                            ? 'Use at least 8 characters'
+                            ? l.t('adminSetup.pwShort')
                             : null,
                       ),
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: setupKey,
                         obscureText: true,
-                        decoration: const InputDecoration(
-                            labelText: 'Setup key',
-                            prefixIcon: Icon(Icons.vpn_key_outlined)),
+                        decoration: InputDecoration(
+                            labelText: l.t('adminSetup.setupKey'),
+                            prefixIcon: const Icon(Icons.vpn_key_outlined)),
                         validator: (v) => v == null || v.isEmpty
-                            ? 'Enter the setup key'
+                            ? l.t('adminSetup.setupKeyReq')
                             : null,
                       ),
                       const SizedBox(height: 18),
@@ -507,7 +527,7 @@ class _AdminSetupScreenState extends State<AdminSetupScreen> {
                                 height: 20,
                                 child: CircularProgressIndicator(
                                     strokeWidth: 2.4, color: Colors.white))
-                            : const Text('Create admin'),
+                            : Text(l.t('adminSetup.create')),
                       ),
                     ]),
               ),
