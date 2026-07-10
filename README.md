@@ -52,6 +52,14 @@ flutter run -t lib/main_owner.dart
 flutter run -t lib/main_tenant.dart
 ```
 
+## Android release signing & in-app updates
+
+Release APKs are signed with a permanent keystore so a newer APK installs over the old one (no uninstall; data and login kept). On launch the Android app checks the latest GitHub release and, when newer than the installed version, shows an Update prompt that downloads the right APK (Owner/Tenant) for a tap-to-install in-place update.
+
+- The keystore lives at `android/app/release.keystore` with `android/key.properties` (both gitignored — never commit them; losing the keystore breaks in-place updates for existing installs, so back it up).
+- CI signing needs four repository secrets (Settings → Secrets and variables → Actions): `ANDROID_KEYSTORE_BASE64` (contents of `android/keystore.base64`), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_PASSWORD`, `ANDROID_KEY_ALIAS` (values from `android/key.properties`).
+- One-time migration: builds before v1.3.0 were debug-signed, so updating from them requires uninstalling once; every update after that is in-place.
+
 ## iOS builds (GitHub Actions, no Mac needed)
 
 `.github/workflows/ios.yml` builds unsigned owner + tenant IPAs on a macOS runner: it runs on `v*` tags (IPAs attached to the release next to the APKs) and via manual dispatch (IPAs uploaded as a workflow artifact; pass an existing tag to attach them to that release).

@@ -6,6 +6,7 @@ import 'l10n.dart';
 import 'module_screens.dart';
 import 'settings_screen.dart';
 import 'theme.dart';
+import 'update_check.dart';
 import 'widgets.dart';
 
 class HomeShell extends StatefulWidget {
@@ -16,6 +17,16 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   int index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        maybePromptUpdate(context, apkAsset: 'PG-Management-Owner.apk');
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

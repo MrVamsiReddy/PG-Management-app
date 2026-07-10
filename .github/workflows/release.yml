@@ -29,6 +29,17 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
+      - name: Set up release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
+          cat > android/key.properties <<EOF
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          storeFile=release.keystore
+          EOF
       - run: flutter build apk --release -t lib/main_owner.dart
       - run: cp build/app/outputs/flutter-apk/app-release.apk PG-Management-Owner.apk
       - run: flutter build apk --release -t lib/main_tenant.dart

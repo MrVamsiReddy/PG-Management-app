@@ -19,6 +19,7 @@ import 'package:pg_management/src/pg_wizard.dart';
 import 'package:pg_management/src/supabase_config.dart';
 import 'package:pg_management/src/tenant_app.dart';
 import 'package:pg_management/src/theme.dart';
+import 'package:pg_management/src/update_check.dart';
 
 // Cloud-only build: there is no local store, seed path or demo login in the
 // product. Tests inject an in-memory fixture directly into the public
@@ -658,6 +659,44 @@ void main() {
     expect(result.error, isNotNull);
     expect(state.tenants.length, tenantsBefore);
     expect(state.payments.length, paymentsBefore);
+  });
+
+  test('update check compares versions semantically', () {
+    expect(isNewerVersion('1.2.0', '1.3.0'), isTrue);
+    expect(isNewerVersion('1.2.0', '2.0.0'), isTrue);
+    expect(isNewerVersion('1.2.0', '1.2.1'), isTrue);
+    expect(isNewerVersion('1.2.0', '1.2.0'), isFalse);
+    expect(isNewerVersion('1.3.0', '1.2.9'), isFalse);
+    expect(isNewerVersion('1.2.0+3', '1.10.0'), isTrue);
+  });
+
+  test('update check picks this surface\'s APK from the release', () {
+    final release = {
+      'tag_name': 'v9.9.9',
+      'assets': [
+        {
+          'name': 'PG-Management-Owner.apk',
+          'browser_download_url': 'https://example.com/owner.apk'
+        },
+        {
+          'name': 'PG-Management-Tenant.apk',
+          'browser_download_url': 'https://example.com/tenant.apk'
+        },
+      ],
+    };
+    final update = updateFromRelease(release,
+        currentVersion: '1.2.0', apkAsset: 'PG-Management-Tenant.apk');
+    expect(update, isNotNull);
+    expect(update!.version, '9.9.9');
+    expect(update.url, 'https://example.com/tenant.apk');
+    expect(
+        updateFromRelease(release,
+            currentVersion: '9.9.9', apkAsset: 'PG-Management-Tenant.apk'),
+        isNull);
+    expect(
+        updateFromRelease(release,
+            currentVersion: '1.0.0', apkAsset: 'Missing.apk'),
+        isNull);
   });
 
   test('the remove-tenant function deletes the login and emails the tenant',

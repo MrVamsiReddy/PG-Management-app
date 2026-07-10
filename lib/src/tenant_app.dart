@@ -9,6 +9,7 @@ import 'l10n.dart';
 import 'operations_screens.dart';
 import 'settings_screen.dart';
 import 'theme.dart';
+import 'update_check.dart';
 import 'widgets.dart';
 
 class TenantApp extends StatelessWidget {
@@ -82,6 +83,16 @@ class TenantShell extends StatefulWidget {
 
 class _TenantShellState extends State<TenantShell> {
   int index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        maybePromptUpdate(context, apkAsset: 'PG-Management-Tenant.apk');
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

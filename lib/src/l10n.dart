@@ -315,6 +315,12 @@ const Map<String, Map<String, String>> _strings = {
     'rem.emailSent':
         'They were emailed that they are no longer part of this PG.',
     'rem.noEmail': 'No notification email could be sent.',
+    // In-app update
+    'upd.title': 'Update available',
+    'upd.body':
+        'A new version is ready. Tap Update to download it, then open the downloaded file to install — the app updates in place and your data and login are kept.',
+    'upd.later': 'Later',
+    'upd.update': 'Update',
     // Errors (mapped from backend/auth)
     'err.network': 'Cannot reach the server. Check your connection.',
     'err.generic': 'Something went wrong. Please try again.',
@@ -559,6 +565,11 @@ const Map<String, Map<String, String>> _strings = {
     'rem.emailSent':
         'उन्हें ईमेल से सूचित किया गया कि वे अब इस पीजी का हिस्सा नहीं हैं।',
     'rem.noEmail': 'सूचना ईमेल नहीं भेजा जा सका।',
+    'upd.title': 'अपडेट उपलब्ध है',
+    'upd.body':
+        'नया संस्करण तैयार है। डाउनलोड करने के लिए अपडेट दबाएँ, फिर इंस्टॉल करने के लिए डाउनलोड की गई फ़ाइल खोलें — ऐप वहीं अपडेट हो जाता है और आपका डेटा और लॉगिन सुरक्षित रहते हैं।',
+    'upd.later': 'बाद में',
+    'upd.update': 'अपडेट करें',
     'err.network': 'सर्वर तक नहीं पहुँच सके। अपना कनेक्शन जाँचें।',
     'err.generic': 'कुछ गड़बड़ हुई। कृपया फिर से प्रयास करें।',
     'err.badCredentials': 'गलत ईमेल या पासवर्ड।',
@@ -806,6 +817,11 @@ const Map<String, Map<String, String>> _strings = {
     'rem.emailSent':
         'వారు ఇకపై ఈ పీజీలో భాగం కాదని ఇమెయిల్ ద్వారా తెలియజేయబడింది.',
     'rem.noEmail': 'నోటిఫికేషన్ ఇమెయిల్ పంపడం సాధ్యపడలేదు.',
+    'upd.title': 'అప్‌డేట్ అందుబాటులో ఉంది',
+    'upd.body':
+        'కొత్త వెర్షన్ సిద్ధంగా ఉంది. డౌన్‌లోడ్ చేయడానికి అప్‌డేట్ నొక్కండి, ఆపై ఇన్‌స్టాల్ చేయడానికి డౌన్‌లోడ్ చేసిన ఫైల్‌ను తెరవండి — యాప్ అక్కడే అప్‌డేట్ అవుతుంది, మీ డేటా మరియు లాగిన్ అలాగే ఉంటాయి.',
+    'upd.later': 'తర్వాత',
+    'upd.update': 'అప్‌డేట్ చేయండి',
     'err.network': 'సర్వర్‌ను చేరుకోలేకపోయాము. మీ కనెక్షన్‌ను తనిఖీ చేయండి.',
     'err.generic': 'ఏదో తప్పు జరిగింది. దయచేసి మళ్లీ ప్రయత్నించండి.',
     'err.badCredentials': 'తప్పు ఇమెయిల్ లేదా పాస్‌వర్డ్.',
