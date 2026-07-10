@@ -1,10 +1,15 @@
 -- PG Management — manual UPI rent payments (roadmap Prompt 9).
 -- Run once in the Supabase dashboard AFTER schema.sql, 002, 004, 006.
+-- Re-runnable: every policy is dropped before it is (re)created.
 --
 -- Live workspace model (app_data + members): owner_id is the workspace, tenant
 -- ids are text. Security-critical transitions live in these dedicated tables so
 -- RLS can enforce that a tenant can only ever create a pending_confirmation
 -- submission and never flip a due to paid.
+--
+-- Requires public.members (002_members.sql) and public.app_data (schema.sql),
+-- both keyed by owner_id. If you hit "column owner_id does not exist", run
+-- those two files first.
 
 create table if not exists public.pg_upi_settings (
   owner_id   uuid not null references auth.users (id) on delete cascade,
@@ -18,11 +23,13 @@ create table if not exists public.pg_upi_settings (
 
 alter table public.pg_upi_settings enable row level security;
 
+drop policy if exists "owner manages own upi" on public.pg_upi_settings;
 create policy "owner manages own upi" on public.pg_upi_settings
   for all to authenticated
   using ((select auth.uid()) = owner_id)
   with check ((select auth.uid()) = owner_id);
 
+drop policy if exists "member reads workspace upi" on public.pg_upi_settings;
 create policy "member reads workspace upi" on public.pg_upi_settings
   for select to authenticated
   using (exists (
@@ -57,12 +64,14 @@ create index if not exists payment_submissions_dup_idx on public.payment_submiss
 alter table public.payment_submissions enable row level security;
 
 -- Owner: full control over their workspace's submissions (confirm/reject).
+drop policy if exists "owner manages submissions" on public.payment_submissions;
 create policy "owner manages submissions" on public.payment_submissions
   for all to authenticated
   using ((select auth.uid()) = owner_id)
   with check ((select auth.uid()) = owner_id);
 
 -- Tenant (member): may create only their own pending submission…
+drop policy if exists "member submits payment" on public.payment_submissions;
 create policy "member submits payment" on public.payment_submissions
   for insert to authenticated
   with check (
@@ -77,11 +86,13 @@ create policy "member submits payment" on public.payment_submissions
 
 -- …and read only their own. No tenant UPDATE/DELETE policy exists, so a tenant
 -- can never confirm a payment or edit one after submitting.
+drop policy if exists "member reads own submissions" on public.payment_submissions;
 create policy "member reads own submissions" on public.payment_submissions
   for select to authenticated
   using (member_email = lower((select auth.email())));
 
 -- Platform admin: read/audit only.
+drop policy if exists "admin reads submissions" on public.payment_submissions;
 create policy "admin reads submissions" on public.payment_submissions
   for select to authenticated
   using (public.is_platform_admin());
@@ -144,11 +155,13 @@ $$
     )
 $$;
 
+drop policy if exists "proofs workspace read" on storage.objects;
 create policy "proofs workspace read" on storage.objects
   for select to authenticated
   using (bucket_id = 'payment-proofs'
     and public.can_access_workspace((storage.foldername(name))[1]));
 
+drop policy if exists "proofs workspace insert" on storage.objects;
 create policy "proofs workspace insert" on storage.objects
   for insert to authenticated
   with check (bucket_id = 'payment-proofs'
