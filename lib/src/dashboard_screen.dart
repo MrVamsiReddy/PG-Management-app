@@ -272,29 +272,24 @@ class DashboardScreen extends StatelessWidget {
 
   Widget _quickActions(
       BuildContext context, AppState state, UserRole role, AppLocalizations l) {
-    // Shortcuts per role, each with a stable key so users can favourite it.
     final actions = role == UserRole.tenant
         ? [
             (
-              'qa.payRent',
               l.t('qa.payRent'),
               Icons.account_balance_wallet_outlined,
               const PaymentsScreen()
             ),
             (
-              'qa.raiseIssue',
               l.t('qa.raiseIssue'),
               Icons.build_outlined,
               const MaintenanceScreen()
             ),
             (
-              'qa.addVisitor',
               l.t('qa.addVisitor'),
               Icons.badge_outlined,
               const VisitorsScreen()
             ),
             (
-              'qa.updates',
               l.t('qa.updates'),
               Icons.campaign_outlined,
               const AnnouncementsScreen()
@@ -302,81 +297,57 @@ class DashboardScreen extends StatelessWidget {
           ]
         : [
             (
-              'qa.addTenant',
               l.t('qa.addTenant'),
               Icons.person_add_alt_1_outlined,
               const TenantsScreen()
             ),
             (
-              'qa.recordRent',
               l.t('qa.recordRent'),
               Icons.payments_outlined,
               const PaymentsScreen()
             ),
             (
-              'qa.maintenance',
               l.t('qa.maintenance'),
               Icons.build_outlined,
               const MaintenanceScreen()
             ),
             (
-              'qa.broadcast',
               l.t('qa.broadcast'),
               Icons.campaign_outlined,
               const AnnouncementsScreen()
             ),
           ];
-    final ordered = state.favoritesFirst(actions, (a) => a.$1);
     return Row(
-      children: ordered.map((a) {
-        final fav = state.isFavorite(a.$1);
+      children: actions.map((a) {
         return Expanded(
           child: Padding(
-            padding: EdgeInsets.only(right: a == ordered.last ? 0 : 10),
+            padding: EdgeInsets.only(right: a == actions.last ? 0 : 10),
             child: InkWell(
               borderRadius: BorderRadius.circular(18),
               onTap: () => Navigator.push(
-                  context, MaterialPageRoute(builder: (_) => a.$4)),
+                  context, MaterialPageRoute(builder: (_) => a.$3)),
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(vertical: 18, horizontal: 4),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                      color:
-                          fav ? warning.withValues(alpha: .5) : Colors.black12,
-                      width: fav ? 1.4 : 1),
+                  border: Border.all(color: Colors.black12),
                 ),
-                child: Stack(clipBehavior: Clip.none, children: [
-                  Column(children: [
-                    Container(
-                        padding: const EdgeInsets.all(11),
-                        decoration: BoxDecoration(
-                            color: primarySoft,
-                            borderRadius: BorderRadius.circular(13)),
-                        child: Icon(a.$3, color: primary, size: 22)),
-                    const SizedBox(height: 9),
-                    Text(a.$2,
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 11)),
-                  ]),
-                  Positioned(
-                    top: -8,
-                    right: -6,
-                    child: InkWell(
-                      customBorder: const CircleBorder(),
-                      onTap: () => state.toggleFavorite(a.$1),
-                      child: Padding(
-                        padding: const EdgeInsets.all(4),
-                        child: Icon(fav ? Icons.star : Icons.star_border,
-                            size: 16, color: fav ? warning : Colors.black26),
-                      ),
-                    ),
-                  ),
+                child: Column(children: [
+                  Container(
+                      padding: const EdgeInsets.all(11),
+                      decoration: BoxDecoration(
+                          color: primarySoft,
+                          borderRadius: BorderRadius.circular(13)),
+                      child: Icon(a.$2, color: primary, size: 22)),
+                  const SizedBox(height: 9),
+                  Text(a.$1,
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 11)),
                 ]),
               ),
             ),
