@@ -1335,7 +1335,7 @@ class AppState extends ChangeNotifier {
     }
     try {
       final rows = await client
-          .from('payment_submissions')
+          .from('upi_submissions')
           .select()
           .order('submitted_at', ascending: false);
       submissions = (rows as List)
@@ -1441,7 +1441,7 @@ class AppState extends ChangeNotifier {
           path = null;
         }
       }
-      await client.from('payment_submissions').insert({
+      await client.from('upi_submissions').insert({
         'owner_id': workspaceId,
         'customer_id': _resolvedCustomerId,
         'pg_id': pgId,
@@ -1478,7 +1478,7 @@ class AppState extends ChangeNotifier {
     final client = supabaseOrNull;
     if (client == null || !isLoggedIn) return 'Sign in to confirm payments.';
     try {
-      await client.from('payment_submissions').update({
+      await client.from('upi_submissions').update({
         'status': 'confirmed',
         'confirmed_by': client.auth.currentUser?.id,
         'confirmed_at': DateTime.now().toIso8601String(),
@@ -1501,7 +1501,7 @@ class AppState extends ChangeNotifier {
     if (client == null || !isLoggedIn) return 'Sign in to reject payments.';
     if (reason.trim().isEmpty) return 'Enter a reason for rejecting.';
     try {
-      await client.from('payment_submissions').update({
+      await client.from('upi_submissions').update({
         'status': 'rejected',
         'rejection_reason': reason.trim(),
       }).eq('id', s.id);

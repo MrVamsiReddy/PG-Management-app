@@ -38,7 +38,7 @@ create policy "member reads workspace upi" on public.pg_upi_settings
       and m.member_email = lower((select auth.email()))
   ));
 
-create table if not exists public.payment_submissions (
+create table if not exists public.upi_submissions (
   id              uuid primary key default gen_random_uuid(),
   owner_id        uuid not null references auth.users (id) on delete cascade,
   customer_id     uuid,
@@ -58,49 +58,49 @@ create table if not exists public.payment_submissions (
   confirmed_at    timestamptz
 );
 
-create index if not exists payment_submissions_owner_idx on public.payment_submissions (owner_id);
-create index if not exists payment_submissions_dup_idx on public.payment_submissions (owner_id, amount, utr);
+create index if not exists upi_submissions_owner_idx on public.upi_submissions (owner_id);
+create index if not exists upi_submissions_dup_idx on public.upi_submissions (owner_id, amount, utr);
 
-alter table public.payment_submissions enable row level security;
+alter table public.upi_submissions enable row level security;
 
 -- Owner: full control over their workspace's submissions (confirm/reject).
-drop policy if exists "owner manages submissions" on public.payment_submissions;
-create policy "owner manages submissions" on public.payment_submissions
+drop policy if exists "owner manages submissions" on public.upi_submissions;
+create policy "owner manages submissions" on public.upi_submissions
   for all to authenticated
   using ((select auth.uid()) = owner_id)
   with check ((select auth.uid()) = owner_id);
 
 -- Tenant (member): may create only their own pending submission…
-drop policy if exists "member submits payment" on public.payment_submissions;
-create policy "member submits payment" on public.payment_submissions
+drop policy if exists "member submits payment" on public.upi_submissions;
+create policy "member submits payment" on public.upi_submissions
   for insert to authenticated
   with check (
     status = 'pending_confirmation'
     and member_email = lower((select auth.email()))
     and exists (
       select 1 from public.members m
-      where m.owner_id = payment_submissions.owner_id
+      where m.owner_id = upi_submissions.owner_id
         and m.member_email = lower((select auth.email()))
     )
   );
 
 -- …and read only their own. No tenant UPDATE/DELETE policy exists, so a tenant
 -- can never confirm a payment or edit one after submitting.
-drop policy if exists "member reads own submissions" on public.payment_submissions;
-create policy "member reads own submissions" on public.payment_submissions
+drop policy if exists "member reads own submissions" on public.upi_submissions;
+create policy "member reads own submissions" on public.upi_submissions
   for select to authenticated
   using (member_email = lower((select auth.email())));
 
 -- Platform admin: read/audit only.
-drop policy if exists "admin reads submissions" on public.payment_submissions;
-create policy "admin reads submissions" on public.payment_submissions
+drop policy if exists "admin reads submissions" on public.upi_submissions;
+create policy "admin reads submissions" on public.upi_submissions
   for select to authenticated
   using (public.is_platform_admin());
 
 -- ---------------------------------------------------------------------------
 -- Tighten members write access: tenants may no longer write the payments blob,
 -- so a tenant cannot mark a due paid via app_data. They keep tenant-facing
--- collections and go through payment_submissions for rent.
+-- collections and go through upi_submissions for rent.
 -- ---------------------------------------------------------------------------
 
 drop policy if exists "member inserts tenant collections" on public.app_data;

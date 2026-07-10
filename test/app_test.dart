@@ -1393,7 +1393,7 @@ void main() {
     final sql = File('supabase/007_payments.sql').readAsStringSync();
     expect(sql, contains('create table if not exists public.pg_upi_settings'));
     expect(
-        sql, contains('create table if not exists public.payment_submissions'));
+        sql, contains('create table if not exists public.upi_submissions'));
     for (final s in ['pending_confirmation', 'confirmed', 'rejected']) {
       expect(sql, contains("'$s'"));
     }
@@ -1414,7 +1414,7 @@ void main() {
     expect(sql, contains("'payment-proofs'"));
     expect(sql, contains('can_access_workspace'));
     // Duplicate detection index on customer/amount/utr scope.
-    expect(sql, contains('payment_submissions_dup_idx'));
+    expect(sql, contains('upi_submissions_dup_idx'));
   });
 
   test('setLanguage switches the active language and locale', () {

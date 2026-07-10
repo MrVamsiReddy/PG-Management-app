@@ -25,7 +25,7 @@ Responsibilities: run own PGs.
 ## Tenant
 Responsibilities: view own rent/notices/complaints/visitors; submit payment.
 - Allowed: view own rent (`tenantPayments`), raise complaints, add visitors, view notices/announcements (`visibleAnnouncements`), edit own profile/KYC ✅ (scoped in app code).
-- Forbidden: business management (no owner screens in tenant build) ✅; confirm payment ✅ (P9 — tenant only submits `pending_confirmation` proof via `payment_submissions`; no UPDATE policy and no `payments` blob write, so cannot mark paid); audit logs (no RLS policy → no access) ✅; other tenants' data ⚠️ (client-side filtering on a shared workspace blob, not RLS).
+- Forbidden: business management (no owner screens in tenant build) ✅; confirm payment ✅ (P9 — tenant only submits `pending_confirmation` proof via `upi_submissions`; no UPDATE policy and no `payments` blob write, so cannot mark paid); audit logs (no RLS policy → no access) ✅; other tenants' data ⚠️ (client-side filtering on a shared workspace blob, not RLS).
 - Screens (tenant build): `TenantShell` → `TenantHome`, `PaymentsScreen`, `MaintenanceScreen`, `VisitorsScreen`, `TenantProfileScreen`, `NotificationsScreen`, `AnnouncementsScreen`, `SettingsScreen`.
 - Tenant build imports no owner/admin screens ✅.
 
