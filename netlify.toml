@@ -1,0 +1,15 @@
+[build]
+command = """
+git clone https://github.com/flutter/flutter.git --depth 1 -b stable
+export PATH="$PWD/flutter/bin:$PATH"
+flutter config --enable-web
+flutter doctor
+flutter pub get
+flutter build web --release
+"""
+publish = "build/web"
+
+[[redirects]]
+from = "/*"
+to = "/index.html"
+status = 200
