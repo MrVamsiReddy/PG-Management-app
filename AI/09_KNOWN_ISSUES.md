@@ -11,7 +11,7 @@ Severity: P0 blocker · P1 high · P2 medium · P3 low. Grounded in current sour
 
 ## Missing functionality (Pending — see 06)
 - P1 · Manual UPI submit/confirm/reject flow (P9).
-- P2 · Admin "view customer PGs" returns empty — `loadCustomerPgNames` reads relational `pgs` the app never writes.
+- ~~P2 · Admin "view customer PGs" returns empty.~~ **Fixed:** `loadCustomerPgNames` now resolves the customer's owner from `profiles` and reads the PG names from the `app_data` blob (where the owner app actually writes them); `010_admin_app_data.sql` adds a platform-admin read policy on `app_data`.
 - P2 · Full localization (P10).
 
 ## Incorrect permissions

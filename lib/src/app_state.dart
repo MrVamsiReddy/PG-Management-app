@@ -492,13 +492,34 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// PG names for a customer, for the admin console. The owner app stores PGs
+  /// in the `app_data` blob keyed by the owner's user id (not the relational
+  /// `pgs` table), so resolve the owner from the customer's profile, then read
+  /// the blob (admins have a read policy on `app_data`).
   Future<List<String>> loadCustomerPgNames(String customerId) async {
     final client = supabaseOrNull;
     if (client == null) return [];
     try {
-      final rows =
-          await client.from('pgs').select('name').eq('customer_id', customerId);
-      return (rows as List).map((r) => r['name'] as String).toList();
+      final prof = await client
+          .from('profiles')
+          .select('id')
+          .eq('customer_id', customerId)
+          .eq('role', 'owner')
+          .limit(1)
+          .maybeSingle();
+      final ownerId = prof?['id'] as String?;
+      if (ownerId == null) return [];
+      final row = await client
+          .from('app_data')
+          .select('data')
+          .eq('owner_id', ownerId)
+          .eq('key', 'pgs')
+          .maybeSingle();
+      final data = row?['data'] as List? ?? const [];
+      return data
+          .map((e) => (e as Map)['name'] as String? ?? '')
+          .where((n) => n.isNotEmpty)
+          .toList();
     } catch (_) {
       return [];
     }

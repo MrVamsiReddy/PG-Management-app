@@ -10,6 +10,7 @@
 7. `supabase/007_payments.sql` — `pg_upi_settings` + `upi_submissions` (tenant-insert-pending-only RLS) + revokes tenant `payments` blob write + `payment-proofs` storage policies (`can_access_workspace`). **Not idempotent**; run once.
 8. `supabase/008_delete_customer.sql` — `admin_delete_customer(uuid)` transactional cascade RPC (service-role only). Idempotent (`create or replace`); safe to re-run.
 9. `supabase/009_subscriptions.sql` — adds `starts_at`/`expires_at` to `customers` (+ backfill 30-day window) and makes `my_owner_customer_id` expiry-aware. Idempotent; safe to re-run.
+10. `supabase/010_admin_app_data.sql` — platform-admin read policy on `app_data` (admin "View PGs"). Idempotent; safe to re-run.
 
 Auth settings: **Authentication → Providers → Email → turn OFF "Confirm email"** (invited/admin accounts sign in immediately). Optionally set **URL Configuration → Site URL** to the tenant/owner web URL.
 
@@ -45,7 +46,7 @@ GitHub Actions builds/tests `main.dart` and publishes a release APK on tag `vX.Y
 Deploy `create-admin` + set `ADMIN_SETUP_KEY` → in the app: **Admin login → Set up a platform admin** → enter the key. Then admins create customers via **New customer**.
 
 ## Release checklist
-- [ ] Migrations 1–9 run; email confirmation off; `payment-proofs` bucket present.
+- [ ] Migrations 1–10 run; email confirmation off; `payment-proofs` bucket present.
 - [ ] Auth → URL Configuration: Site URL + Redirect URLs set to the `/PG-Management-app/` path (reset links).
 - [ ] All 4 functions deployed; `ADMIN_SETUP_KEY` + `FIREBASE_SERVICE_ACCOUNT` set.
 - [x] `flutter analyze` clean; `flutter test` green (101); `dart format` applied. (P11)

@@ -53,4 +53,7 @@ Removed the local Hive store, the demo/seed path (`_seed`, `debugSeedDemoData`),
 Before Prompts 8–11 add more features on the unenforced foundation, migrate the owner/tenant runtime from the `app_data` blob onto the relational `customer_id`-scoped tables so `004` RLS becomes the enforcement boundary, and make `payRent` a submission (not a paid-mark). Then P9/P8 land on solid ground.
 
 ## Test status
-`test/app_test.dart` — 115 passing; `flutter analyze` clean; `dart format` applied repo-wide; owner + tenant `flutter build web --release` succeed. See `10_TESTING_GUIDE.md`.
+`test/app_test.dart` — 116 passing; `flutter analyze` clean; `dart format` applied repo-wide; owner + tenant `flutter build web --release` succeed. See `10_TESTING_GUIDE.md`.
+
+## Bugfixes (interim)
+- **Admin "View PGs" now works** — `loadCustomerPgNames` reads the customer's PGs from the `app_data` blob (owner resolved via `profiles`), not the empty relational `pgs` table; `010_admin_app_data.sql` grants platform admins read on `app_data`.

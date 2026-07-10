@@ -1990,6 +1990,17 @@ void main() {
     expect(await state.deleteCustomer('c1'), isNotNull);
   });
 
+  test('admins can read app_data so "View PGs" works, and it fails closed',
+      () async {
+    // The fix reads PGs from the app_data blob; a matching admin read policy
+    // exists in migration 010.
+    final sql = File('supabase/010_admin_app_data.sql').readAsStringSync();
+    expect(sql, contains('admin reads all app_data'));
+    expect(sql, contains('public.is_platform_admin()'));
+    // No cloud → empty, never throws.
+    expect(await state.loadCustomerPgNames('c1'), isEmpty);
+  });
+
   test('customer deletion cascades every table atomically and is admin-only',
       () {
     final sql = File('supabase/008_delete_customer.sql').readAsStringSync();
