@@ -8,6 +8,7 @@
 5. `supabase/005_admin_setup.sql` — `admin_setup_attempts`.
 6. `supabase/006_invites.sql` — `invites` (tenant invite lifecycle, service-role-write-only) + `resent` status on `tenant_invites` + restrictive `app_data` policies that block writes while `must_change_password` is set. **Not idempotent** (plain `create policy`); run once.
 7. `supabase/007_payments.sql` — `pg_upi_settings` + `upi_submissions` (tenant-insert-pending-only RLS) + revokes tenant `payments` blob write + `payment-proofs` storage policies (`can_access_workspace`). **Not idempotent**; run once.
+8. `supabase/008_delete_customer.sql` — `admin_delete_customer(uuid)` transactional cascade RPC (service-role only). Idempotent (`create or replace`); safe to re-run.
 
 Auth settings: **Authentication → Providers → Email → turn OFF "Confirm email"** (invited/admin accounts sign in immediately). Optionally set **URL Configuration → Site URL** to the tenant/owner web URL.
 
@@ -16,6 +17,7 @@ Auth settings: **Authentication → Providers → Email → turn OFF "Confirm em
 - `invite` — `functions/invite/index.ts`. No extra secret. **Redeploy after Prompt 7** (now handles create/resend/revoke/validate/accept; requires `006_invites.sql`). The app has no client-side fallback — tenant invites fail cleanly if this function is missing.
 - `create-admin` — `functions/create-admin/index.ts`. Secrets: `ADMIN_SETUP_KEY` (required), optional `ADMIN_SETUP_KEY_PREVIOUS` (rotation grace), `ADMIN_SETUP_KEY_EXPIRES_AT` (ISO).
 - `create-customer` — `functions/create-customer/index.ts`. No extra secret; requires a platform admin caller.
+- `delete-customer` — `functions/delete-customer/index.ts`. No extra secret; platform-admin only; requires `008_delete_customer.sql`. Permanently deletes a customer (DB cascade RPC + Storage purge + auth-user deletion).
 
 Auto-injected into every function: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (do not set manually).
 

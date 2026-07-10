@@ -111,10 +111,43 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                     }
                     _reload(state);
                   }),
+              IconButton(
+                  tooltip: 'Delete customer',
+                  onPressed: () => _deleteCustomer(context, state, c),
+                  icon: const Icon(Icons.delete_outline, color: coral)),
             ]),
           ]),
         ),
       );
+
+  Future<void> _deleteCustomer(
+      BuildContext context, AppState state, Customer c) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete customer?'),
+        content: Text(
+            'This permanently deletes ${c.businessName}, its owner and tenant accounts, and all PGs, rooms, tenants, payments and files. This cannot be undone.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: coral),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Delete permanently')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    messenger
+        .showSnackBar(SnackBar(content: Text('Deleting ${c.businessName}…')));
+    final error = await state.deleteCustomer(c.id);
+    messenger.showSnackBar(
+        SnackBar(content: Text(error ?? '${c.businessName} deleted.')));
+    _reload(state);
+  }
 
   Future<void> _viewPgs(
       BuildContext context, AppState state, Customer c) async {

@@ -15,8 +15,11 @@ Roadmap = `app improvements.md` (Prompts 1–11). Details of each area live in `
 - **P10 Full localization** — language now **persists** (`shared_preferences`, `loadLanguage` at bootstrap). Localized auth (portals/login/set-password/admin-setup), dashboard, PG wizard, tenant invite dialog on top of the existing nav/settings/profile/announcements/UPI. `signInCloud` returns `code:*`; `AppLocalizations.error(code)` maps backend/auth codes to localized text. en/hi/te expanded (~90 keys). Not-yet-covered: some secondary ops/community/room-detail strings.
 - **P11 Production QA** — checklist verified against source (see below); fixed the receipt PDF footer ("demo receipt" → "not a valid tax document"). `dart format` clean, `flutter analyze` clean, `flutter test` 101 passing, and **both `flutter build web --release` (owner + tenant) succeed**. Remaining production blockers are the pre-existing P0/P1 items in `09` (runtime still on `app_data`/`owner_id`, not relational `customer_id` RLS; legacy tenants bypass the disabled-customer gate).
 
+## Post-P11 improvements (in progress, one task at a time)
+- **Customer deletion (done)** — platform admin can permanently delete a customer from `CustomerManagementScreen` (delete icon + confirm dialog). `AppState.deleteCustomer` → `delete-customer` Edge Function (platform-admin only) → `admin_delete_customer(target)` RPC in `008_delete_customer.sql`: a single-transaction plpgsql cascade over app_data/members/invites/pg_upi_settings/upi_submissions/push_tokens/audit_logs/profiles and the `customers` row (which cascades all 004 relational tables). The function then purges the customer's `payment-proofs` Storage folder and deletes every auth user (owner + tenants). RPC is service-role-only (`revoke ... from public, authenticated`). UI removes the row on success.
+
 ## In progress
-- None (each prompt shipped whole). Cross-cutting gap: runtime not migrated to relational tables.
+- Improvements batch tasks 2–9 (PG creation simplification, onboarding rent, room pricing, password mgmt, subscriptions, dashboard, navigation, rooms/beds) — pending, executed one at a time.
 
 ## P11 production checklist (verified 2026-07-10)
 - ✅ No demo/local/offline code, no seed/mock path (Hive + demo removed; only stray comments remained).
@@ -44,4 +47,4 @@ Removed the local Hive store, the demo/seed path (`_seed`, `debugSeedDemoData`),
 Before Prompts 8–11 add more features on the unenforced foundation, migrate the owner/tenant runtime from the `app_data` blob onto the relational `customer_id`-scoped tables so `004` RLS becomes the enforcement boundary, and make `payRent` a submission (not a paid-mark). Then P9/P8 land on solid ground.
 
 ## Test status
-`test/app_test.dart` — 101 passing; `flutter analyze` clean; `dart format` applied repo-wide; owner + tenant `flutter build web --release` succeed. See `10_TESTING_GUIDE.md`.
+`test/app_test.dart` — 102 passing; `flutter analyze` clean; `dart format` applied repo-wide; owner + tenant `flutter build web --release` succeed. See `10_TESTING_GUIDE.md`.

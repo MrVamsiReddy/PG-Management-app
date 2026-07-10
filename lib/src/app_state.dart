@@ -408,6 +408,29 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Platform-admin only: permanently deletes a customer and everything under
+  /// it (owner + tenant accounts, workspace data, relational rows, storage) via
+  /// the `delete-customer` Edge Function. Returns an error message, or null.
+  Future<String?> deleteCustomer(String id) async {
+    final client = supabaseOrNull;
+    if (client == null) {
+      return 'Cannot reach the server. Check your connection.';
+    }
+    try {
+      final result = await client.functions
+          .invoke('delete-customer', body: {'customerId': id});
+      final data = result.data;
+      if (data is Map && data['ok'] == true) return null;
+      return adminSetupMessage(data is Map ? data['error'] as String? : null);
+    } on FunctionException catch (e) {
+      final details = e.details;
+      return adminSetupMessage(
+          details is Map ? details['error'] as String? : null);
+    } catch (_) {
+      return 'Could not delete the customer.';
+    }
+  }
+
   void _audit(String action,
       {String? customerId,
       String? entityType,

@@ -36,6 +36,32 @@ Next task:
 
 ## Latest
 ```
+### Session: 2026-07-10 · Improvements #1 — customer deletion
+Prompt/goal: Platform admin can permanently delete a customer + cascade all data (no orphans), transactional server-side, admin-only.
+Commit(s): (this session)
+
+Summary:
+- 008_delete_customer.sql: admin_delete_customer(target) SECURITY DEFINER plpgsql (single transaction) purges app_data/members/invites/pg_upi_settings/upi_submissions/push_tokens/audit_logs/profiles by owner/customer, then deletes the customers row (cascades all 004 relational tables); returns user ids; execute revoked from public/authenticated.
+- delete-customer Edge Function (platform-admin verified): calls the RPC, recursively purges the payment-proofs Storage folder per user id, deletes every auth user (owner + tenants).
+- AppState.deleteCustomer → invokes the function, maps code:* errors.
+- admin_customers.dart: red delete icon per customer card + confirm dialog; removes row on success.
+
+Files modified:
+- supabase/008_delete_customer.sql (new), supabase/functions/delete-customer/index.ts (new)
+- lib/src/app_state.dart (deleteCustomer), lib/src/admin_customers.dart (delete UI)
+- test/app_test.dart (fail-closed + migration/function content)
+- AI/06,07 updated
+
+Deploy: run 008_delete_customer.sql once; deploy the `delete-customer` Edge Function.
+
+Tests: 102 passing; analyze clean; dart format applied.
+
+Remaining: improvements tasks 2–9, executed one at a time on request.
+
+Next task: #2 PG creation simplification (drop sharing/rent from PG create).
+```
+
+```
 ### Session: 2026-07-10 · Prompt 11 — production readiness QA
 Prompt/goal: Verify the production checklist against source, fix gaps, run format/analyze/test + owner & tenant web release builds, report remaining blockers.
 Commit(s): (this session)

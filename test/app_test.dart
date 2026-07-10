@@ -1833,6 +1833,36 @@ void main() {
         businessName: 'B', ownerName: 'O', ownerEmail: 'o@b.c', phone: '9');
     expect(created.error, isNotNull);
     expect(await state.setCustomerStatus('c1', false), isNotNull);
+    expect(await state.deleteCustomer('c1'), isNotNull);
+  });
+
+  test('customer deletion cascades every table atomically and is admin-only',
+      () {
+    final sql = File('supabase/008_delete_customer.sql').readAsStringSync();
+    expect(sql, contains('function public.admin_delete_customer'));
+    expect(sql, contains('security definer'));
+    for (final table in [
+      'app_data',
+      'members',
+      'invites',
+      'pg_upi_settings',
+      'upi_submissions',
+      'push_tokens',
+      'audit_logs',
+      'profiles',
+      'customers',
+    ]) {
+      expect(sql, contains('from $table'), reason: '$table must be purged');
+    }
+    expect(
+        sql, contains('revoke all on function public.admin_delete_customer'));
+
+    final fn =
+        File('supabase/functions/delete-customer/index.ts').readAsStringSync();
+    expect(fn, contains('platform_admin'));
+    expect(fn, contains('admin_delete_customer'));
+    expect(fn, contains('deleteUser'));
+    expect(fn, contains('payment-proofs'));
   });
 
   testWidgets('a platform admin sees customer management, not PG screens',
