@@ -28,13 +28,24 @@ enum UserRole { owner, tenant, admin }
 
 /// Result of an invite action. [tempPassword] is only ever non-null right
 /// after it was (re)generated — passwords are never redisplayed later.
+/// [emailSent] reports whether the server delivered the invite email.
 typedef InviteResult = ({
   String? error,
   String? tempPassword,
   String? token,
   DateTime? expiresAt,
-  String? email
+  String? email,
+  bool emailSent
 });
+
+InviteResult _inviteFailure(String error) => (
+      error: error,
+      tempPassword: null,
+      token: null,
+      expiresAt: null,
+      email: null,
+      emailSent: false
+    );
 
 extension UserRoleX on UserRole {
   String get label => switch (this) {
@@ -603,11 +614,12 @@ class AppState extends ChangeNotifier {
     final email = accountEmail;
     if (currentPassword != null) {
       if (email == null) return 'code:generic';
+      if (currentPassword.isEmpty) return 'code:temp_wrong';
       try {
         await client.auth
             .signInWithPassword(email: email, password: currentPassword);
       } on AuthException {
-        return 'code:bad_credentials'; // wrong temporary password
+        return 'code:temp_wrong';
       } catch (_) {
         return 'code:network';
       }
@@ -742,10 +754,16 @@ class AppState extends ChangeNotifier {
   /// Creates the tenant's login via the `invite` Edge Function: a temporary
   /// password (forced change at first sign-in), a one-time invite token with
   /// an expiry, and the workspace link. Tenants can never self-register.
+  /// The email is the one saved on the tenant record at onboarding.
   /// [tempPassword] is null when the email already had its own password.
-  Future<InviteResult> inviteTenant(
-          {required String tenantId, required String email}) =>
-      _inviteAction('create', tenantId: tenantId, email: email);
+  Future<InviteResult> inviteTenant({required String tenantId}) {
+    final email = tenantById(tenantId)?.email?.trim() ?? '';
+    if (email.isEmpty) {
+      return Future.value(_inviteFailure(
+          'No email on file for this tenant — add one at onboarding.'));
+    }
+    return _inviteAction('create', tenantId: tenantId, email: email);
+  }
 
   /// Supersedes the previous invite (status → resent) and issues a fresh
   /// token; the temporary password is regenerated only while the tenant has
@@ -753,34 +771,24 @@ class AppState extends ChangeNotifier {
   Future<InviteResult> resendInvite({required String tenantId}) async {
     final client = supabaseOrNull;
     if (client == null || !isLoggedIn) {
-      return (
-        error: 'Sign in with a cloud account to invite tenants.',
-        tempPassword: null,
-        token: null,
-        expiresAt: null,
-        email: null
-      );
+      return _inviteFailure('Sign in with a cloud account to invite tenants.');
     }
-    String? email;
-    try {
-      final row = await client
-          .from('invites')
-          .select('email')
-          .eq('tenant_id', tenantId)
-          .order('created_at', ascending: false)
-          .limit(1)
-          .maybeSingle();
-      email = row?['email'] as String?;
-    } catch (_) {}
-    if (email == null) {
-      return (
-        error:
-            'No previous invite for this tenant — use "Invite to app" first.',
-        tempPassword: null,
-        token: null,
-        expiresAt: null,
-        email: null
-      );
+    String? email = tenantById(tenantId)?.email;
+    if (email == null || email.isEmpty) {
+      try {
+        final row = await client
+            .from('invites')
+            .select('email')
+            .eq('tenant_id', tenantId)
+            .order('created_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+        email = row?['email'] as String?;
+      } catch (_) {}
+    }
+    if (email == null || email.isEmpty) {
+      return _inviteFailure(
+          'No previous invite for this tenant — use "Invite to app" first.');
     }
     return _inviteAction('resend', tenantId: tenantId, email: email);
   }
@@ -794,13 +802,7 @@ class AppState extends ChangeNotifier {
       {required String tenantId, String? email}) async {
     final client = supabaseOrNull;
     if (client == null || !isLoggedIn) {
-      return (
-        error: 'Sign in with a cloud account to invite tenants.',
-        tempPassword: null,
-        token: null,
-        expiresAt: null,
-        email: null
-      );
+      return _inviteFailure('Sign in with a cloud account to invite tenants.');
     }
     final address = email?.trim().toLowerCase();
     final tenant = tenantById(tenantId);
@@ -811,9 +813,11 @@ class AppState extends ChangeNotifier {
         'tenantId': tenantId,
         if (address != null) 'email': address,
         'tenantName': tenant?.name ?? '',
+        'pgName': pgNameForTenant(tenantId),
         'pgId': room?.pgId ?? '',
         'roomId': tenant?.roomId ?? '',
         'bedLabel': tenant?.bed ?? '',
+        'lang': language.code,
       });
       final data = result.data;
       if (data is Map && data['ok'] == true) {
@@ -823,34 +827,18 @@ class AppState extends ChangeNotifier {
           token: data['token'] as String?,
           expiresAt: DateTime.tryParse(data['expiresAt'] as String? ?? ''),
           email: address,
+          emailSent: data['emailSent'] == true,
         );
       }
-      return (
-        error:
-            inviteActionMessage(data is Map ? data['error'] as String? : null),
-        tempPassword: null,
-        token: null,
-        expiresAt: null,
-        email: null
-      );
+      return _inviteFailure(
+          inviteActionMessage(data is Map ? data['error'] as String? : null));
     } on FunctionException catch (e) {
       final details = e.details;
-      return (
-        error: inviteActionMessage(
-            details is Map ? details['error'] as String? : null),
-        tempPassword: null,
-        token: null,
-        expiresAt: null,
-        email: null
-      );
+      return _inviteFailure(inviteActionMessage(
+          details is Map ? details['error'] as String? : null));
     } catch (_) {
-      return (
-        error: 'Could not reach the invite service. Check your connection.',
-        tempPassword: null,
-        token: null,
-        expiresAt: null,
-        email: null
-      );
+      return _inviteFailure(
+          'Could not reach the invite service. Check your connection.');
     }
   }
 
@@ -1448,15 +1436,20 @@ class AppState extends ChangeNotifier {
   String? onboardTenant(
       {required String name,
       required String phone,
+      required String email,
       required String roomId,
       required String bed,
       String? kycDoc}) {
     final cleanName = name.trim();
     final cleanPhone = phone.trim();
+    final cleanEmail = email.trim().toLowerCase();
     final cleanBed = bed.trim();
     if (cleanName.isEmpty) return 'Enter the tenant\'s name.';
     if (cleanPhone.replaceAll(RegExp(r'[^0-9]'), '').length < 10) {
       return 'Enter a valid 10-digit phone number.';
+    }
+    if (!cleanEmail.contains('@') || !cleanEmail.contains('.')) {
+      return 'Enter a valid email address.';
     }
     if (cleanBed.isEmpty) return 'Enter a bed label.';
 
@@ -1474,6 +1467,7 @@ class AppState extends ChangeNotifier {
           id: _id('t'),
           name: cleanName,
           phone: cleanPhone,
+          email: cleanEmail,
           roomId: roomId,
           bed: cleanBed,
           kyc: KycStatus.pending,

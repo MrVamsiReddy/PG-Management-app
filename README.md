@@ -95,6 +95,8 @@ Deploy the function: Edge Functions → Deploy → name it exactly `create-custo
 
 Tenants → tenant card → ⋮ → **Remove tenant**. After confirmation the tenant's record and all their data (payments, requests, visitors, notifications) are permanently deleted and their bed is freed. The `remove-tenant` Edge Function then deletes their login, invite/member links, UPI submissions and payment-proof screenshots, and emails the tenant that they are no longer part of the PG and that their data has been permanently deleted (in the owner's app language — English/Hindi/Telugu).
 
+The same `RESEND_API_KEY` secret also powers automatic **invite emails**: tenant onboarding collects the email address, and the `invite` function (redeploy `supabase/functions/invite/index.ts`) delivers the credentials + app links directly to the tenant (localized en/hi/te); without the secret the owner shares the invite message manually as before.
+
 Deploy the function: Edge Functions → Deploy → name it exactly `remove-tenant` → paste `supabase/functions/remove-tenant/index.ts`. For the email, set the `RESEND_API_KEY` secret (free key from resend.com; optional `RESEND_FROM` = a verified sender like `PG Management <you@yourdomain.com>`). Without the secret the removal still works fully — the app just tells the owner no email could be sent. Note: Resend's shared `onboarding@resend.dev` sender only delivers to your own Resend account email; verify a domain to email real tenants.
 
 ## Cloud accounts (Supabase)

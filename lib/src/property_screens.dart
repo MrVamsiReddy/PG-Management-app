@@ -864,9 +864,13 @@ class _TenantsScreenState extends State<TenantsScreen> {
   }
 
   void _invite(BuildContext context, AppState state, Tenant tenant) {
-    final email = TextEditingController();
     final messenger = ScaffoldMessenger.of(context);
     final l = AppLocalizations.of(context);
+    final address = tenant.email?.trim() ?? '';
+    if (address.isEmpty) {
+      messenger.showSnackBar(SnackBar(content: Text(l.t('inv.noEmail'))));
+      return;
+    }
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -878,13 +882,13 @@ class _TenantsScreenState extends State<TenantsScreen> {
             children: [
               Text(l.t('inv.desc'), style: const TextStyle(fontSize: 13)),
               const SizedBox(height: 14),
-              TextField(
-                  controller: email,
-                  autofocus: true,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
-                      labelText: l.t('inv.emailLabel'),
-                      prefixIcon: const Icon(Icons.mail_outline))),
+              Row(children: [
+                const Icon(Icons.mail_outline, size: 18, color: primary),
+                const SizedBox(width: 8),
+                Expanded(
+                    child: Text(address,
+                        style: const TextStyle(fontWeight: FontWeight.w700))),
+              ]),
               const SizedBox(height: 10),
               Text(l.t('inv.next'),
                   style: const TextStyle(fontSize: 11, color: Colors.black45)),
@@ -895,17 +899,19 @@ class _TenantsScreenState extends State<TenantsScreen> {
               child: Text(l.t('common.cancel'))),
           FilledButton.icon(
               onPressed: () async {
-                final address = email.text.trim();
-                if (!address.contains('@')) return;
-                final result = await state.inviteTenant(
-                    tenantId: tenant.id, email: address);
+                final result = await state.inviteTenant(tenantId: tenant.id);
                 if (dialogContext.mounted) Navigator.pop(dialogContext);
                 if (result.error != null) {
                   messenger
                       .showSnackBar(SnackBar(content: Text(result.error!)));
                   return;
                 }
-                await _shareInvite(messenger, state, tenant, address, result);
+                if (result.emailSent) {
+                  messenger.showSnackBar(SnackBar(
+                      content: Text('${l.t('inv.emailed')} $address')));
+                } else {
+                  await _shareInvite(messenger, state, tenant, address, result);
+                }
               },
               icon: const Icon(Icons.send_outlined),
               label: Text(l.t('inv.createShare'))),
@@ -917,12 +923,18 @@ class _TenantsScreenState extends State<TenantsScreen> {
   void _resendInvite(
       BuildContext context, AppState state, Tenant tenant) async {
     final messenger = ScaffoldMessenger.of(context);
+    final emailed = AppLocalizations.of(context).t('inv.emailed');
     final result = await state.resendInvite(tenantId: tenant.id);
     if (result.error != null) {
       messenger.showSnackBar(SnackBar(content: Text(result.error!)));
       return;
     }
-    await _shareInvite(messenger, state, tenant, result.email ?? '', result);
+    if (result.emailSent) {
+      messenger
+          .showSnackBar(SnackBar(content: Text('$emailed ${result.email}')));
+    } else {
+      await _shareInvite(messenger, state, tenant, result.email ?? '', result);
+    }
   }
 
   void _revokeInvite(
@@ -1030,6 +1042,7 @@ class _TenantsScreenState extends State<TenantsScreen> {
     final formKey = GlobalKey<FormState>();
     final name = TextEditingController();
     final phone = TextEditingController();
+    final email = TextEditingController();
     final roomNumber = TextEditingController();
     final floorCtl = TextEditingController(text: '1');
     final rent = TextEditingController(text: '9000');
@@ -1079,6 +1092,20 @@ class _TenantsScreenState extends State<TenantsScreen> {
                   (v == null || v.replaceAll(RegExp(r'[^0-9]'), '').length < 10)
                       ? 'Enter a valid 10-digit number'
                       : null,
+            ),
+            const FormLabel('Email address'),
+            TextFormField(
+              controller: email,
+              keyboardType: TextInputType.emailAddress,
+              autocorrect: false,
+              decoration:
+                  const InputDecoration(hintText: 'Used for their app invite'),
+              validator: (v) {
+                final e = (v ?? '').trim();
+                return e.contains('@') && e.contains('.')
+                    ? null
+                    : 'Enter a valid email address';
+              },
             ),
             const FormLabel('PG'),
             DropdownButtonFormField<String>(
@@ -1208,7 +1235,7 @@ class _TenantsScreenState extends State<TenantsScreen> {
             ),
             const SizedBox(height: 16),
             FilledButton(
-                onPressed: () {
+                onPressed: () async {
                   if (!formKey.currentState!.validate()) return;
                   if (kycDoc == null) {
                     messenger.showSnackBar(const SnackBar(
@@ -1227,6 +1254,7 @@ class _TenantsScreenState extends State<TenantsScreen> {
                   final error = state.onboardTenant(
                       name: name.text,
                       phone: phone.text,
+                      email: email.text,
                       roomId: roomId,
                       bed: bed.text,
                       kycDoc: kycDoc);
@@ -1238,6 +1266,23 @@ class _TenantsScreenState extends State<TenantsScreen> {
                   messenger.showSnackBar(SnackBar(
                       content: Text(
                           '${name.text.trim()} onboarded to room ${state.roomNumber(roomId)}.')));
+                  // The invite is created and emailed automatically; the
+                  // share sheet stays as the fallback when email delivery
+                  // is unavailable.
+                  final tenant = state.tenants.first;
+                  final result = await state.inviteTenant(tenantId: tenant.id);
+                  if (result.error != null) {
+                    messenger
+                        .showSnackBar(SnackBar(content: Text(result.error!)));
+                    return;
+                  }
+                  if (result.emailSent) {
+                    messenger.showSnackBar(SnackBar(
+                        content: Text('Invite emailed to ${result.email}.')));
+                  } else {
+                    await _shareInvite(
+                        messenger, state, tenant, result.email ?? '', result);
+                  }
                 },
                 child: const Text('Onboard tenant')),
           ]),

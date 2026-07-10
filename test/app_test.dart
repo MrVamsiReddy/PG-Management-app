@@ -620,6 +620,7 @@ void main() {
     final error = state.onboardTenant(
         name: 'Neha Verma',
         phone: '90000 00001',
+        email: 'tenant@example.com',
         roomId: room.id,
         bed: state.suggestBed(room.id));
 
@@ -728,7 +729,11 @@ void main() {
     final pgBefore = state.pgById(full.pgId)!.occupied;
 
     final error = state.onboardTenant(
-        name: 'Full Roomer', phone: '90000 12345', roomId: full.id, bed: 'C');
+        name: 'Full Roomer',
+        phone: '90000 12345',
+        email: 'tenant@example.com',
+        roomId: full.id,
+        bed: 'C');
 
     expect(error, isNotNull);
     expect(error, contains('full'));
@@ -739,7 +744,11 @@ void main() {
 
   test('onboarding onto a taken bed label in the same room is blocked', () {
     final error = state.onboardTenant(
-        name: 'Bed Clash', phone: '90000 22222', roomId: 'r2', bed: 'a');
+        name: 'Bed Clash',
+        phone: '90000 22222',
+        email: 'tenant@example.com',
+        roomId: 'r2',
+        bed: 'a');
     expect(error, isNotNull);
     expect(error, contains('taken'));
     expect(state.tenants.any((t) => t.name == 'Bed Clash'), isFalse);
@@ -747,6 +756,7 @@ void main() {
     final ok = state.onboardTenant(
         name: 'Bed Ok',
         phone: '90000 22223',
+        email: 'tenant@example.com',
         roomId: 'r2',
         bed: state.suggestBed('r2'));
     expect(ok, isNull);
@@ -757,13 +767,41 @@ void main() {
     final before = state.tenants.length;
     expect(
         state.onboardTenant(
-            name: '   ', phone: '90000 00001', roomId: 'r4', bed: 'B'),
+            name: '   ',
+            phone: '90000 00001',
+            email: 'tenant@example.com',
+            roomId: 'r4',
+            bed: 'B'),
         contains('name'));
     expect(
         state.onboardTenant(
-            name: 'Shorty', phone: '12345', roomId: 'r4', bed: 'B'),
+            name: 'Shorty',
+            phone: '12345',
+            email: 'tenant@example.com',
+            roomId: 'r4',
+            bed: 'B'),
         contains('phone'));
+    expect(
+        state.onboardTenant(
+            name: 'No Mail',
+            phone: '9000000000',
+            email: 'not-an-email',
+            roomId: 'r4',
+            bed: 'B'),
+        contains('email'));
     expect(state.tenants.length, before);
+  });
+
+  test('onboarding stores the tenant email for the invite', () {
+    final room = state.rooms.firstWhere((r) => r.occupied < r.beds);
+    final error = state.onboardTenant(
+        name: 'Mail Kept',
+        phone: '9000011111',
+        email: '  Mail.Kept@Example.COM ',
+        roomId: room.id,
+        bed: state.suggestBed(room.id));
+    expect(error, isNull);
+    expect(state.tenants.first.email, 'mail.kept@example.com');
   });
 
   test('suggestBed returns the first free bed and empty when the room is full',
@@ -874,7 +912,11 @@ void main() {
 
   test('onboarding a tenant creates their first monthly due', () {
     state.onboardTenant(
-        name: 'Kiran Kumar', phone: '90000 00002', roomId: 'r4', bed: 'B');
+        name: 'Kiran Kumar',
+        phone: '90000 00002',
+        email: 'tenant@example.com',
+        roomId: 'r4',
+        bed: 'B');
     final tenant = state.tenants.first;
     final due = state.payments.firstWhere((p) => p.tenantId == tenant.id);
     expect(due.amount, 10000);
@@ -892,7 +934,11 @@ void main() {
     expect(room.type, 'Triple sharing');
 
     final error = state.onboardTenant(
-        name: 'Nisha Rao', phone: '9000000123', roomId: roomId, bed: 'A');
+        name: 'Nisha Rao',
+        phone: '9000000123',
+        email: 'tenant@example.com',
+        roomId: roomId,
+        bed: 'A');
     expect(error, isNull);
     final tenant = state.tenants.firstWhere((t) => t.name == 'Nisha Rao');
     expect(tenant.roomId, roomId);
@@ -917,11 +963,18 @@ void main() {
 
   test('inviteTenant reports a friendly error without a cloud connection',
       () async {
-    final result =
-        await state.inviteTenant(tenantId: 't1', email: 'someone@example.com');
+    final i = state.tenants.indexWhere((t) => t.id == 't1');
+    state.tenants[i] = state.tenants[i].copyWith(email: 'someone@example.com');
+    final result = await state.inviteTenant(tenantId: 't1');
     expect(result.error, isNotNull);
     expect(result.error, contains('cloud account'));
     expect(result.tempPassword, isNull);
+    expect(result.emailSent, isFalse);
+  });
+
+  test('inviteTenant requires the email saved at onboarding', () async {
+    final result = await state.inviteTenant(tenantId: 't2');
+    expect(result.error, contains('email'));
   });
 
   test('the active property scopes rooms, tenants and money', () {
@@ -1179,6 +1232,7 @@ void main() {
     state.onboardTenant(
         name: 'Stamp Test',
         phone: '90000 12399',
+        email: 'tenant@example.com',
         roomId: room.id,
         bed: state.suggestBed(room.id));
     final tenant = state.tenants.first;
@@ -1478,6 +1532,22 @@ void main() {
     // Temporary passwords are returned once and never logged.
     expect(fn, isNot(contains('console.log')));
     expect(fn, isNot(contains('console.error')));
+  });
+
+  test('the invite function emails the invite with localized templates', () {
+    final fn = File('supabase/functions/invite/index.ts').readAsStringSync();
+    expect(fn, contains('RESEND_API_KEY'));
+    expect(fn, contains('api.resend.com'));
+    expect(fn, contains('emailSent'));
+    for (final lang in ['en', 'hi', 'te']) {
+      expect(fn, contains('$lang:'), reason: '$lang template must exist');
+    }
+    // Everything the tenant needs: links, credentials and instructions.
+    expect(fn, contains('github.io/PG-Management-app'));
+    expect(fn, contains('releases/latest/download/PG-Management-Tenant.apk'));
+    expect(fn, contains('?invite='));
+    expect(fn, contains('tempPassword'));
+    expect(fn, contains('set your own password'));
   });
 
   // ---- Prompt 8: audit logs ----
@@ -1818,6 +1888,21 @@ void main() {
     expect(find.text('Temporary password'), findsOneWidget);
     expect(find.text('New password'), findsOneWidget);
     expect(find.text('Confirm password'), findsOneWidget);
+  });
+
+  testWidgets('a filled temporary password never reports "required" on save',
+      (tester) async {
+    state.debugSignIn(UserRole.owner);
+    await tester.pumpWidget(localized(state, const SetPasswordScreen()));
+    await tester.pump();
+    final fields = find.byType(TextFormField);
+    await tester.enterText(fields.at(0), ' temp1234 '); // pasted whitespace ok
+    await tester.enterText(fields.at(1), 'newpass99');
+    await tester.enterText(fields.at(2), 'newpass99');
+    await tester.tap(find.text('Save & continue'));
+    await tester.pump();
+    expect(find.text('Enter your temporary password'), findsNothing);
+    expect(find.text('Passwords do not match'), findsNothing);
   });
 
   testWidgets('reset-link flow hides the temporary-password field',
@@ -2249,7 +2334,11 @@ void main() {
     final roomId = state.ensureRoom(
         pgId: 'p2', floor: 1, roomNumber: '302', sharingType: 2, rent: 7000);
     state.onboardTenant(
-        name: 'First In', phone: '9000000001', roomId: roomId, bed: 'A');
+        name: 'First In',
+        phone: '9000000001',
+        email: 'tenant@example.com',
+        roomId: roomId,
+        bed: 'A');
     final first = state.tenants.firstWhere((t) => t.name == 'First In');
     final firstDue = state.payments.firstWhere((p) => p.tenantId == first.id);
     expect(firstDue.amount, 7000);
@@ -2260,7 +2349,11 @@ void main() {
 
     // A tenant assigned after the change inherits the new rent.
     state.onboardTenant(
-        name: 'Second In', phone: '9000000002', roomId: roomId, bed: 'B');
+        name: 'Second In',
+        phone: '9000000002',
+        email: 'tenant@example.com',
+        roomId: roomId,
+        bed: 'B');
     final second = state.tenants.firstWhere((t) => t.name == 'Second In');
     final secondDue = state.payments.firstWhere((p) => p.tenantId == second.id);
     expect(secondDue.amount, 9000);
@@ -2295,7 +2388,11 @@ void main() {
     final roomId = state.ensureRoom(
         pgId: 'p2', floor: 1, roomNumber: '601', sharingType: 2, rent: 7000);
     state.onboardTenant(
-        name: 'Occupant', phone: '9000000009', roomId: roomId, bed: 'A');
+        name: 'Occupant',
+        phone: '9000000009',
+        email: 'tenant@example.com',
+        roomId: roomId,
+        bed: 'A');
     expect(state.removeRoom(roomId), contains('active tenants'));
     expect(state.rooms.any((r) => r.id == roomId), isTrue);
   });

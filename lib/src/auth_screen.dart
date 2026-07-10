@@ -302,6 +302,9 @@ class _SetPasswordScreenState extends State<SetPasswordScreen> {
   }
 
   Future<void> submit() async {
+    // Commit any pending IME composition (Indic keyboards, autofill) so the
+    // validators see exactly what is on screen.
+    FocusScope.of(context).unfocus();
     if (!formKey.currentState!.validate()) return;
     final state = AppScope.of(context);
     final l = AppLocalizations.of(context);
@@ -309,7 +312,7 @@ class _SetPasswordScreenState extends State<SetPasswordScreen> {
     // First-login flow re-validates the temporary password; reset-link
     // (recovery) flow does not have one.
     final error = await state.changePassword(password.text,
-        currentPassword: state.passwordRecovery ? null : temp.text);
+        currentPassword: state.passwordRecovery ? null : temp.text.trim());
     if (!mounted) return;
     setState(() => busy = false);
     if (error != null) {
@@ -360,10 +363,13 @@ class _SetPasswordScreenState extends State<SetPasswordScreen> {
                         TextFormField(
                           controller: temp,
                           obscureText: true,
+                          autocorrect: false,
+                          enableSuggestions: false,
+                          textInputAction: TextInputAction.next,
                           decoration: InputDecoration(
                               labelText: l.t('setpw.temp'),
                               prefixIcon: const Icon(Icons.vpn_key_outlined)),
-                          validator: (v) => (v == null || v.isEmpty)
+                          validator: (v) => (v == null || v.trim().isEmpty)
                               ? l.t('setpw.tempReq')
                               : null,
                         ),

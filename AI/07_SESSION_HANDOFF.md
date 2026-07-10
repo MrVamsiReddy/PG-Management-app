@@ -36,7 +36,37 @@ Next task:
 
 ## Latest
 ```
+### Session: 2026-07-11 · Temp-password fix, email-at-onboarding, transactional email
+Prompt/goal: (1) Fix first-login temp-password "required" validation bug; (2) move tenant email from the invite dialog to onboarding; (3) server-side transactional email (invite + vacancy) via Edge Functions.
+Commit(s): (this session, released as v1.6.0)
+
+Summary:
+- SetPasswordScreen: unfocus before validate (commits pending IME/autofill composition — the "still required" symptom), trims the temp password, autocorrect/suggestions off; wrong temp password now maps to its own localized error (code:temp_wrong → setpw.tempWrong) instead of generic bad-credentials. changePassword re-auth unchanged (verification still required before the change; must_change_password stays enforced client + 006 RLS).
+- Tenant.email (new field, wire key 'email'): collected + validated at onboarding (onboardTenant requires a valid email, stores lowercase). Invite dialog no longer has an email input — it shows the saved address and only sends/manages the invite; inviteTenant(tenantId) resolves the saved email (error when missing); resendInvite prefers the tenant email, falls back to the last invite row.
+- Auto-invite after onboarding: the onboarding sheet creates the invite immediately after a successful onboard; if the server emailed it (emailSent) a snackbar confirms, else the share-sheet fallback opens.
+- invite fn: localized (en/hi/te) invite email via Resend (RESEND_API_KEY/RESEND_FROM secrets, shared with remove-tenant) containing name, email, temp password (only when just generated), web login URL, APK URL, invite link, password-setup instructions, expiry; returns emailSent; never logs the password. Vacancy email already shipped in remove-tenant.
+
+Files modified:
+- lib/src/auth_screen.dart (submit unfocus/trim, temp field), lib/src/app_state.dart (code:temp_wrong, onboardTenant email, InviteResult.emailSent, inviteTenant/resendInvite/_inviteAction), lib/src/models.dart (Tenant.email), lib/src/property_screens.dart (onboarding email field + auto-invite, invite dialog rewrite), lib/src/l10n.dart (setpw.tempWrong, inv.noEmail, inv.emailed ×3)
+- supabase/functions/invite/index.ts (localized templates + Resend sender + emailSent)
+- README.md (invite email setup note)
+
+Architecture changes: none (InviteResult record gains emailSent).
+Database changes: none (no new migrations; invite fn needs redeploy).
+
+Tests added:
+- "a filled temporary password never reports required on save", "onboarding stores the tenant email for the invite", email validation case, "inviteTenant requires the email saved at onboarding", "the invite function emails the invite with localized templates" · 129 passing · analyze clean.
+
+Remaining work / manual:
+- Redeploy `invite` Edge Function; RESEND_API_KEY (+ verified domain / RESEND_FROM) required for real delivery — resend.dev sender only reaches the account owner's inbox.
+- Legacy tenants (onboarded before this) have no email — resend uses the last invite row; fresh invite needs re-onboarding or a future edit-tenant UI.
+
+Known issues introduced/affected: none new; 09 P0/P1 unchanged.
+Next task: none queued — awaiting direction.
+```
+
 ### Session: 2026-07-10 · Improvements #9 — rooms & beds
+```
 Prompt/goal: Responsive floor selector; Room Details page; ⋮ menu (edit room/sharing/rent/delete); delete only when empty + remove empty beds + update UI.
 Commit(s): (this session)
 

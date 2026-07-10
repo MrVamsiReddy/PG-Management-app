@@ -29,6 +29,11 @@ Roadmap = `app improvements.md` (Prompts 1–11). Details of each area live in `
 ## Improvements batch complete
 - Tasks 1–9 shipped. Interim bugfix: admin "View PGs" reads app_data.
 
+## Post-batch fixes (2026-07-11, v1.6.0)
+- **Temp-password flow fixed** — `SetPasswordScreen.submit` unfocuses before validating (commits pending IME/autofill composition, the cause of "Temporary password is required" firing on a filled field), trims the entered temp password, and disables autocorrect/suggestions on the field. A wrong temp password now returns `code:temp_wrong` → localized `setpw.tempWrong` (was generic bad-credentials). Verification before change + `must_change_password` client/server enforcement unchanged.
+- **Email collected at onboarding** — `Tenant.email` (new, required + validated in `onboardTenant`, stored lowercase). The invite dialog no longer collects an email: it shows the saved address and only sends/manages the invite (`inviteTenant(tenantId)` resolves it; errors when absent). Onboarding auto-creates the invite on success.
+- **Transactional email (server-side only)** — the `invite` Edge Function sends a localized (en/hi/te) invite email via Resend (`RESEND_API_KEY`/`RESEND_FROM`, same secrets as `remove-tenant`'s vacancy email) with name, email, temp password (only when just generated), web login URL, APK URL, invite link, setup instructions and expiry; responds `emailSent`, never logs the password. App falls back to the share sheet when delivery is off. **Deploy needed:** redeploy `invite`; a verified Resend domain is required to email real tenants.
+
 ## P11 production checklist (verified 2026-07-10)
 - ✅ No demo/local/offline code, no seed/mock path (Hive + demo removed; only stray comments remained).
 - ✅ No public owner signup ("Accounts are created by your administrator" — portal login only).
@@ -55,7 +60,7 @@ Removed the local Hive store, the demo/seed path (`_seed`, `debugSeedDemoData`),
 Before Prompts 8–11 add more features on the unenforced foundation, migrate the owner/tenant runtime from the `app_data` blob onto the relational `customer_id`-scoped tables so `004` RLS becomes the enforcement boundary, and make `payRent` a submission (not a paid-mark). Then P9/P8 land on solid ground.
 
 ## Test status
-`test/app_test.dart` — 120 passing; `flutter analyze` clean; `dart format` applied repo-wide; owner + tenant `flutter build web --release` succeed. See `10_TESTING_GUIDE.md`.
+`test/app_test.dart` — 129 passing; `flutter analyze` clean; `dart format` applied repo-wide; owner + tenant `flutter build web --release` succeed. See `10_TESTING_GUIDE.md`.
 
 ## Bugfixes (interim)
 - **Admin "View PGs" now works** — `loadCustomerPgNames` reads the customer's PGs from the `app_data` blob (owner resolved via `profiles`), not the empty relational `pgs` table; `010_admin_app_data.sql` grants platform admins read on `app_data`.

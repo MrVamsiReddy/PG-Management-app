@@ -288,6 +288,7 @@ class Tenant {
     required this.kyc,
     required this.agreement,
     required this.joinDate,
+    this.email,
     this.kycDoc,
     this.customerId,
   });
@@ -300,6 +301,7 @@ class Tenant {
   final KycStatus kyc;
   final AgreementStatus agreement;
   final DateTime joinDate;
+  final String? email; // collected at onboarding; used for the invite
   final String? kycDoc; // identity document image, base64
   final String? customerId;
 
@@ -313,6 +315,7 @@ class Tenant {
   Tenant copyWith(
           {String? name,
           String? phone,
+          String? email,
           KycStatus? kyc,
           AgreementStatus? agreement,
           String? kycDoc}) =>
@@ -324,6 +327,7 @@ class Tenant {
         customerId: customerId,
         name: name ?? this.name,
         phone: phone ?? this.phone,
+        email: email ?? this.email,
         kyc: kyc ?? this.kyc,
         agreement: agreement ?? this.agreement,
         kycDoc: kycDoc ?? this.kycDoc,
@@ -338,6 +342,7 @@ class Tenant {
         'kyc': kyc.name,
         'agreement': agreement.name,
         'joinDate': joinDate.toIso8601String(),
+        'email': email,
         'kycDoc': kycDoc,
         'customerId': customerId,
       };
@@ -351,6 +356,7 @@ class Tenant {
         kyc: KycStatus.values.byName(map['kyc'] as String),
         agreement: AgreementStatus.values.byName(map['agreement'] as String),
         joinDate: DateTime.parse(map['joinDate'] as String),
+        email: map['email'] as String?,
         kycDoc: map['kycDoc'] as String?,
         customerId: map['customerId'] as String?,
       );

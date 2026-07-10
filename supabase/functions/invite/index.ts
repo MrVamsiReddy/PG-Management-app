@@ -21,9 +21,96 @@
 // maps to localized text.
 //
 // Deploy (Supabase dashboard): Edge Functions → `invite` → paste → Deploy.
-// Run supabase/006_invites.sql first. No extra secrets needed.
+// Run supabase/006_invites.sql first. Optional secrets: RESEND_API_KEY
+// (+ RESEND_FROM) — with them, create/resend deliver the invite email
+// directly (localized en/hi/te) and return `emailSent: true`; without them
+// the app falls back to the share sheet.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+
+const appWebUrl = "https://mrvamsireddy.github.io/PG-Management-app/";
+const apkDownloadUrl =
+  "https://github.com/MrVamsiReddy/PG-Management-app/releases/latest/download/PG-Management-Tenant.apk";
+
+type InviteMail = {
+  subject: (pg: string) => string;
+  body: (p: {
+    name: string;
+    pg: string;
+    email: string;
+    tempPassword: string | null;
+    inviteLink: string;
+    expiresAt: string;
+  }) => string;
+};
+
+// Reusable invite templates — mirror lib/src/invite_message.dart. The
+// temporary password appears only in this one email and is never logged.
+const inviteMails: Record<string, InviteMail> = {
+  en: {
+    subject: (pg) => `Your ${pg} resident account`,
+    body: ({ name, pg, email, tempPassword, inviteLink, expiresAt }) =>
+      `Hi ${name.split(" ")[0]}! Your room at ${pg} is now on PG Management.\n\n` +
+      `Download the app (Android): ${apkDownloadUrl}\n` +
+      `Or sign in on the web: ${appWebUrl}\n` +
+      `Your invite link: ${inviteLink}\n\n` +
+      (tempPassword
+        ? `Sign in with:\nEmail: ${email}\nTemporary password: ${tempPassword}\n\n` +
+          `You will be asked to set your own password the first time you sign in. ` +
+          `The temporary password stops working after that.\n\n`
+        : `Sign in with your existing password using this email: ${email}\n\n`) +
+      `This invite expires on ${expiresAt}.\n\n— ${pg}, via PG Management`,
+  },
+  hi: {
+    subject: (pg) => `आपका ${pg} निवासी खाता`,
+    body: ({ name, pg, email, tempPassword, inviteLink, expiresAt }) =>
+      `नमस्ते ${name.split(" ")[0]}! ${pg} में आपका कमरा अब PG Management पर है।\n\n` +
+      `ऐप डाउनलोड करें (Android): ${apkDownloadUrl}\n` +
+      `या वेब पर साइन इन करें: ${appWebUrl}\n` +
+      `आपका निमंत्रण लिंक: ${inviteLink}\n\n` +
+      (tempPassword
+        ? `इनसे साइन इन करें:\nईमेल: ${email}\nअस्थायी पासवर्ड: ${tempPassword}\n\n` +
+          `पहली बार साइन इन करने पर आपसे अपना पासवर्ड सेट करने को कहा जाएगा। ` +
+          `उसके बाद अस्थायी पासवर्ड काम करना बंद कर देगा।\n\n`
+        : `इस ईमेल के साथ अपने मौजूदा पासवर्ड से साइन इन करें: ${email}\n\n`) +
+      `यह निमंत्रण ${expiresAt} को समाप्त हो जाएगा।\n\n— ${pg}, PG Management के माध्यम से`,
+  },
+  te: {
+    subject: (pg) => `మీ ${pg} నివాసి ఖాతా`,
+    body: ({ name, pg, email, tempPassword, inviteLink, expiresAt }) =>
+      `నమస్తే ${name.split(" ")[0]}! ${pg}లో మీ గది ఇప్పుడు PG Managementలో ఉంది.\n\n` +
+      `యాప్ డౌన్‌లోడ్ చేయండి (Android): ${apkDownloadUrl}\n` +
+      `లేదా వెబ్‌లో సైన్ ఇన్ చేయండి: ${appWebUrl}\n` +
+      `మీ ఆహ్వాన లింక్: ${inviteLink}\n\n` +
+      (tempPassword
+        ? `వీటితో సైన్ ఇన్ చేయండి:\nఇమెయిల్: ${email}\nతాత్కాలిక పాస్‌వర్డ్: ${tempPassword}\n\n` +
+          `మొదటిసారి సైన్ ఇన్ చేసినప్పుడు మీ స్వంత పాస్‌వర్డ్ సెట్ చేయమని అడగబడుతుంది. ` +
+          `ఆ తర్వాత తాత్కాలిక పాస్‌వర్డ్ పనిచేయదు.\n\n`
+        : `ఈ ఇమెయిల్‌తో మీ ప్రస్తుత పాస్‌వర్డ్ ఉపయోగించి సైన్ ఇన్ చేయండి: ${email}\n\n`) +
+      `ఈ ఆహ్వానం ${expiresAt}న గడువు ముగుస్తుంది.\n\n— ${pg}, PG Management ద్వారా`,
+  },
+};
+
+// Best-effort transactional email via Resend; returns delivery success.
+async function sendMail(to: string, subject: string, text: string): Promise<boolean> {
+  const key = Deno.env.get("RESEND_API_KEY");
+  if (!key) return false;
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        from: Deno.env.get("RESEND_FROM") ?? "PG Management <onboarding@resend.dev>",
+        to: [to],
+        subject,
+        text,
+      }),
+    });
+    return res.ok;
+  } catch (_e) {
+    return false;
+  }
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -250,12 +337,28 @@ Deno.serve(async (req) => {
 
     await audit(action === "resend" ? "tenant_invite_resent" : "tenant_invited", customerId, tenantId, { email: address });
 
+    const mail = inviteMails[String(body.lang ?? "en")] ?? inviteMails.en;
+    const pgName = String(body.pgName ?? "").trim() || "your PG";
+    const emailSent = await sendMail(
+      address,
+      mail.subject(pgName),
+      mail.body({
+        name: tenantName || "resident",
+        pg: pgName,
+        email: address,
+        tempPassword: password,
+        inviteLink: `${appWebUrl}?invite=${invite.token}`,
+        expiresAt: new Date(invite.expires_at).toDateString(),
+      }),
+    );
+
     return json({
       ok: true,
       tempPassword: password,
       existing,
       token: invite.token,
       expiresAt: invite.expires_at,
+      emailSent,
     });
   } catch (_e) {
     return json({ error: "code:server_error" }, 500);

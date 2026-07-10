@@ -42,6 +42,7 @@ class AppLocalizations {
   String error(String? code) => switch (code) {
         'code:network' => t('err.network'),
         'code:bad_credentials' => t('err.badCredentials'),
+        'code:temp_wrong' => t('setpw.tempWrong'),
         'code:email_in_use' => t('err.emailInUse'),
         'code:generic' || null => t('err.generic'),
         _ => code,
@@ -192,6 +193,8 @@ const Map<String, Map<String, String>> _strings = {
     'setpw.title': 'Set your password',
     'setpw.temp': 'Temporary password',
     'setpw.tempReq': 'Enter your temporary password',
+    'setpw.tempWrong':
+        'That temporary password is incorrect. Copy it exactly from your invite message.',
     'setpw.hello': 'Welcome',
     'setpw.sub':
         'Your temporary password worked — now choose your own. You will use it for every sign-in from here on.',
@@ -305,6 +308,9 @@ const Map<String, Map<String, String>> _strings = {
     'inv.revokeDone': 'Invite revoked.',
     'inv.options': 'Invite options',
     'inv.inviteToApp': 'Invite to app',
+    'inv.noEmail':
+        'This tenant has no email on file — it is collected during onboarding.',
+    'inv.emailed': 'Invite emailed to',
     'inv.copied':
         'Message with the login details copied — paste it into WhatsApp or email.',
     // Remove tenant
@@ -446,6 +452,8 @@ const Map<String, Map<String, String>> _strings = {
     'setpw.title': 'अपना पासवर्ड सेट करें',
     'setpw.temp': 'अस्थायी पासवर्ड',
     'setpw.tempReq': 'अपना अस्थायी पासवर्ड दर्ज करें',
+    'setpw.tempWrong':
+        'वह अस्थायी पासवर्ड गलत है। इसे अपने निमंत्रण संदेश से हूबहू कॉपी करें।',
     'setpw.hello': 'स्वागत है',
     'setpw.sub':
         'आपका अस्थायी पासवर्ड काम कर गया — अब अपना खुद का चुनें। इसके बाद हर साइन-इन के लिए इसी का उपयोग करेंगे।',
@@ -555,6 +563,9 @@ const Map<String, Map<String, String>> _strings = {
     'inv.revokeDone': 'निमंत्रण रद्द किया गया।',
     'inv.options': 'निमंत्रण विकल्प',
     'inv.inviteToApp': 'ऐप में आमंत्रित करें',
+    'inv.noEmail':
+        'इस किरायेदार का कोई ईमेल दर्ज नहीं है — यह ऑनबोर्डिंग के दौरान लिया जाता है।',
+    'inv.emailed': 'निमंत्रण ईमेल भेजा गया:',
     'inv.copied':
         'लॉगिन विवरण वाला संदेश कॉपी किया गया — इसे WhatsApp या ईमेल में पेस्ट करें।',
     'rem.remove': 'किरायेदार हटाएँ',
@@ -695,6 +706,8 @@ const Map<String, Map<String, String>> _strings = {
     'setpw.title': 'మీ పాస్‌వర్డ్‌ను సెట్ చేయండి',
     'setpw.temp': 'తాత్కాలిక పాస్‌వర్డ్',
     'setpw.tempReq': 'మీ తాత్కాలిక పాస్‌వర్డ్‌ను నమోదు చేయండి',
+    'setpw.tempWrong':
+        'ఆ తాత్కాలిక పాస్‌వర్డ్ తప్పు. మీ ఆహ్వాన సందేశం నుండి దాన్ని యథాతథంగా కాపీ చేయండి.',
     'setpw.hello': 'స్వాగతం',
     'setpw.sub':
         'మీ తాత్కాలిక పాస్‌వర్డ్ పనిచేసింది — ఇప్పుడు మీ స్వంతది ఎంచుకోండి. ఇక నుండి ప్రతి సైన్-ఇన్‌కు దీన్నే ఉపయోగిస్తారు.',
@@ -807,6 +820,9 @@ const Map<String, Map<String, String>> _strings = {
     'inv.revokeDone': 'ఆహ్వానం రద్దు చేయబడింది.',
     'inv.options': 'ఆహ్వాన ఎంపికలు',
     'inv.inviteToApp': 'యాప్‌కు ఆహ్వానించండి',
+    'inv.noEmail':
+        'ఈ అద్దెదారుకు ఇమెయిల్ నమోదు కాలేదు — ఇది ఆన్‌బోర్డింగ్ సమయంలో సేకరించబడుతుంది.',
+    'inv.emailed': 'ఆహ్వానం ఇమెయిల్ చేయబడింది:',
     'inv.copied':
         'లాగిన్ వివరాలతో కూడిన సందేశం కాపీ చేయబడింది — దాన్ని WhatsApp లేదా ఇమెయిల్‌లో పేస్ట్ చేయండి.',
     'rem.remove': 'అద్దెదారుని తొలగించండి',
