@@ -1879,14 +1879,25 @@ void main() {
     expect(find.text('संपत्ति विवरण'), findsOneWidget);
   });
 
-  testWidgets('the invite action is localized', (tester) async {
+  testWidgets(
+      'tenant card offers no standalone invite; menu actions are localized',
+      (tester) async {
     state.debugSignIn(UserRole.owner);
     state.setLanguage(AppLanguage.hindi);
     await tester.pumpWidget(localized(state, const TenantsScreen()));
     await tester.pump();
     await tester.tap(find.text('Aarav Mehta'));
     await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('ऐप में आमंत्रित करें'), findsOneWidget);
+    // Invites are created only during onboarding — no invite button here.
+    expect(find.text('ऐप में आमंत्रित करें'), findsNothing);
+    expect(find.byIcon(Icons.send_outlined), findsNothing);
+    tester
+        .state<PopupMenuButtonState<String>>(
+            find.byType(PopupMenuButton<String>).first)
+        .showButtonMenu();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('निमंत्रण फिर भेजें'), findsOneWidget); // resend
+    expect(find.text('निमंत्रण रद्द करें'), findsOneWidget); // revoke
   });
 
   testWidgets('first login requires temporary + new + confirm password',
@@ -1961,7 +1972,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Agreement'), findsNothing);
     expect(find.textContaining('e-sign'), findsNothing);
-    expect(find.text('Call tenant'), findsOneWidget);
+    expect(find.text('Call'), findsOneWidget);
   });
 
   Widget dashboardHarness() => AppScope(

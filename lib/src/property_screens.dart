@@ -764,83 +764,89 @@ class _TenantsScreenState extends State<TenantsScreen> {
                     trailing: StatusPill(tenant.kyc.label),
                     children: [
                       Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                          child: Column(children: [
-                            const Divider(),
-                            _detail(Icons.calendar_today_outlined, 'Joined',
-                                formatFullDate(tenant.joinDate)),
-                            _detail(Icons.verified_user_outlined, 'KYC',
-                                tenant.kyc.label),
-                            const SizedBox(height: 10),
-                            if (tenant.kycDoc != null) ...[
-                              SizedBox(
-                                  width: double.infinity,
-                                  child: OutlinedButton.icon(
-                                      onPressed: () =>
-                                          _viewKycDoc(context, tenant),
-                                      icon: const Icon(Icons.badge_outlined),
-                                      label: const Text('View KYC document'))),
-                              const SizedBox(height: 8),
-                            ],
-                            OutlinedButton.icon(
-                                onPressed: () => _call(tenant.phone),
-                                icon: const Icon(Icons.call_outlined),
-                                label: const Text('Call tenant')),
-                            const SizedBox(height: 8),
-                            Row(children: [
-                              Expanded(
-                                  child: FilledButton.tonalIcon(
-                                      onPressed: () =>
-                                          _invite(context, state, tenant),
-                                      icon: const Icon(Icons.send_outlined),
-                                      label: Text(AppLocalizations.of(context)
-                                          .t('inv.inviteToApp')))),
-                              PopupMenuButton<String>(
-                                icon: const Icon(Icons.more_vert),
-                                tooltip: AppLocalizations.of(context)
-                                    .t('inv.options'),
-                                onSelected: (value) {
-                                  if (value == 'resend') {
-                                    _resendInvite(context, state, tenant);
-                                  } else if (value == 'revoke') {
-                                    _revokeInvite(context, state, tenant);
-                                  } else {
-                                    _removeTenant(context, state, tenant);
-                                  }
-                                },
-                                itemBuilder: (context) => [
-                                  PopupMenuItem(
-                                      value: 'resend',
-                                      child: ListTile(
-                                          leading: const Icon(Icons.refresh),
-                                          title: Text(
-                                              AppLocalizations.of(context)
-                                                  .t('inv.resend')),
-                                          contentPadding: EdgeInsets.zero)),
-                                  PopupMenuItem(
-                                      value: 'revoke',
-                                      child: ListTile(
-                                          leading: const Icon(Icons.link_off),
-                                          title: Text(
-                                              AppLocalizations.of(context)
-                                                  .t('inv.revoke')),
-                                          contentPadding: EdgeInsets.zero)),
-                                  PopupMenuItem(
-                                      value: 'remove',
-                                      child: ListTile(
-                                          leading: const Icon(
-                                              Icons.person_remove_outlined,
-                                              color: coral),
-                                          title: Text(
-                                              AppLocalizations.of(context)
-                                                  .t('rem.remove'),
-                                              style: const TextStyle(
-                                                  color: coral)),
-                                          contentPadding: EdgeInsets.zero)),
-                                ],
-                              ),
-                            ]),
-                          ]))
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                const Divider(height: 1),
+                                const SizedBox(height: 10),
+                                if ((tenant.email ?? '').isNotEmpty)
+                                  _detail(Icons.mail_outline, 'Email',
+                                      tenant.email!),
+                                _detail(
+                                    Icons.call_outlined, 'Phone', tenant.phone),
+                                _detail(Icons.calendar_today_outlined, 'Joined',
+                                    formatFullDate(tenant.joinDate)),
+                                _detail(Icons.verified_user_outlined, 'KYC',
+                                    tenant.kyc.label),
+                                const SizedBox(height: 12),
+                                Row(children: [
+                                  Expanded(
+                                      child: OutlinedButton.icon(
+                                          onPressed: () => _call(tenant.phone),
+                                          icon: const Icon(Icons.call_outlined,
+                                              size: 18),
+                                          label: const Text('Call'))),
+                                  if (tenant.kycDoc != null) ...[
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                        child: OutlinedButton.icon(
+                                            onPressed: () =>
+                                                _viewKycDoc(context, tenant),
+                                            icon: const Icon(
+                                                Icons.badge_outlined,
+                                                size: 18),
+                                            label: const Text('KYC'))),
+                                  ],
+                                  const SizedBox(width: 8),
+                                  PopupMenuButton<String>(
+                                    icon: const Icon(Icons.more_vert),
+                                    tooltip: AppLocalizations.of(context)
+                                        .t('inv.options'),
+                                    onSelected: (value) {
+                                      if (value == 'resend') {
+                                        _resendInvite(context, state, tenant);
+                                      } else if (value == 'revoke') {
+                                        _revokeInvite(context, state, tenant);
+                                      } else {
+                                        _removeTenant(context, state, tenant);
+                                      }
+                                    },
+                                    itemBuilder: (context) => [
+                                      PopupMenuItem(
+                                          value: 'resend',
+                                          child: ListTile(
+                                              leading:
+                                                  const Icon(Icons.refresh),
+                                              title: Text(
+                                                  AppLocalizations.of(context)
+                                                      .t('inv.resend')),
+                                              contentPadding: EdgeInsets.zero)),
+                                      PopupMenuItem(
+                                          value: 'revoke',
+                                          child: ListTile(
+                                              leading:
+                                                  const Icon(Icons.link_off),
+                                              title: Text(
+                                                  AppLocalizations.of(context)
+                                                      .t('inv.revoke')),
+                                              contentPadding: EdgeInsets.zero)),
+                                      PopupMenuItem(
+                                          value: 'remove',
+                                          child: ListTile(
+                                              leading: const Icon(
+                                                  Icons.person_remove_outlined,
+                                                  color: coral),
+                                              title: Text(
+                                                  AppLocalizations.of(context)
+                                                      .t('rem.remove'),
+                                                  style: const TextStyle(
+                                                      color: coral)),
+                                              contentPadding: EdgeInsets.zero)),
+                                    ],
+                                  ),
+                                ]),
+                              ]))
                     ],
                   ),
                 )),
@@ -861,63 +867,6 @@ class _TenantsScreenState extends State<TenantsScreen> {
   void _call(String phone) {
     final digits = phone.replaceAll(RegExp(r'[^0-9+]'), '');
     launchUrl(Uri(scheme: 'tel', path: digits));
-  }
-
-  void _invite(BuildContext context, AppState state, Tenant tenant) {
-    final messenger = ScaffoldMessenger.of(context);
-    final l = AppLocalizations.of(context);
-    final address = tenant.email?.trim() ?? '';
-    if (address.isEmpty) {
-      messenger.showSnackBar(SnackBar(content: Text(l.t('inv.noEmail'))));
-      return;
-    }
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(
-            '${l.t('inv.add')} ${tenant.name.split(' ').first} ${l.t('inv.toApp')}'),
-        content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(l.t('inv.desc'), style: const TextStyle(fontSize: 13)),
-              const SizedBox(height: 14),
-              Row(children: [
-                const Icon(Icons.mail_outline, size: 18, color: primary),
-                const SizedBox(width: 8),
-                Expanded(
-                    child: Text(address,
-                        style: const TextStyle(fontWeight: FontWeight.w700))),
-              ]),
-              const SizedBox(height: 10),
-              Text(l.t('inv.next'),
-                  style: const TextStyle(fontSize: 11, color: Colors.black45)),
-            ]),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: Text(l.t('common.cancel'))),
-          FilledButton.icon(
-              onPressed: () async {
-                final result = await state.inviteTenant(tenantId: tenant.id);
-                if (dialogContext.mounted) Navigator.pop(dialogContext);
-                if (result.error != null) {
-                  messenger
-                      .showSnackBar(SnackBar(content: Text(result.error!)));
-                  return;
-                }
-                if (result.emailSent) {
-                  messenger.showSnackBar(SnackBar(
-                      content: Text('${l.t('inv.emailed')} $address')));
-                } else {
-                  await _shareInvite(messenger, state, tenant, address, result);
-                }
-              },
-              icon: const Icon(Icons.send_outlined),
-              label: Text(l.t('inv.createShare'))),
-        ],
-      ),
-    );
   }
 
   void _resendInvite(
