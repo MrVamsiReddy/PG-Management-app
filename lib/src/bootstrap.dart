@@ -10,7 +10,8 @@ import 'supabase_config.dart';
 Future<AppState> bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
-    await Supabase.initialize(url: supabaseUrl, publishableKey: supabasePublishableKey);
+    await Supabase.initialize(
+        url: supabaseUrl, publishableKey: supabasePublishableKey);
     supabaseReady = true;
   } catch (_) {
     supabaseReady = false;
@@ -20,7 +21,9 @@ Future<AppState> bootstrap() async {
   await state.restoreCloudSession();
   if (state.isLoggedIn) unawaited(registerPushToken());
   supabaseOrNull?.auth.onAuthStateChange.listen((change) {
-    if (change.event == AuthChangeEvent.signedIn) unawaited(registerPushToken());
+    if (change.event == AuthChangeEvent.signedIn) {
+      unawaited(registerPushToken());
+    }
   });
   onPushWhileOpen(() => unawaited(state.refresh()));
   return state;

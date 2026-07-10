@@ -13,7 +13,10 @@ abstract class Repository<T> {
 /// user for owners, or the inviting owner's id for linked tenants. Row-level
 /// security enforces who may touch what (see supabase/schema.sql).
 class SupabaseRepository<T> implements Repository<T> {
-  SupabaseRepository(this.client, this.key, {required this.workspaceOwnerId, required this.fromMap, required this.toMap});
+  SupabaseRepository(this.client, this.key,
+      {required this.workspaceOwnerId,
+      required this.fromMap,
+      required this.toMap});
 
   final SupabaseClient client;
   final String key;
@@ -23,9 +26,16 @@ class SupabaseRepository<T> implements Repository<T> {
 
   @override
   Future<List<T>> loadAll() async {
-    final row = await client.from('app_data').select('data').eq('owner_id', workspaceOwnerId).eq('key', key).maybeSingle();
+    final row = await client
+        .from('app_data')
+        .select('data')
+        .eq('owner_id', workspaceOwnerId)
+        .eq('key', key)
+        .maybeSingle();
     final data = row?['data'] as List? ?? const [];
-    return data.map((e) => fromMap(Map<String, dynamic>.from(e as Map))).toList();
+    return data
+        .map((e) => fromMap(Map<String, dynamic>.from(e as Map)))
+        .toList();
   }
 
   @override

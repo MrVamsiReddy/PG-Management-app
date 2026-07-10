@@ -5,12 +5,11 @@ Severity: P0 blocker · P1 high · P2 medium · P3 low. Grounded in current sour
 ## Security issues
 - **P0 · Runtime not on customer-scoped RLS.** Owner/tenant data flows through `app_data` (`repositories.dart` `SupabaseRepository`), keyed by `owner_id`; `customer_id` is JSON metadata only. The `004` relational RLS is unused at runtime. Fix: migrate reads/writes to the relational tables. (The local Hive store and demo/seed path have been removed — the app is now cloud-only — but this does not by itself move enforcement onto the relational tables.)
 - **P0 · Tenant can mark rent PAID.** `finance_screens.dart` `_paymentFlow` → `app_state.payRent` sets `status=paid`. Must become a proof submission; only owner confirms (P9).
-- **P1 · Disabled customer does not block tenants.** Invited tenants have no `profiles` row → `_fetchAccessGate` pass-through skips the `customers.status` check. Fix: create a `profiles` row per tenant (P7) so the gate applies.
+- **P1 (narrowed) · Disabled customer does not block legacy tenants.** The `invite` fn now creates a `profiles` row for newly invited tenants **when the inviting owner has a resolved `customer_id`**; those tenants hit the customer-status gate. Tenants invited before P7 — or by an owner with no `profiles` row (legacy path) — still bypass it. Fix: backfill `profiles` rows / migrate owners to customers.
 - **P2 · Intra-workspace tenant isolation is client-side.** Tenant reads the whole workspace blob; `visibleNotifications`/`tenantPayments`/`visibleAnnouncements` filter in Dart, not via RLS.
-- **P2 · `must_change_password` not server-enforced.** Only `SetPasswordScreen` blocks the UI; the API would serve a temp-password session.
+- **P2 (resolved for writes) · `must_change_password` server enforcement.** `006_invites.sql` adds restrictive `app_data` policies: a session whose JWT still carries `must_change_password=true` cannot insert/update/delete. Reads remain allowed (the set-password screen needs the session; UI still gates). App calls `refreshSession()` after the change so the new JWT takes effect immediately.
 
 ## Missing functionality (Pending — see 06)
-- P1 · Tenant invite tokens/states + expiry/revoke (P7).
 - P1 · Manual UPI submit/confirm/reject flow (P9).
 - P1 · Audit log writes + viewers (P8).
 - P2 · Admin "view customer PGs" returns empty — `loadCustomerPgNames` reads relational `pgs` the app never writes.

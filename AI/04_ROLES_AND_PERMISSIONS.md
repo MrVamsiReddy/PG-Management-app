@@ -30,7 +30,8 @@ Responsibilities: view own rent/notices/complaints/visitors; submit payment.
 
 ## Disabled customer
 - Owner with a `profiles` row → blocked at login/refresh ✅.
-- Tenant without a `profiles` row (legacy invite) → **not** blocked ❌ (see `09`).
+- Tenant invited after P7 by an owner with a resolved customer → has a `profiles` row → blocked ✅.
+- Tenant without a `profiles` row (legacy invite, or owner without a customer) → **not** blocked ❌ (see `09`).
 
 ## Removed from product (data kept internal, no UI)
 Utility billing, Attendance, Rental agreement.

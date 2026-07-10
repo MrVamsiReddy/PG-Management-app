@@ -24,12 +24,29 @@ enum InviteStatus {
   pending('pending'),
   accepted('accepted'),
   expired('expired'),
-  revoked('revoked');
+  revoked('revoked'),
+  resent('resent');
 
   const InviteStatus(this.wire);
   final String wire;
   static InviteStatus fromWire(String? wire) => values
       .firstWhere((e) => e.wire == wire, orElse: () => InviteStatus.pending);
+}
+
+/// Mirrors the `invite` Edge Function's single-use/expiry validation: the
+/// `code:*` error the server returns for this invite, or null when the invite
+/// can still be accepted. Tokens are one-time — an accepted invite can never
+/// be consumed again, and a superseded (resent) invite behaves like a revoked
+/// one.
+String? inviteAcceptError(
+    InviteStatus status, DateTime expiresAt, DateTime now) {
+  return switch (status) {
+    InviteStatus.accepted => 'code:invite_used',
+    InviteStatus.revoked || InviteStatus.resent => 'code:invite_revoked',
+    InviteStatus.expired => 'code:invite_expired',
+    InviteStatus.pending =>
+      now.isBefore(expiresAt) ? null : 'code:invite_expired',
+  };
 }
 
 enum SubmissionStatus {

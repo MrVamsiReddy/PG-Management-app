@@ -10,10 +10,12 @@ const supabasePublishableKey = 'sb_publishable_AbpcjS3ZRxowxBSdkvu5PA_Yto9Teob';
 const appWebUrl = 'https://mrvamsireddy.github.io/PG-Management-app/';
 
 /// Always points at the newest published APK (GitHub release asset).
-const apkDownloadUrl = 'https://github.com/MrVamsiReddy/PG-Management-app/releases/latest/download/PG-Management.apk';
+const apkDownloadUrl =
+    'https://github.com/MrVamsiReddy/PG-Management-app/releases/latest/download/PG-Management.apk';
 
 /// Set by main() once Supabase.initialize succeeds. False in tests and when
 /// offline at startup.
 bool supabaseReady = false;
 
-SupabaseClient? get supabaseOrNull => supabaseReady ? Supabase.instance.client : null;
+SupabaseClient? get supabaseOrNull =>
+    supabaseReady ? Supabase.instance.client : null;

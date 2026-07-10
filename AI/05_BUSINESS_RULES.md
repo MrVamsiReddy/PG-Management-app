@@ -6,7 +6,7 @@ Enforced in current code unless marked Pending. Roles → `04`; schema → `03`.
 - Customers and their owner login are created only by a platform admin via `create-customer` (verifies caller `platform_admin`). Owner gets a temp password + `must_change_password=true` metadata + a `profiles` row (role=owner, customer_id). ✅
 - New customers start empty — the function inserts no PGs/rooms/tenants. ✅
 - Enable/disable via `setCustomerStatus` (updates `customers.status`). Owners with a profile are then blocked by the login gate. ✅ (tenants gap → `09`).
-- `must_change_password` is enforced **client-side** only (`SetPasswordScreen` blocks the app); not server-enforced. ⚠️
+- `must_change_password` is enforced client-side (`SetPasswordScreen` blocks the app) and server-side for writes (`006` restrictive `app_data` policies; app refreshes the JWT after the change). ✅
 
 ## PG hierarchy
 - Owner builds a PG via `PgSetupWizard` → `AppState.createProperty(name, address, amenities, specs)`. Creates a `Pg` and its `Room`s in the live model, stamped with `customerId`, and sets it active. ✅
@@ -27,9 +27,13 @@ Enforced in current code unless marked Pending. Roles → `04`; schema → `03`.
 - Partial payments supported (`paidAmount`, `collected`, `balance`, `Partial` status). ✅
 - **Tenant `payRent` marks the due paid directly.** ❌ Violates "tenant never confirms payment." Manual-UPI submit/confirm flow is **Pending** (Prompt 9).
 
-## Invite workflow (current)
-- Owner invites a tenant via `inviteTenant` → `invite` Edge Function: creates the tenant auth user (temp password, `must_change_password`), links via `members`, returns credentials to share (APK + web links). ✅
-- Invite **tokens / states (pending/accepted/expired/revoked) are Pending** (Prompt 7). Invited tenants get no `profiles` row.
+## Invite workflow (P7, current)
+- Only owners create tenant logins, via `inviteTenant`/`resendInvite`/`revokeInvite` → the `invite` Edge Function (actions create/resend/revoke/validate/accept). No client-side fallback. ✅
+- `create`: tenant auth user with temp password + metadata (`role=tenant`, `must_change_password=true`, `customer_id`, `tenant_id`, `pg_id`, `room_id`, `bed_id`), `members` link, `profiles` row (when the owner has a resolved customer), and an `invites` row: one-time token, `expires_at` = 7 days. ✅
+- Lifecycle: pending → accepted (tenant sets own password) / expired (past `expires_at`) / revoked (owner cancels; unused temp password scrambled) / resent (superseded by a new invite, which regenerates the temp password only while onboarding is incomplete). Single-use enforced by the guarded pending→accepted transition. ✅
+- First tenant sign-in on a temp password calls `validate`: an expired/revoked invite blocks the login (`_enterCloud`). After the password change the app refreshes the JWT and calls `accept`. ✅
+- Share message (`invite_message.dart`): email, temp password (only when just generated — never redisplayed), APK link, web login link, invite link, password-change instructions, expiry. Temp passwords are never logged. ✅
+- `must_change_password` enforced client-side (`SetPasswordScreen`) **and** backend-side (restrictive `app_data` write policies in `006`). ✅
 
 ## Notifications & announcements
 - In-app notifications are role-scoped (`visibleNotifications`: tenant sees own + workspace; managers see managerial + active-PG). ✅

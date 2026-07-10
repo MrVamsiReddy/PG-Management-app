@@ -6,12 +6,13 @@
 3. `supabase/003_push_tokens.sql` — FCM tokens.
 4. `supabase/004_saas_core.sql` — relational SaaS schema + RLS + `payment-proofs` bucket. (Idempotent; re-runnable.)
 5. `supabase/005_admin_setup.sql` — `admin_setup_attempts`.
+6. `supabase/006_invites.sql` — `invites` (tenant invite lifecycle, service-role-write-only) + `resent` status on `tenant_invites` + restrictive `app_data` policies that block writes while `must_change_password` is set. **Not idempotent** (plain `create policy`); run once.
 
 Auth settings: **Authentication → Providers → Email → turn OFF "Confirm email"** (invited/admin accounts sign in immediately). Optionally set **URL Configuration → Site URL** to the tenant/owner web URL.
 
 ## Edge Functions (Dashboard → Edge Functions → Deploy; name must match exactly)
 - `push` — `functions/push/index.ts`. Secret: `FIREBASE_SERVICE_ACCOUNT` = full Firebase service-account JSON.
-- `invite` — `functions/invite/index.ts`. No extra secret.
+- `invite` — `functions/invite/index.ts`. No extra secret. **Redeploy after Prompt 7** (now handles create/resend/revoke/validate/accept; requires `006_invites.sql`). The app has no client-side fallback — tenant invites fail cleanly if this function is missing.
 - `create-admin` — `functions/create-admin/index.ts`. Secrets: `ADMIN_SETUP_KEY` (required), optional `ADMIN_SETUP_KEY_PREVIOUS` (rotation grace), `ADMIN_SETUP_KEY_EXPIRES_AT` (ISO).
 - `create-customer` — `functions/create-customer/index.ts`. No extra secret; requires a platform admin caller.
 
@@ -40,7 +41,7 @@ GitHub Actions builds/tests `main.dart` and publishes a release APK on tag `vX.Y
 Deploy `create-admin` + set `ADMIN_SETUP_KEY` → in the app: **Admin login → Set up a platform admin** → enter the key. Then admins create customers via **New customer**.
 
 ## Release checklist
-- [ ] Migrations 1–5 run; email confirmation off.
+- [ ] Migrations 1–6 run; email confirmation off.
 - [ ] All 4 functions deployed; `ADMIN_SETUP_KEY` + `FIREBASE_SERVICE_ACCOUNT` set.
 - [ ] `flutter analyze` clean; `flutter test` green.
 - [ ] Ship `main_owner`/`main_tenant` builds — **not** `main.dart** (combined app leaks admin PG ops, `09`).

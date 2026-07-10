@@ -1,13 +1,27 @@
-// PG Management — `invite` Edge Function.
+// PG Management — `invite` Edge Function (roadmap Prompt 7).
 //
-// Called by an owner when adding a tenant. Creates the tenant's login with a
-// temporary password (returned to the owner to share) and links the email to
-// the owner's workspace. If the email already has an account, it is linked
-// without touching its password.
+// All tenant onboarding goes through here; tenants can never self-register.
+// Actions (POST body `action`):
+//   create   (owner)  — create the tenant's login with a temporary password,
+//                       link it to the workspace, issue a one-time invite
+//                       token. Supersedes any previous pending invite.
+//   resend   (owner)  — same as create for an already-invited tenant; the
+//                       temporary password is regenerated only while the
+//                       tenant has not yet set their own password.
+//   revoke   (owner)  — cancel the pending invite; a never-used temporary
+//                       password is scrambled so shared credentials die.
+//   validate (tenant) — called at first sign-in: reports whether the invite
+//                       is still pending/accepted, or expired/revoked.
+//   accept   (tenant) — consume the one-time invite after the tenant sets
+//                       their own password. Only a pending, unexpired invite
+//                       can be accepted, exactly once.
 //
-// Deploy (Supabase dashboard): Edge Functions → Deploy new function →
-// name it exactly `invite` → paste this file → Deploy.
-// No extra secrets needed (uses the built-in service role).
+// Security: the temporary password is returned to the owner exactly once and
+// is NEVER logged or stored. Errors are returned as `code:*` strings the app
+// maps to localized text.
+//
+// Deploy (Supabase dashboard): Edge Functions → `invite` → paste → Deploy.
+// Run supabase/006_invites.sql first. No extra secrets needed.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -16,24 +30,32 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-function tempPassword(): string {
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "content-type": "application/json" },
+  });
+
+function tempPassword(length = 10): string {
   // Unambiguous characters only — this gets retyped from a phone screen.
   const chars = "abcdefghjkmnpqrstuvwxyzACDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const random = crypto.getRandomValues(new Uint8Array(10));
+  const random = crypto.getRandomValues(new Uint8Array(length));
   let out = "";
   for (const byte of random) out += chars[byte % chars.length];
   return out;
 }
 
+type InviteRow = {
+  id: string;
+  user_id: string | null;
+  email: string;
+  status: string;
+  expires_at: string;
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
-    const { email, tenantId, tenantName } = await req.json();
-    const address = String(email ?? "").trim().toLowerCase();
-    if (!address.includes("@") || !tenantId) {
-      return new Response("bad request", { status: 400, headers: corsHeaders });
-    }
-
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -45,26 +67,145 @@ Deno.serve(async (req) => {
     );
     const { data: userData } = await authed.auth.getUser();
     const caller = userData?.user;
-    if (!caller) return new Response("unauthorized", { status: 401, headers: corsHeaders });
+    if (!caller) return json({ error: "code:unauthorized" }, 401);
 
-    // Try to create the tenant's account with a one-time password. If the
-    // email is already registered we only link it — never reset a password
-    // the owner doesn't control.
+    const body = await req.json().catch(() => ({}));
+    const action = String(body.action ?? "create");
+
+    // ---- Tenant-side actions -----------------------------------------------
+
+    if (action === "validate" || action === "accept") {
+      const callerEmail = (caller.email ?? "").toLowerCase();
+      let invite: InviteRow | null = null;
+      if (body.token) {
+        const { data } = await admin.from("invites")
+          .select("id, user_id, email, status, expires_at")
+          .eq("token", String(body.token)).maybeSingle();
+        // A token belongs to exactly one email — never honour someone else's.
+        if (data && data.email !== callerEmail) return json({ error: "code:unauthorized" }, 403);
+        invite = data;
+      } else {
+        const { data } = await admin.from("invites")
+          .select("id, user_id, email, status, expires_at")
+          .eq("email", callerEmail)
+          .order("created_at", { ascending: false })
+          .limit(1).maybeSingle();
+        invite = data;
+      }
+      if (!invite) return json({ ok: true, status: "none" });
+
+      if (invite.status === "pending" && Date.parse(invite.expires_at) < Date.now()) {
+        await admin.from("invites")
+          .update({ status: "expired" })
+          .eq("id", invite.id).eq("status", "pending");
+        invite.status = "expired";
+      }
+      if (invite.status === "expired") return json({ error: "code:invite_expired" }, 403);
+      if (invite.status === "revoked" || invite.status === "resent") {
+        return json({ error: "code:invite_revoked" }, 403);
+      }
+      if (invite.status === "accepted") {
+        // validate: an accepted invite is a completed onboarding — fine.
+        // accept: the one-time token cannot be consumed twice.
+        return action === "validate"
+          ? json({ ok: true, status: "accepted" })
+          : json({ error: "code:invite_used" }, 409);
+      }
+      if (action === "validate") return json({ ok: true, status: "pending" });
+
+      // Single-use consumption: only the pending → accepted transition exists,
+      // and the status guard makes a concurrent double-accept impossible.
+      const { data: consumed } = await admin.from("invites")
+        .update({ status: "accepted", accepted_at: new Date().toISOString() })
+        .eq("id", invite.id).eq("status", "pending")
+        .select("id");
+      if (!consumed || consumed.length === 0) return json({ error: "code:invite_used" }, 409);
+      return json({ ok: true, status: "accepted" });
+    }
+
+    // ---- Owner-side actions ------------------------------------------------
+
+    const tenantId = String(body.tenantId ?? "");
+    if (!tenantId) return json({ error: "code:missing_fields" }, 400);
+
+    if (action === "revoke") {
+      const { data: revoked } = await admin.from("invites")
+        .update({ status: "revoked", revoked_at: new Date().toISOString() })
+        .eq("owner_id", caller.id).eq("tenant_id", tenantId).eq("status", "pending")
+        .select("user_id");
+      if (!revoked || revoked.length === 0) return json({ error: "code:invite_not_found" }, 404);
+      // Kill the shared temporary password — but never touch a password the
+      // tenant already set themselves.
+      for (const row of revoked) {
+        if (!row.user_id) continue;
+        const { data: got } = await admin.auth.admin.getUserById(row.user_id);
+        if (got?.user?.user_metadata?.must_change_password === true) {
+          await admin.auth.admin.updateUserById(row.user_id, { password: tempPassword(32) });
+        }
+      }
+      return json({ ok: true, status: "revoked" });
+    }
+
+    if (action !== "create" && action !== "resend") {
+      return json({ error: "code:missing_fields" }, 400);
+    }
+
+    const address = String(body.email ?? "").trim().toLowerCase();
+    if (!address.includes("@")) return json({ error: "code:missing_fields" }, 400);
+    const tenantName = String(body.tenantName ?? "");
+    const pgId = String(body.pgId ?? "");
+    const roomId = String(body.roomId ?? "");
+    const bedLabel = String(body.bedLabel ?? "");
+
+    // The inviting owner's resolved SaaS customer, when one exists.
+    const { data: prof } = await admin.from("profiles")
+      .select("customer_id").eq("id", caller.id).maybeSingle();
+    const customerId = prof?.customer_id ?? null;
+
+    // A new invite supersedes any previous pending one for this tenant.
+    const { data: superseded } = await admin.from("invites")
+      .update({ status: "resent", resent_at: new Date().toISOString() })
+      .eq("owner_id", caller.id).eq("tenant_id", tenantId).eq("status", "pending")
+      .select("user_id");
+
+    // Create the tenant's account with a one-time password. If the email is
+    // already registered we regenerate the temporary password only while the
+    // tenant has never set their own — otherwise we just (re)link the account.
     let password: string | null = tempPassword();
     let existing = false;
-    const { error: createError } = await admin.auth.admin.createUser({
+    let userId: string | null = null;
+    const metadata = {
+      role: "tenant",
+      full_name: tenantName,
+      must_change_password: true,
+      customer_id: customerId,
+      tenant_id: tenantId,
+      pg_id: pgId,
+      room_id: roomId,
+      bed_id: bedLabel,
+    };
+    const { data: created, error: createError } = await admin.auth.admin.createUser({
       email: address,
       password,
       email_confirm: true,
-      user_metadata: {
-        role: "tenant",
-        full_name: tenantName ?? "",
-        must_change_password: true,
-      },
+      user_metadata: metadata,
     });
-    if (createError) {
-      password = null;
+    if (createError || !created?.user) {
       existing = true;
+      password = null;
+      userId = (superseded ?? []).find((r) => r.user_id)?.user_id ?? null;
+      if (userId) {
+        const { data: got } = await admin.auth.admin.getUserById(userId);
+        if (got?.user?.user_metadata?.must_change_password === true) {
+          password = tempPassword();
+          await admin.auth.admin.updateUserById(userId, {
+            password,
+            user_metadata: { ...got.user.user_metadata, ...metadata },
+          });
+        }
+      }
+    } else {
+      userId = created.user.id;
     }
 
     const { error: memberError } = await admin.from("members").upsert({
@@ -72,12 +213,39 @@ Deno.serve(async (req) => {
       member_email: address,
       tenant_id: tenantId,
     }, { onConflict: "owner_id,member_email" });
-    if (memberError) {
-      return new Response(`membership failed: ${memberError.message}`, { status: 500, headers: corsHeaders });
+    if (memberError) return json({ error: "code:server_error" }, 500);
+
+    // Give invited tenants a profiles row so the customer-status login gate
+    // applies to them too (disabled customer ⇒ tenant blocked).
+    if (userId && customerId) {
+      await admin.from("profiles").upsert({
+        id: userId,
+        role: "tenant",
+        customer_id: customerId,
+        full_name: tenantName,
+      });
     }
 
-    return Response.json({ tempPassword: password, existing }, { headers: corsHeaders });
-  } catch (e) {
-    return new Response(`error: ${e}`, { status: 500, headers: corsHeaders });
+    const { data: invite, error: inviteError } = await admin.from("invites").insert({
+      owner_id: caller.id,
+      customer_id: customerId,
+      user_id: userId,
+      tenant_id: tenantId,
+      email: address,
+      pg_id: pgId,
+      room_id: roomId,
+      bed_label: bedLabel,
+    }).select("token, expires_at").single();
+    if (inviteError || !invite) return json({ error: "code:server_error" }, 500);
+
+    return json({
+      ok: true,
+      tempPassword: password,
+      existing,
+      token: invite.token,
+      expiresAt: invite.expires_at,
+    });
+  } catch (_e) {
+    return json({ error: "code:server_error" }, 500);
   }
 });

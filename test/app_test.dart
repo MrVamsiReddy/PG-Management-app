@@ -9,9 +9,11 @@ import 'package:pg_management/src/app_state.dart';
 import 'package:pg_management/src/dashboard_screen.dart';
 import 'package:pg_management/src/format.dart';
 import 'package:pg_management/src/home_shell.dart';
+import 'package:pg_management/src/invite_message.dart';
 import 'package:pg_management/src/l10n.dart';
 import 'package:pg_management/src/module_screens.dart';
 import 'package:pg_management/src/owner_app.dart';
+import 'package:pg_management/src/supabase_config.dart';
 import 'package:pg_management/src/tenant_app.dart';
 import 'package:pg_management/src/theme.dart';
 
@@ -1091,6 +1093,149 @@ void main() {
     expect(sql, contains("'payment-proofs'"));
     expect(sql, contains('pp_tenant_insert'));
     expect(sql, contains('unique (tenant_id, period)'));
+  });
+
+  // ---- Prompt 7: tenant invite tokens & temporary passwords ----
+
+  test('invite message contains credentials, links and instructions', () {
+    final expiry = DateTime(2026, 7, 17);
+    final message = buildInviteMessage(
+        tenantName: 'Aarav Mehta',
+        pgName: 'HSR Layout PG',
+        email: 'aarav@example.com',
+        tempPassword: 'x7kQm2p4Rt',
+        inviteToken: 'tok123abc',
+        expiresAt: expiry);
+    expect(message, contains('aarav@example.com'));
+    expect(message, contains('Temporary password: x7kQm2p4Rt'));
+    expect(message, contains(apkDownloadUrl));
+    expect(message, contains(appWebUrl));
+    expect(message, contains(inviteLink('tok123abc')));
+    expect(message, contains('set your own password'));
+    expect(message, contains('temporary password stops working'));
+    expect(message, contains('expires on ${formatFullDate(expiry)}'));
+  });
+
+  test('invite message for a linked existing account never shows a password',
+      () {
+    final message = buildInviteMessage(
+        tenantName: 'Aarav Mehta',
+        pgName: 'HSR Layout PG',
+        email: 'aarav@example.com',
+        tempPassword: null,
+        inviteToken: 'tok123abc');
+    expect(message, isNot(contains('Temporary password')));
+    expect(message, contains('existing password'));
+    expect(message, contains('aarav@example.com'));
+    expect(message, contains(apkDownloadUrl));
+    expect(message, contains(appWebUrl));
+  });
+
+  test('invite tokens are single-use and validate every lifecycle state', () {
+    final now = DateTime(2026, 7, 10);
+    final future = now.add(const Duration(days: 7));
+    final past = now.subtract(const Duration(days: 1));
+
+    // A pending, unexpired invite is the only acceptable one.
+    expect(inviteAcceptError(InviteStatus.pending, future, now), isNull);
+    // Expiry: pending past expires_at, or already marked expired.
+    expect(inviteAcceptError(InviteStatus.pending, past, now),
+        'code:invite_expired');
+    expect(inviteAcceptError(InviteStatus.expired, future, now),
+        'code:invite_expired');
+    // Reuse prevention: accepted once means never again.
+    expect(inviteAcceptError(InviteStatus.accepted, future, now),
+        'code:invite_used');
+    // Revocation, and a superseded (resent) invite behaves the same.
+    expect(inviteAcceptError(InviteStatus.revoked, future, now),
+        'code:invite_revoked');
+    expect(inviteAcceptError(InviteStatus.resent, future, now),
+        'code:invite_revoked');
+  });
+
+  test('invite lifecycle statuses round-trip, including resent', () {
+    expect(InviteStatus.fromWire('resent'), InviteStatus.resent);
+    final invite = TenantInvite(
+        id: 'i2',
+        customerId: 'c1',
+        tenantId: 't1',
+        email: 'x@y.z',
+        token: 'tok',
+        status: InviteStatus.resent,
+        expiresAt: DateTime.now().add(const Duration(days: 7)));
+    expect(TenantInvite.fromMap(invite.toMap()).status, InviteStatus.resent);
+    expect(invite.usable, isFalse);
+  });
+
+  test('invite error codes map to friendly messages', () {
+    expect(inviteActionMessage('code:invite_expired'), contains('expired'));
+    expect(inviteActionMessage('code:invite_revoked'), contains('revoked'));
+    expect(inviteActionMessage('code:invite_used'), contains('already used'));
+    expect(inviteActionMessage(null), contains('went wrong'));
+  });
+
+  test('resend and revoke report a friendly error without a cloud connection',
+      () async {
+    state.debugSignIn(UserRole.owner);
+    final resent = await state.resendInvite(tenantId: 't1');
+    expect(resent.error, contains('cloud account'));
+    expect(resent.tempPassword, isNull);
+    final revoked = await state.revokeInvite(tenantId: 't1');
+    expect(revoked.error, contains('cloud account'));
+  });
+
+  test('the invites migration defines the full lifecycle securely', () {
+    final sql = File('supabase/006_invites.sql').readAsStringSync();
+    expect(sql, contains('create table if not exists public.invites'));
+    for (final status in [
+      'pending',
+      'accepted',
+      'expired',
+      'revoked',
+      'resent'
+    ]) {
+      expect(sql, contains("'$status'"), reason: '$status state must exist');
+    }
+    expect(sql, contains('token'));
+    expect(sql, contains('unique'), reason: 'tokens must be single-use');
+    expect(sql, contains('expires_at'));
+    expect(sql, contains('customer_id'));
+    expect(
+        sql, contains('alter table public.invites enable row level security'));
+    expect(
+        RegExp(r'create policy "[^"]*" on public\.invites\s+for (insert|update|delete)')
+            .hasMatch(sql),
+        isFalse,
+        reason: 'clients must never write invites directly');
+    // must_change_password is enforced in the backend, not only the UI.
+    expect(sql, contains('as restrictive for insert'));
+    expect(sql, contains('as restrictive for update'));
+    expect(sql, contains('as restrictive for delete'));
+    expect(sql, contains("must_change_password"));
+    // The relational mirror gains the same vocabulary.
+    expect(sql, contains('tenant_invites_status_check'));
+  });
+
+  test('the invite function enforces lifecycle and never logs passwords', () {
+    final fn = File('supabase/functions/invite/index.ts').readAsStringSync();
+    for (final action in [
+      '"create"',
+      '"resend"',
+      '"revoke"',
+      '"validate"',
+      '"accept"'
+    ]) {
+      expect(fn, contains(action), reason: '$action action must exist');
+    }
+    expect(fn, contains('must_change_password'));
+    expect(fn, contains('code:invite_expired'));
+    expect(fn, contains('code:invite_revoked'));
+    expect(fn, contains('code:invite_used'));
+    // Single-use consumption is guarded by the pending-status transition.
+    expect(fn, contains('.eq("status", "pending")'));
+    // Temporary passwords are returned once and never logged.
+    expect(fn, isNot(contains('console.log')));
+    expect(fn, isNot(contains('console.error')));
   });
 
   test('setLanguage switches the active language and locale', () {

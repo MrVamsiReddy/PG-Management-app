@@ -1,5 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show AuthException, FunctionException, PostgrestException, User, UserAttributes;
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show
+        AuthException,
+        FunctionException,
+        PostgrestException,
+        SupabaseClient,
+        User,
+        UserAttributes;
 
 import 'access.dart';
 import 'format.dart';
@@ -15,6 +22,16 @@ export 'models.dart';
 export 'saas_models.dart';
 
 enum UserRole { owner, tenant, admin }
+
+/// Result of an invite action. [tempPassword] is only ever non-null right
+/// after it was (re)generated — passwords are never redisplayed later.
+typedef InviteResult = ({
+  String? error,
+  String? tempPassword,
+  String? token,
+  DateTime? expiresAt,
+  String? email
+});
 
 extension UserRoleX on UserRole {
   String get label => switch (this) {
@@ -81,16 +98,49 @@ class AppState extends ChangeNotifier {
 
   void _useSupabaseRepos(String workspaceOwnerId) {
     final client = supabaseOrNull!;
-    _pgRepo = SupabaseRepository<Pg>(client, 'pgs', workspaceOwnerId: workspaceOwnerId, fromMap: Pg.fromMap, toMap: (e) => e.toMap());
-    _roomRepo = SupabaseRepository<Room>(client, 'rooms', workspaceOwnerId: workspaceOwnerId, fromMap: Room.fromMap, toMap: (e) => e.toMap());
-    _tenantRepo = SupabaseRepository<Tenant>(client, 'tenants', workspaceOwnerId: workspaceOwnerId, fromMap: Tenant.fromMap, toMap: (e) => e.toMap());
-    _paymentRepo = SupabaseRepository<Payment>(client, 'payments', workspaceOwnerId: workspaceOwnerId, fromMap: Payment.fromMap, toMap: (e) => e.toMap());
-    _maintenanceRepo = SupabaseRepository<MaintenanceRequest>(client, 'maintenance', workspaceOwnerId: workspaceOwnerId, fromMap: MaintenanceRequest.fromMap, toMap: (e) => e.toMap());
-    _visitorRepo = SupabaseRepository<Visitor>(client, 'visitors', workspaceOwnerId: workspaceOwnerId, fromMap: Visitor.fromMap, toMap: (e) => e.toMap());
-    _announcementRepo = SupabaseRepository<Announcement>(client, 'announcements', workspaceOwnerId: workspaceOwnerId, fromMap: Announcement.fromMap, toMap: (e) => e.toMap());
-    _attendanceRepo = SupabaseRepository<AttendanceRecord>(client, 'attendance', workspaceOwnerId: workspaceOwnerId, fromMap: AttendanceRecord.fromMap, toMap: (e) => e.toMap());
-    _utilityRepo = SupabaseRepository<UtilityBill>(client, 'utilities', workspaceOwnerId: workspaceOwnerId, fromMap: UtilityBill.fromMap, toMap: (e) => e.toMap());
-    _notificationRepo = SupabaseRepository<AppNotification>(client, 'notifications', workspaceOwnerId: workspaceOwnerId, fromMap: AppNotification.fromMap, toMap: (e) => e.toMap());
+    _pgRepo = SupabaseRepository<Pg>(client, 'pgs',
+        workspaceOwnerId: workspaceOwnerId,
+        fromMap: Pg.fromMap,
+        toMap: (e) => e.toMap());
+    _roomRepo = SupabaseRepository<Room>(client, 'rooms',
+        workspaceOwnerId: workspaceOwnerId,
+        fromMap: Room.fromMap,
+        toMap: (e) => e.toMap());
+    _tenantRepo = SupabaseRepository<Tenant>(client, 'tenants',
+        workspaceOwnerId: workspaceOwnerId,
+        fromMap: Tenant.fromMap,
+        toMap: (e) => e.toMap());
+    _paymentRepo = SupabaseRepository<Payment>(client, 'payments',
+        workspaceOwnerId: workspaceOwnerId,
+        fromMap: Payment.fromMap,
+        toMap: (e) => e.toMap());
+    _maintenanceRepo = SupabaseRepository<MaintenanceRequest>(
+        client, 'maintenance',
+        workspaceOwnerId: workspaceOwnerId,
+        fromMap: MaintenanceRequest.fromMap,
+        toMap: (e) => e.toMap());
+    _visitorRepo = SupabaseRepository<Visitor>(client, 'visitors',
+        workspaceOwnerId: workspaceOwnerId,
+        fromMap: Visitor.fromMap,
+        toMap: (e) => e.toMap());
+    _announcementRepo = SupabaseRepository<Announcement>(
+        client, 'announcements',
+        workspaceOwnerId: workspaceOwnerId,
+        fromMap: Announcement.fromMap,
+        toMap: (e) => e.toMap());
+    _attendanceRepo = SupabaseRepository<AttendanceRecord>(client, 'attendance',
+        workspaceOwnerId: workspaceOwnerId,
+        fromMap: AttendanceRecord.fromMap,
+        toMap: (e) => e.toMap());
+    _utilityRepo = SupabaseRepository<UtilityBill>(client, 'utilities',
+        workspaceOwnerId: workspaceOwnerId,
+        fromMap: UtilityBill.fromMap,
+        toMap: (e) => e.toMap());
+    _notificationRepo = SupabaseRepository<AppNotification>(
+        client, 'notifications',
+        workspaceOwnerId: workspaceOwnerId,
+        fromMap: AppNotification.fromMap,
+        toMap: (e) => e.toMap());
   }
 
   List<Pg> pgs = [];
@@ -206,13 +256,17 @@ class AppState extends ChangeNotifier {
 
   // ---- Cloud accounts (Supabase) ----
 
-  Future<String?> signInCloud({required String email, required String password, required LoginPortal portal}) async {
+  Future<String?> signInCloud(
+      {required String email,
+      required String password,
+      required LoginPortal portal}) async {
     final client = supabaseOrNull;
     if (client == null) {
       return 'Cannot reach the server. Check your connection and try again.';
     }
     try {
-      final result = await client.auth.signInWithPassword(email: email, password: password);
+      final result = await client.auth
+          .signInWithPassword(email: email, password: password);
       final error = await _enterCloud(result.user!, portal: portal);
       if (error != null) {
         try {
@@ -232,9 +286,15 @@ class AppState extends ChangeNotifier {
   }
 
   /// Emails a password-reset link. Returns an error message, or null.
-  Future<String?> createAdmin({required String fullName, required String email, required String password, required String setupKey}) async {
+  Future<String?> createAdmin(
+      {required String fullName,
+      required String email,
+      required String password,
+      required String setupKey}) async {
     final client = supabaseOrNull;
-    if (client == null) return 'Cannot reach the server. Check your connection.';
+    if (client == null) {
+      return 'Cannot reach the server. Check your connection.';
+    }
     try {
       final result = await client.functions.invoke('create-admin', body: {
         'fullName': fullName.trim(),
@@ -247,7 +307,8 @@ class AppState extends ChangeNotifier {
       return adminSetupMessage(data is Map ? data['error'] as String? : null);
     } on FunctionException catch (e) {
       final details = e.details;
-      return adminSetupMessage(details is Map ? details['error'] as String? : null);
+      return adminSetupMessage(
+          details is Map ? details['error'] as String? : null);
     } catch (_) {
       return adminSetupMessage(null);
     }
@@ -261,24 +322,42 @@ class AppState extends ChangeNotifier {
         phone: r['phone'] as String? ?? '',
         status: CustomerStatus.fromWire(r['status'] as String?),
         plan: r['plan'] as String? ?? 'free',
-        createdAt: DateTime.tryParse(r['created_at'] as String? ?? '') ?? DateTime.now(),
-        disabledAt: r['disabled_at'] == null ? null : DateTime.tryParse(r['disabled_at'] as String),
+        createdAt: DateTime.tryParse(r['created_at'] as String? ?? '') ??
+            DateTime.now(),
+        disabledAt: r['disabled_at'] == null
+            ? null
+            : DateTime.tryParse(r['disabled_at'] as String),
       );
 
   Future<List<Customer>> loadCustomers() async {
     final client = supabaseOrNull;
     if (client == null) return [];
     try {
-      final rows = await client.from('customers').select().order('created_at', ascending: false);
-      return (rows as List).map((r) => _customerFromRow(Map<String, dynamic>.from(r as Map))).toList();
+      final rows = await client
+          .from('customers')
+          .select()
+          .order('created_at', ascending: false);
+      return (rows as List)
+          .map((r) => _customerFromRow(Map<String, dynamic>.from(r as Map)))
+          .toList();
     } catch (_) {
       return [];
     }
   }
 
-  Future<({String? error, String? tempPassword})> createCustomer({required String businessName, required String ownerName, required String ownerEmail, required String phone, String plan = 'free'}) async {
+  Future<({String? error, String? tempPassword})> createCustomer(
+      {required String businessName,
+      required String ownerName,
+      required String ownerEmail,
+      required String phone,
+      String plan = 'free'}) async {
     final client = supabaseOrNull;
-    if (client == null) return (error: 'Cannot reach the server. Check your connection.', tempPassword: null);
+    if (client == null) {
+      return (
+        error: 'Cannot reach the server. Check your connection.',
+        tempPassword: null
+      );
+    }
     try {
       final result = await client.functions.invoke('create-customer', body: {
         'businessName': businessName.trim(),
@@ -288,19 +367,33 @@ class AppState extends ChangeNotifier {
         'plan': plan,
       });
       final data = result.data;
-      if (data is Map && data['ok'] == true) return (error: null, tempPassword: data['tempPassword'] as String?);
-      return (error: adminSetupMessage(data is Map ? data['error'] as String? : null), tempPassword: null);
+      if (data is Map && data['ok'] == true) {
+        return (error: null, tempPassword: data['tempPassword'] as String?);
+      }
+      return (
+        error: adminSetupMessage(data is Map ? data['error'] as String? : null),
+        tempPassword: null
+      );
     } on FunctionException catch (e) {
       final details = e.details;
-      return (error: adminSetupMessage(details is Map ? details['error'] as String? : null), tempPassword: null);
+      return (
+        error: adminSetupMessage(
+            details is Map ? details['error'] as String? : null),
+        tempPassword: null
+      );
     } catch (_) {
-      return (error: 'Something went wrong. Please try again.', tempPassword: null);
+      return (
+        error: 'Something went wrong. Please try again.',
+        tempPassword: null
+      );
     }
   }
 
   Future<String?> setCustomerStatus(String id, bool enabled) async {
     final client = supabaseOrNull;
-    if (client == null) return 'Cannot reach the server. Check your connection.';
+    if (client == null) {
+      return 'Cannot reach the server. Check your connection.';
+    }
     try {
       await client.from('customers').update({
         'status': enabled ? 'enabled' : 'disabled',
@@ -316,7 +409,8 @@ class AppState extends ChangeNotifier {
     final client = supabaseOrNull;
     if (client == null) return [];
     try {
-      final rows = await client.from('pgs').select('name').eq('customer_id', customerId);
+      final rows =
+          await client.from('pgs').select('name').eq('customer_id', customerId);
       return (rows as List).map((r) => r['name'] as String).toList();
     } catch (_) {
       return [];
@@ -340,9 +434,23 @@ class AppState extends ChangeNotifier {
   /// password flag. Returns an error, or null.
   Future<String?> changePassword(String password) async {
     final client = supabaseOrNull;
-    if (client == null || !isLoggedIn) return 'Sign in with an account to change your password.';
+    if (client == null || !isLoggedIn) {
+      return 'Sign in with an account to change your password.';
+    }
     try {
-      await client.auth.updateUser(UserAttributes(password: password, data: {'must_change_password': false}));
+      await client.auth.updateUser(UserAttributes(
+          password: password, data: {'must_change_password': false}));
+      // Fresh JWT so backend policies (which block writes while the
+      // temporary-password claim is set) see the cleared flag immediately.
+      try {
+        await client.auth.refreshSession();
+      } catch (_) {}
+      if (role == UserRole.tenant) {
+        // Onboarding complete — consume the one-time invite token.
+        try {
+          await client.functions.invoke('invite', body: {'action': 'accept'});
+        } catch (_) {}
+      }
       mustChangePassword = false;
       notifyListeners();
       return null;
@@ -419,13 +527,23 @@ class AppState extends ChangeNotifier {
       resolvedRole = UserRole.tenant;
     } else {
       final metaRole = user.userMetadata?['role'] as String?;
-      resolvedRole = UserRole.values.firstWhere((e) => e.name == metaRole, orElse: () => UserRole.owner);
+      resolvedRole = UserRole.values
+          .firstWhere((e) => e.name == metaRole, orElse: () => UserRole.owner);
     }
     if (gate.role != null) resolvedRole = gate.role!;
 
     if (portal != null) {
       final mismatch = portalError(resolvedRole, portal);
       if (mismatch != null) return mismatch;
+    }
+
+    // A tenant still on their temporary password is mid-invite: an expired
+    // or revoked invite blocks the sign-in (enforced server-side too — the
+    // Edge Function owns all lifecycle transitions).
+    if (resolvedRole == UserRole.tenant &&
+        user.userMetadata?['must_change_password'] == true) {
+      final inviteError = await _inviteLoginError(client);
+      if (inviteError != null) return inviteError;
     }
 
     role = resolvedRole;
@@ -444,40 +562,142 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
-  /// Creates the tenant's login (temporary password, forced change on first
-  /// sign-in) and links it to this workspace, via the `invite` Edge Function.
-  /// Falls back to link-only membership when the function isn't deployed.
-  /// [tempPassword] is null when the email already had an account.
-  Future<({String? error, String? tempPassword})> inviteTenant({required String tenantId, required String email}) async {
+  /// Creates the tenant's login via the `invite` Edge Function: a temporary
+  /// password (forced change at first sign-in), a one-time invite token with
+  /// an expiry, and the workspace link. Tenants can never self-register.
+  /// [tempPassword] is null when the email already had its own password.
+  Future<InviteResult> inviteTenant(
+          {required String tenantId, required String email}) =>
+      _inviteAction('create', tenantId: tenantId, email: email);
+
+  /// Supersedes the previous invite (status → resent) and issues a fresh
+  /// token; the temporary password is regenerated only while the tenant has
+  /// never set their own password.
+  Future<InviteResult> resendInvite({required String tenantId}) async {
     final client = supabaseOrNull;
     if (client == null || !isLoggedIn) {
-      return (error: 'Sign in with a cloud account to invite tenants.', tempPassword: null);
+      return (
+        error: 'Sign in with a cloud account to invite tenants.',
+        tempPassword: null,
+        token: null,
+        expiresAt: null,
+        email: null
+      );
     }
-    final address = email.trim().toLowerCase();
+    String? email;
+    try {
+      final row = await client
+          .from('invites')
+          .select('email')
+          .eq('tenant_id', tenantId)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      email = row?['email'] as String?;
+    } catch (_) {}
+    if (email == null) {
+      return (
+        error:
+            'No previous invite for this tenant — use "Invite to app" first.',
+        tempPassword: null,
+        token: null,
+        expiresAt: null,
+        email: null
+      );
+    }
+    return _inviteAction('resend', tenantId: tenantId, email: email);
+  }
+
+  /// Cancels the pending invite: the token becomes unusable and a never-used
+  /// temporary password is scrambled server-side.
+  Future<InviteResult> revokeInvite({required String tenantId}) =>
+      _inviteAction('revoke', tenantId: tenantId);
+
+  Future<InviteResult> _inviteAction(String action,
+      {required String tenantId, String? email}) async {
+    final client = supabaseOrNull;
+    if (client == null || !isLoggedIn) {
+      return (
+        error: 'Sign in with a cloud account to invite tenants.',
+        tempPassword: null,
+        token: null,
+        expiresAt: null,
+        email: null
+      );
+    }
+    final address = email?.trim().toLowerCase();
     final tenant = tenantById(tenantId);
+    final room = roomById(tenant?.roomId ?? '');
     try {
       final result = await client.functions.invoke('invite', body: {
-        'email': address,
+        'action': action,
         'tenantId': tenantId,
+        if (address != null) 'email': address,
         'tenantName': tenant?.name ?? '',
+        'pgId': room?.pgId ?? '',
+        'roomId': tenant?.roomId ?? '',
+        'bedLabel': tenant?.bed ?? '',
       });
-      final data = result.data as Map?;
-      return (error: null, tempPassword: data?['tempPassword'] as String?);
-    } catch (_) {
-      // Function not deployed or unreachable: save a link-only invite so the
-      // tenant can still self-register with this email.
-      try {
-        await client.from('members').upsert({
-          'owner_id': client.auth.currentUser!.id,
-          'member_email': address,
-          'tenant_id': tenantId,
-        }, onConflict: 'owner_id,member_email');
-        return (error: null, tempPassword: null);
-      } on PostgrestException catch (e) {
-        return (error: 'Could not save the invite: ${e.message}', tempPassword: null);
-      } catch (_) {
-        return (error: 'Could not reach the server. Check your connection.', tempPassword: null);
+      final data = result.data;
+      if (data is Map && data['ok'] == true) {
+        return (
+          error: null,
+          tempPassword: data['tempPassword'] as String?,
+          token: data['token'] as String?,
+          expiresAt: DateTime.tryParse(data['expiresAt'] as String? ?? ''),
+          email: address,
+        );
       }
+      return (
+        error:
+            inviteActionMessage(data is Map ? data['error'] as String? : null),
+        tempPassword: null,
+        token: null,
+        expiresAt: null,
+        email: null
+      );
+    } on FunctionException catch (e) {
+      final details = e.details;
+      return (
+        error: inviteActionMessage(
+            details is Map ? details['error'] as String? : null),
+        tempPassword: null,
+        token: null,
+        expiresAt: null,
+        email: null
+      );
+    } catch (_) {
+      return (
+        error: 'Could not reach the invite service. Check your connection.',
+        tempPassword: null,
+        token: null,
+        expiresAt: null,
+        email: null
+      );
+    }
+  }
+
+  /// Server-side invite lifecycle check for a tenant still on a temporary
+  /// password: an expired or revoked invite blocks the sign-in. Network
+  /// failures never block (parity with the profiles gate).
+  Future<String?> _inviteLoginError(SupabaseClient client) async {
+    try {
+      final result =
+          await client.functions.invoke('invite', body: {'action': 'validate'});
+      final data = result.data;
+      if (data is Map && data['error'] is String) {
+        return inviteActionMessage(data['error'] as String);
+      }
+      return null;
+    } on FunctionException catch (e) {
+      final details = e.details;
+      final code = details is Map ? details['error'] as String? : null;
+      if (code == 'code:invite_expired' || code == 'code:invite_revoked') {
+        return inviteActionMessage(code);
+      }
+      return null;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -489,7 +709,8 @@ class AppState extends ChangeNotifier {
 
   String tenantName(String id) => tenantById(id)?.name ?? 'Former tenant';
   String roomNumber(String roomId) => roomById(roomId)?.number ?? '—';
-  String tenantRoomLabel(Tenant tenant) => '${roomNumber(tenant.roomId)}-${tenant.bed}';
+  String tenantRoomLabel(Tenant tenant) =>
+      '${roomNumber(tenant.roomId)}-${tenant.bed}';
 
   Tenant? get currentTenant => tenantById(currentTenantId);
   String get currentTenantRoomLabel {
@@ -569,23 +790,34 @@ class AppState extends ChangeNotifier {
   }
 
   String get displayName {
-    if (role == UserRole.tenant) return currentTenant?.name ?? _cloudName ?? 'Tenant';
+    if (role == UserRole.tenant) {
+      return currentTenant?.name ?? _cloudName ?? 'Tenant';
+    }
     return _cloudName ?? accountEmail?.split('@').first ?? 'Account';
   }
-  String get initials => displayName.split(' ').where((e) => e.isNotEmpty).map((e) => e[0]).take(2).join();
+
+  String get initials => displayName
+      .split(' ')
+      .where((e) => e.isNotEmpty)
+      .map((e) => e[0])
+      .take(2)
+      .join();
 
   /// The phone shown on the profile (tenants have one; managers may not).
-  String? get profilePhone => role == UserRole.tenant ? currentTenant?.phone : null;
+  String? get profilePhone =>
+      role == UserRole.tenant ? currentTenant?.phone : null;
 
   /// Updates the signed-in person's name (and a tenant's phone). Returns a
   /// user-facing error, or null on success.
-  Future<String?> updatePersonalDetails({required String name, String? phone}) async {
+  Future<String?> updatePersonalDetails(
+      {required String name, String? phone}) async {
     final cleanName = name.trim();
     if (cleanName.isEmpty) return 'Enter your name.';
     if (role == UserRole.tenant) {
       final i = tenants.indexWhere((t) => t.id == currentTenantId);
       if (i != -1) {
-        tenants[i] = tenants[i].copyWith(name: cleanName, phone: (phone ?? tenants[i].phone).trim());
+        tenants[i] = tenants[i].copyWith(
+            name: cleanName, phone: (phone ?? tenants[i].phone).trim());
         _cloudName = cleanName;
         await _persist({'tenants'});
         return null;
@@ -594,7 +826,8 @@ class AppState extends ChangeNotifier {
       return null;
     }
     try {
-      await supabaseOrNull?.auth.updateUser(UserAttributes(data: {'full_name': cleanName}));
+      await supabaseOrNull?.auth
+          .updateUser(UserAttributes(data: {'full_name': cleanName}));
     } catch (_) {}
     _cloudName = cleanName;
     notifyListeners();
@@ -625,13 +858,15 @@ class AppState extends ChangeNotifier {
         .fold(0, (sum, e) => sum + e.collected);
   }
 
-  List<({DateTime month, int total})> monthlyRevenue({int months = 6, List<Payment>? source}) {
+  List<({DateTime month, int total})> monthlyRevenue(
+      {int months = 6, List<Payment>? source}) {
     final now = DateTime.now();
     final pool = source ?? payments;
     return List.generate(months, (i) {
       final month = DateTime(now.year, now.month - (months - 1 - i));
       final total = pool
-          .where((e) => e.period.year == month.year && e.period.month == month.month)
+          .where((e) =>
+              e.period.year == month.year && e.period.month == month.month)
           .fold(0, (sum, e) => sum + e.collected);
       return (month: month, total: total);
     });
@@ -649,27 +884,41 @@ class AppState extends ChangeNotifier {
 
   // ---- Actions ----
 
-  String _id(String prefix) => '$prefix${DateTime.now().microsecondsSinceEpoch}';
+  String _id(String prefix) =>
+      '$prefix${DateTime.now().microsecondsSinceEpoch}';
 
-  void _notify(String title, String body, NotificationType type, {
+  void _notify(
+    String title,
+    String body,
+    NotificationType type, {
     NotificationScope scope = NotificationScope.managers,
     String? tenantId,
     String? pgId,
     String? relatedEntityId,
     bool push = true,
   }) {
-    notifications.insert(0, AppNotification(
-      id: _id('n'), title: title, body: body, type: type, createdAt: DateTime.now(),
-      roleScope: scope, tenantId: tenantId, pgId: pgId, relatedEntityId: relatedEntityId,
-      customerId: customerId,
-    ));
+    notifications.insert(
+        0,
+        AppNotification(
+          id: _id('n'),
+          title: title,
+          body: body,
+          type: type,
+          createdAt: DateTime.now(),
+          roleScope: scope,
+          tenantId: tenantId,
+          pgId: pgId,
+          relatedEntityId: relatedEntityId,
+          customerId: customerId,
+        ));
     if (push) _pushToWorkspace(title, body, scope: scope, tenantId: tenantId);
   }
 
   /// Fire-and-forget push via the `push` Edge Function. Scope and tenant are
   /// passed so the function can target the right devices; push failures never
   /// block the action itself.
-  void _pushToWorkspace(String title, String body, {required NotificationScope scope, String? tenantId}) {
+  void _pushToWorkspace(String title, String body,
+      {required NotificationScope scope, String? tenantId}) {
     final client = supabaseOrNull;
     final owner = _workspaceOwnerId;
     if (client == null || owner == null || !pushEnabled) return;
@@ -683,9 +932,11 @@ class AppState extends ChangeNotifier {
   }
 
   // Which property a tenant/room belongs to — used to scope notifications.
-  String? _pgIdForTenant(String tenantId) => roomById(tenantById(tenantId)?.roomId ?? '')?.pgId;
+  String? _pgIdForTenant(String tenantId) =>
+      roomById(tenantById(tenantId)?.roomId ?? '')?.pgId;
   String? _pgIdForRoom(String roomId) => roomById(roomId)?.pgId;
-  List<Tenant> _tenantsInRoom(String roomId) => tenants.where((t) => t.roomId == roomId).toList();
+  List<Tenant> _tenantsInRoom(String roomId) =>
+      tenants.where((t) => t.roomId == roomId).toList();
 
   /// Notifications the current session is allowed to see. Tenants get only
   /// their own personal notifications plus workspace-wide announcements;
@@ -694,14 +945,20 @@ class AppState extends ChangeNotifier {
   List<AppNotification> get visibleNotifications {
     if (role == UserRole.tenant) {
       final id = currentTenantId;
-      return notifications.where((n) =>
-          n.roleScope == NotificationScope.everyone ||
-          (n.roleScope == NotificationScope.tenant && n.tenantId == id)).toList();
+      return notifications
+          .where((n) =>
+              n.roleScope == NotificationScope.everyone ||
+              (n.roleScope == NotificationScope.tenant && n.tenantId == id))
+          .toList();
     }
     final pgId = activePg?.id;
     return notifications.where((n) {
-      if (n.roleScope == NotificationScope.tenant) return false; // personal to a tenant
-      if (n.pgId != null && pgId != null && n.pgId != pgId) return false; // another property
+      if (n.roleScope == NotificationScope.tenant) {
+        return false; // personal to a tenant
+      }
+      if (n.pgId != null && pgId != null && n.pgId != pgId) {
+        return false; // another property
+      }
       return true;
     }).toList();
   }
@@ -718,7 +975,9 @@ class AppState extends ChangeNotifier {
   void markAllNotificationsRead() {
     // Only clear the ones this session can actually see.
     final visibleIds = visibleNotifications.map((n) => n.id).toSet();
-    notifications = notifications.map((n) => visibleIds.contains(n.id) ? n.copyWith(read: true) : n).toList();
+    notifications = notifications
+        .map((n) => visibleIds.contains(n.id) ? n.copyWith(read: true) : n)
+        .toList();
     _persist({'notifications'});
   }
 
@@ -738,16 +997,38 @@ class AppState extends ChangeNotifier {
     _persist({'rooms'});
   }
 
-  String? createProperty({required String name, required String address, required String amenities, required List<({String number, int floor, int beds, int rent})> specs}) {
+  String? createProperty(
+      {required String name,
+      required String address,
+      required String amenities,
+      required List<({String number, int floor, int beds, int rent})> specs}) {
     final cleanName = name.trim();
     if (cleanName.isEmpty) return 'Enter a property name.';
     if (specs.isEmpty) return 'Add at least one room.';
     final pgId = 'p${DateTime.now().microsecondsSinceEpoch}';
     final totalBeds = specs.fold(0, (s, e) => s + e.beds);
-    pgs.insert(0, Pg(id: pgId, name: cleanName, address: address.trim(), beds: totalBeds, occupied: 0, amenities: amenities.trim(), rating: 0, customerId: customerId));
+    pgs.insert(
+        0,
+        Pg(
+            id: pgId,
+            name: cleanName,
+            address: address.trim(),
+            beds: totalBeds,
+            occupied: 0,
+            amenities: amenities.trim(),
+            rating: 0,
+            customerId: customerId));
     var seq = 0;
     for (final s in specs) {
-      rooms.add(Room(id: 'r${DateTime.now().microsecondsSinceEpoch}-${seq++}', pgId: pgId, number: s.number, floor: s.floor, beds: s.beds, occupied: 0, rent: s.rent, customerId: customerId));
+      rooms.add(Room(
+          id: 'r${DateTime.now().microsecondsSinceEpoch}-${seq++}',
+          pgId: pgId,
+          number: s.number,
+          floor: s.floor,
+          beds: s.beds,
+          occupied: 0,
+          rent: s.rent,
+          customerId: customerId));
     }
     _activePgId = pgId;
     _persist({'pgs', 'rooms'});
@@ -762,7 +1043,9 @@ class AppState extends ChangeNotifier {
   String? removeRoom(String roomId) {
     final i = rooms.indexWhere((r) => r.id == roomId);
     if (i == -1) return 'Room not found.';
-    if (_roomOccupancy(rooms[i]) > 0) return 'Cannot remove a room with active tenants.';
+    if (_roomOccupancy(rooms[i]) > 0) {
+      return 'Cannot remove a room with active tenants.';
+    }
     rooms.removeAt(i);
     _persist({'rooms'});
     return null;
@@ -771,9 +1054,19 @@ class AppState extends ChangeNotifier {
   String? setRoomBeds(String roomId, int beds) {
     final i = rooms.indexWhere((r) => r.id == roomId);
     if (i == -1) return 'Room not found.';
-    if (beds < _roomOccupancy(rooms[i])) return 'Cannot reduce beds below occupied beds.';
+    if (beds < _roomOccupancy(rooms[i])) {
+      return 'Cannot reduce beds below occupied beds.';
+    }
     final r = rooms[i];
-    rooms[i] = Room(id: r.id, pgId: r.pgId, number: r.number, floor: r.floor, beds: beds, occupied: r.occupied, rent: r.rent, customerId: r.customerId);
+    rooms[i] = Room(
+        id: r.id,
+        pgId: r.pgId,
+        number: r.number,
+        floor: r.floor,
+        beds: beds,
+        occupied: r.occupied,
+        rent: r.rent,
+        customerId: r.customerId);
     _persist({'rooms'});
     return null;
   }
@@ -793,8 +1086,10 @@ class AppState extends ChangeNotifier {
   }
 
   /// Bed labels already taken in a room (upper-cased for comparison).
-  Set<String> takenBeds(String roomId) =>
-      tenants.where((t) => t.roomId == roomId).map((t) => t.bed.trim().toUpperCase()).toSet();
+  Set<String> takenBeds(String roomId) => tenants
+      .where((t) => t.roomId == roomId)
+      .map((t) => t.bed.trim().toUpperCase())
+      .toSet();
 
   /// The first free bed letter (A, B, C, …) for a room, or '' if none fit.
   String suggestBed(String roomId) {
@@ -811,12 +1106,19 @@ class AppState extends ChangeNotifier {
   /// Onboards a tenant after validating the inputs. Returns a user-facing
   /// error message, or null on success. Blocks full rooms and duplicate bed
   /// labels, and keeps room/property occupancy in step.
-  String? onboardTenant({required String name, required String phone, required String roomId, required String bed, String? kycDoc}) {
+  String? onboardTenant(
+      {required String name,
+      required String phone,
+      required String roomId,
+      required String bed,
+      String? kycDoc}) {
     final cleanName = name.trim();
     final cleanPhone = phone.trim();
     final cleanBed = bed.trim();
     if (cleanName.isEmpty) return 'Enter the tenant\'s name.';
-    if (cleanPhone.replaceAll(RegExp(r'[^0-9]'), '').length < 10) return 'Enter a valid 10-digit phone number.';
+    if (cleanPhone.replaceAll(RegExp(r'[^0-9]'), '').length < 10) {
+      return 'Enter a valid 10-digit phone number.';
+    }
     if (cleanBed.isEmpty) return 'Enter a bed label.';
 
     final i = rooms.indexWhere((r) => r.id == roomId);
@@ -827,11 +1129,20 @@ class AppState extends ChangeNotifier {
       return 'Bed $cleanBed is already taken in room ${room.number}.';
     }
 
-    tenants.insert(0, Tenant(
-      id: _id('t'), name: cleanName, phone: cleanPhone, roomId: roomId, bed: cleanBed,
-      kyc: KycStatus.pending, agreement: AgreementStatus.awaitingSign, joinDate: DateTime.now(),
-      kycDoc: kycDoc, customerId: customerId,
-    ));
+    tenants.insert(
+        0,
+        Tenant(
+          id: _id('t'),
+          name: cleanName,
+          phone: cleanPhone,
+          roomId: roomId,
+          bed: cleanBed,
+          kyc: KycStatus.pending,
+          agreement: AgreementStatus.awaitingSign,
+          joinDate: DateTime.now(),
+          kycDoc: kycDoc,
+          customerId: customerId,
+        ));
     rooms[i] = room.copyWith(occupied: room.occupied + 1);
     final p = pgs.indexWhere((e) => e.id == room.pgId);
     if (p != -1 && pgs[p].occupied < pgs[p].beds) {
@@ -844,8 +1155,8 @@ class AppState extends ChangeNotifier {
   }
 
   /// The current tenant's next unsettled payment (due or partially paid).
-  Payment? get tenantDuePayment =>
-      _firstOrNull(payments, (p) => p.tenantId == currentTenantId && p.status != PaymentStatus.paid);
+  Payment? get tenantDuePayment => _firstOrNull(payments,
+      (p) => p.tenantId == currentTenantId && p.status != PaymentStatus.paid);
 
   /// The signed-in tenant's own payments — never anyone else's.
   List<Payment> get tenantPayments =>
@@ -854,7 +1165,9 @@ class AppState extends ChangeNotifier {
   /// Rent collection as spreadsheet-ready CSV (newest first, like the UI).
   String paymentsCsv() {
     String cell(String value) => '"${value.replaceAll('"', '""')}"';
-    final rows = <String>['Receipt,Tenant,Month,Amount,Collected,Balance,Status,Due date,Paid date,Method'];
+    final rows = <String>[
+      'Receipt,Tenant,Month,Amount,Collected,Balance,Status,Due date,Paid date,Method'
+    ];
     for (final p in payments) {
       rows.add([
         p.id,
@@ -882,21 +1195,29 @@ class AppState extends ChangeNotifier {
     final now = DateTime.now();
     final period = DateTime(now.year, now.month);
     final fifth = DateTime(now.year, now.month, 5);
-    final dueDate = now.isBefore(fifth) ? fifth : now.add(const Duration(days: 3));
+    final dueDate =
+        now.isBefore(fifth) ? fifth : now.add(const Duration(days: 3));
     var added = false;
     for (final tenant in tenants) {
       if (onlyTenantId != null && tenant.id != onlyTenantId) continue;
       final exists = payments.any((p) =>
-          p.tenantId == tenant.id && p.period.year == period.year && p.period.month == period.month);
+          p.tenantId == tenant.id &&
+          p.period.year == period.year &&
+          p.period.month == period.month);
       if (exists) continue;
       final rent = roomById(tenant.roomId)?.rent ?? 0;
       if (rent <= 0) continue;
-      payments.insert(0, Payment(
-        id: 'pay-${period.year}-${period.month}-${tenant.id}',
-        tenantId: tenant.id, period: period, amount: rent,
-        status: PaymentStatus.due, dueDate: dueDate,
-        customerId: customerId,
-      ));
+      payments.insert(
+          0,
+          Payment(
+            id: 'pay-${period.year}-${period.month}-${tenant.id}',
+            tenantId: tenant.id,
+            period: period,
+            amount: rent,
+            status: PaymentStatus.due,
+            dueDate: dueDate,
+            customerId: customerId,
+          ));
       added = true;
     }
     return added;
@@ -918,13 +1239,28 @@ class AppState extends ChangeNotifier {
     if (i == -1) return;
     // Paying rent settles the whole balance (partial or not) in one go.
     final paid = payments[i] = payments[i].copyWith(
-        status: PaymentStatus.paid, paidAmount: payments[i].amount, paidDate: DateTime.now(), method: method);
+        status: PaymentStatus.paid,
+        paidAmount: payments[i].amount,
+        paidDate: DateTime.now(),
+        method: method);
     final pgId = _pgIdForTenant(paid.tenantId);
     // Managers see the income; the paying tenant gets a private confirmation.
-    _notify('Rent received', '${inr(paid.amount)} received from ${tenantName(paid.tenantId)}.', NotificationType.payment,
-        scope: NotificationScope.managers, pgId: pgId, tenantId: paid.tenantId, relatedEntityId: paid.id);
-    _notify('Payment successful', 'Your ${formatMonthName(paid.period)} rent of ${inr(paid.amount)} is paid.', NotificationType.payment,
-        scope: NotificationScope.tenant, tenantId: paid.tenantId, pgId: pgId, relatedEntityId: paid.id);
+    _notify(
+        'Rent received',
+        '${inr(paid.amount)} received from ${tenantName(paid.tenantId)}.',
+        NotificationType.payment,
+        scope: NotificationScope.managers,
+        pgId: pgId,
+        tenantId: paid.tenantId,
+        relatedEntityId: paid.id);
+    _notify(
+        'Payment successful',
+        'Your ${formatMonthName(paid.period)} rent of ${inr(paid.amount)} is paid.',
+        NotificationType.payment,
+        scope: NotificationScope.tenant,
+        tenantId: paid.tenantId,
+        pgId: pgId,
+        relatedEntityId: paid.id);
     _persist({'payments', 'notifications'});
   }
 
@@ -932,13 +1268,16 @@ class AppState extends ChangeNotifier {
   /// the current month it is settled in place (fully -> paid, otherwise
   /// -> partial), so no duplicate row is created. Only advance payments,
   /// adjustments, or payments with no matching due create a new row.
-  void recordPayment({required String tenantId, required int amount, required String method}) {
+  void recordPayment(
+      {required String tenantId, required int amount, required String method}) {
     if (amount <= 0) return;
     final now = DateTime.now();
     final period = DateTime(now.year, now.month);
     final i = payments.indexWhere((p) =>
-        p.tenantId == tenantId && p.status != PaymentStatus.paid &&
-        p.period.year == period.year && p.period.month == period.month);
+        p.tenantId == tenantId &&
+        p.status != PaymentStatus.paid &&
+        p.period.year == period.year &&
+        p.period.month == period.month);
 
     final Payment payment;
     final bool settled;
@@ -949,15 +1288,22 @@ class AppState extends ChangeNotifier {
       payment = payments[i] = existing.copyWith(
         status: settled ? PaymentStatus.paid : PaymentStatus.partial,
         paidAmount: settled ? existing.amount : collected,
-        paidDate: now, method: method,
+        paidDate: now,
+        method: method,
       );
     } else {
       // Advance / adjustment / no matching due -> a new standalone paid row.
       settled = true;
       payment = Payment(
-        id: _id('pay'), tenantId: tenantId, period: period, amount: amount,
-        status: PaymentStatus.paid, paidAmount: amount,
-        dueDate: DateTime(now.year, now.month, 5), paidDate: now, method: method,
+        id: _id('pay'),
+        tenantId: tenantId,
+        period: period,
+        amount: amount,
+        status: PaymentStatus.paid,
+        paidAmount: amount,
+        dueDate: DateTime(now.year, now.month, 5),
+        paidDate: now,
+        method: method,
         customerId: customerId,
       );
       payments.insert(0, payment);
@@ -971,7 +1317,10 @@ class AppState extends ChangeNotifier {
           ? '${inr(amount)} from $name marked as received.'
           : '${inr(amount)} from $name · ${inr(payment.balance)} balance remaining.',
       NotificationType.payment,
-      scope: NotificationScope.managers, pgId: pgId, tenantId: tenantId, relatedEntityId: payment.id,
+      scope: NotificationScope.managers,
+      pgId: pgId,
+      tenantId: tenantId,
+      relatedEntityId: payment.id,
     );
     _notify(
       settled ? 'Rent received' : 'Part payment received',
@@ -979,49 +1328,87 @@ class AppState extends ChangeNotifier {
           ? 'Your ${formatMonthName(payment.period)} rent of ${inr(payment.amount)} is settled.'
           : '${inr(amount)} received · ${inr(payment.balance)} still due.',
       NotificationType.payment,
-      scope: NotificationScope.tenant, tenantId: tenantId, pgId: pgId, relatedEntityId: payment.id,
+      scope: NotificationScope.tenant,
+      tenantId: tenantId,
+      pgId: pgId,
+      relatedEntityId: payment.id,
     );
     _persist({'payments', 'notifications'});
   }
 
-  void addMaintenanceRequest({required String title, required String roomId, required String category, required Priority priority, String? photo}) {
+  void addMaintenanceRequest(
+      {required String title,
+      required String roomId,
+      required String category,
+      required Priority priority,
+      String? photo}) {
     final request = MaintenanceRequest(
-      id: _id('m'), roomId: roomId, title: title, category: category,
-      status: MaintenanceStatus.open, priority: priority, createdAt: DateTime.now(),
-      photo: photo, customerId: customerId,
+      id: _id('m'),
+      roomId: roomId,
+      title: title,
+      category: category,
+      status: MaintenanceStatus.open,
+      priority: priority,
+      createdAt: DateTime.now(),
+      photo: photo,
+      customerId: customerId,
     );
     maintenance.insert(0, request);
     // Managers are alerted to the new request; it also appears in the raising
     // tenant's own "My requests" list.
-    _notify('New maintenance request', '$title · Room ${roomNumber(roomId)}', NotificationType.maintenance,
-        scope: NotificationScope.managers, pgId: _pgIdForRoom(roomId), relatedEntityId: request.id);
+    _notify('New maintenance request', '$title · Room ${roomNumber(roomId)}',
+        NotificationType.maintenance,
+        scope: NotificationScope.managers,
+        pgId: _pgIdForRoom(roomId),
+        relatedEntityId: request.id);
     _persist({'maintenance', 'notifications'});
   }
 
-  void setMaintenanceStatus(String id, MaintenanceStatus status, {String? assignee}) {
+  void setMaintenanceStatus(String id, MaintenanceStatus status,
+      {String? assignee}) {
     final i = maintenance.indexWhere((e) => e.id == id);
     if (i == -1) return;
     final trimmed = assignee?.trim();
-    final request = maintenance[i] = maintenance[i].copyWith(status: status, assignee: (trimmed?.isEmpty ?? true) ? null : trimmed);
+    final request = maintenance[i] = maintenance[i].copyWith(
+        status: status, assignee: (trimmed?.isEmpty ?? true) ? null : trimmed);
     final pgId = _pgIdForRoom(request.roomId);
     // Notify each tenant living in that room — and only them.
     for (final tenant in _tenantsInRoom(request.roomId)) {
-      _notify('Maintenance updated', '${request.title} is now ${status.label.toLowerCase()}.', NotificationType.maintenance,
-          scope: NotificationScope.tenant, tenantId: tenant.id, pgId: pgId, relatedEntityId: request.id);
+      _notify(
+          'Maintenance updated',
+          '${request.title} is now ${status.label.toLowerCase()}.',
+          NotificationType.maintenance,
+          scope: NotificationScope.tenant,
+          tenantId: tenant.id,
+          pgId: pgId,
+          relatedEntityId: request.id);
     }
     _persist({'maintenance', 'notifications'});
   }
 
-  void addVisitor({required String name, required String tenantId, required String purpose}) {
+  void addVisitor(
+      {required String name,
+      required String tenantId,
+      required String purpose}) {
     final visitor = Visitor(
-      id: _id('v'), tenantId: tenantId, name: name, purpose: purpose,
-      status: VisitorStatus.awaitingApproval, expectedAt: DateTime.now(),
+      id: _id('v'),
+      tenantId: tenantId,
+      name: name,
+      purpose: purpose,
+      status: VisitorStatus.awaitingApproval,
+      expectedAt: DateTime.now(),
       customerId: customerId,
     );
     visitors.insert(0, visitor);
     // Managers are alerted to approve; the visit is private to this tenant.
-    _notify('Visitor awaiting approval', '$name · $purpose visit for ${tenantName(tenantId)}.', NotificationType.visitor,
-        scope: NotificationScope.managers, pgId: _pgIdForTenant(tenantId), tenantId: tenantId, relatedEntityId: visitor.id);
+    _notify(
+        'Visitor awaiting approval',
+        '$name · $purpose visit for ${tenantName(tenantId)}.',
+        NotificationType.visitor,
+        scope: NotificationScope.managers,
+        pgId: _pgIdForTenant(tenantId),
+        tenantId: tenantId,
+        relatedEntityId: visitor.id);
     _persist({'visitors', 'notifications'});
   }
 
@@ -1037,23 +1424,34 @@ class AppState extends ChangeNotifier {
       VisitorStatus.awaitingApproval => 'Visitor updated',
     };
     // Only the host tenant is told about their own visitor.
-    _notify(title, '${visitor.name} · ${visitor.purpose} visit.', NotificationType.visitor,
-        scope: NotificationScope.tenant, tenantId: visitor.tenantId, pgId: _pgIdForTenant(visitor.tenantId), relatedEntityId: visitor.id);
+    _notify(title, '${visitor.name} · ${visitor.purpose} visit.',
+        NotificationType.visitor,
+        scope: NotificationScope.tenant,
+        tenantId: visitor.tenantId,
+        pgId: _pgIdForTenant(visitor.tenantId),
+        relatedEntityId: visitor.id);
     _persist({'visitors', 'notifications'});
   }
 
   /// Publishes an announcement. [pgId] null targets every property (all
   /// tenants); a value targets that property only. [sendPush] and the global
   /// [pushEnabled] preference together decide whether a push is attempted.
-  void publishAnnouncement(String title, String body, {String? pgId, bool sendPush = true}) {
+  void publishAnnouncement(String title, String body,
+      {String? pgId, bool sendPush = true}) {
     final announcement = Announcement(
-      id: _id('a'), title: title, body: body,
-      author: '$displayName, ${role.label}', postedAt: DateTime.now(), pgId: pgId,
+      id: _id('a'),
+      title: title,
+      body: body,
+      author: '$displayName, ${role.label}',
+      postedAt: DateTime.now(),
+      pgId: pgId,
       customerId: customerId,
     );
     announcements.insert(0, announcement);
     _notify('New announcement', title, NotificationType.announcement,
-        scope: NotificationScope.everyone, pgId: pgId, relatedEntityId: announcement.id,
+        scope: NotificationScope.everyone,
+        pgId: pgId,
+        relatedEntityId: announcement.id,
         push: sendPush);
     _persist({'announcements', 'notifications'});
   }
@@ -1063,9 +1461,13 @@ class AppState extends ChangeNotifier {
   List<Announcement> get visibleAnnouncements {
     if (role == UserRole.tenant) {
       final myPg = roomById(currentTenant?.roomId ?? '')?.pgId;
-      return announcements.where((a) => a.pgId == null || a.pgId == myPg).toList();
+      return announcements
+          .where((a) => a.pgId == null || a.pgId == myPg)
+          .toList();
     }
     final pgId = activePg?.id;
-    return announcements.where((a) => a.pgId == null || a.pgId == pgId).toList();
+    return announcements
+        .where((a) => a.pgId == null || a.pgId == pgId)
+        .toList();
   }
 }

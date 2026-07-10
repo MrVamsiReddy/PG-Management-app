@@ -36,6 +36,45 @@ Next task:
 
 ## Latest
 ```
+### Session: 2026-07-10 · Prompt 7 — tenant invite tokens & temporary passwords
+Prompt/goal: Owner-only tenant onboarding via Edge Function with one-time tokens, temp passwords, full lifecycle (pending/accepted/expired/revoked/resent) and backend must_change_password enforcement.
+Commit(s): (this session)
+
+Summary:
+- Rewrote the `invite` Edge Function with actions create/resend/revoke/validate/accept: creates the tenant auth user (temp password, role/customer_id/pg_id/room_id/bed_id/tenant_id metadata, must_change_password=true), a profiles row (when the owner has a resolved customer), the members link, and an `invites` row with a single-use token + 7-day expiry. Revoke scrambles a never-used temp password; resend supersedes (status resent) and regenerates the password only while onboarding is incomplete. Expired/revoked invites block the tenant's first sign-in; password change refreshes the JWT and consumes (accepts) the invite. Removed the client-side members-upsert fallback — invites now require the function.
+
+Files modified:
+- supabase/006_invites.sql (new: invites table, service-role-write-only RLS, resent state on tenant_invites, restrictive app_data write policies while must_change_password)
+- supabase/functions/invite/index.ts (rewritten; never logs passwords; code:* errors)
+- lib/src/app_state.dart (InviteResult; inviteTenant/resendInvite/revokeInvite/_inviteAction; _inviteLoginError gate in _enterCloud; changePassword refreshes session + accepts invite)
+- lib/src/invite_message.dart (new: buildInviteMessage — email, temp password, APK/web/invite links, instructions, expiry)
+- lib/src/saas_models.dart (InviteStatus.resent; inviteAcceptError mirror of server validation)
+- lib/src/access.dart (inviteActionMessage code→text)
+- lib/src/property_screens.dart (share via builder; resend/revoke menu per tenant)
+- test/app_test.dart (8 new tests)
+- AI/03,04,05,06,09,11 (reflect P7)
+- Repo-wide dart format applied (large cosmetic diff in app_state/property_screens).
+
+Architecture changes:
+- New pure module invite_message.dart; invite lifecycle owned entirely server-side (clients cannot write invites).
+
+Database changes:
+- 006_invites.sql (see above). Run once; then redeploy the `invite` function.
+
+Tests added:
+- invite message contents (credentials + existing-account variants), single-use/expiry/revocation matrix, resent round-trip, error-code mapping, offline resend/revoke, 006 migration lockdown, invite fn lifecycle/no-logging. 83 passing; analyze clean.
+
+Remaining work:
+- P8–P11 (see 06). Legacy tenants still lack profiles rows (09 P1, narrowed).
+
+Known issues introduced/affected:
+- 09: must_change_password write enforcement resolved; disabled-customer tenant gap narrowed to legacy invites.
+
+Next task:
+- Prompt 8 (audit logs) or the runtime→relational migration (06 "Next recommended phase").
+```
+
+```
 ### Session: 2026-07-10 · Cloud-only data layer (remove Hive/demo/seed)
 Prompt/goal: Make Supabase the single source of truth — remove the local store, demo mode and mock seed path.
 Commit(s): (this session)

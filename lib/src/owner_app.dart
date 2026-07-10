@@ -37,7 +37,9 @@ class OwnerAdminApp extends StatelessWidget {
   }
 
   Widget _home() {
-    if (!state.isLoggedIn) return const AuthScreen(portals: [LoginPortal.owner, LoginPortal.admin]);
+    if (!state.isLoggedIn) {
+      return const AuthScreen(portals: [LoginPortal.owner, LoginPortal.admin]);
+    }
     if (state.mustChangePassword) return const SetPasswordScreen();
     if (state.role == UserRole.tenant) return const _WrongApp();
     if (state.role == UserRole.admin) return const CustomerManagementScreen();
@@ -58,9 +60,12 @@ class _WrongApp extends StatelessWidget {
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               const Icon(Icons.info_outline, size: 48, color: primary),
               const SizedBox(height: 16),
-              const Text('This is the owner/admin app. Tenant accounts use the tenant app.', textAlign: TextAlign.center),
+              const Text(
+                  'This is the owner/admin app. Tenant accounts use the tenant app.',
+                  textAlign: TextAlign.center),
               const SizedBox(height: 16),
-              FilledButton(onPressed: state.logout, child: const Text('Sign out')),
+              FilledButton(
+                  onPressed: state.logout, child: const Text('Sign out')),
             ]),
           ),
         ),
