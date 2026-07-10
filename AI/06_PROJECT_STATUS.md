@@ -22,9 +22,10 @@ Roadmap = `app improvements.md` (Prompts 1–11). Details of each area live in `
 - **Room pricing model (done/verified)** — Room stores sharing type (`Room.sharingType` = `beds`) + current `rent`; Tenant stores `roomId` + `bed`; Payment stores the rent snapshot (`amount`, fixed at creation by `generateMonthlyDues`, which is idempotent per tenant+period). `setRoomRent` mutates only the room, so a rent change flows into **future** dues (next period / newly assigned tenants) while existing/historical dues keep their snapshot. Also hardened `_id()` with a monotonic counter so ids stay unique under a coarse clock (two rapid onboardings no longer collide).
 - **Password management (done)** — first login requires temporary + new + confirm: `SetPasswordScreen` adds a temp-password field re-validated by `changePassword(currentPassword:)`; the app is gated on `needsPasswordSet` (= `mustChangePassword || passwordRecovery`) at all three entry points. Reset links work: `sendPasswordReset` passes `redirectTo: appWebUrl`, and the `passwordRecovery` auth event (handled in `bootstrap`) opens the set-password screen in recovery mode (new + confirm only). `must_change_password` still enforced client + server (`006`). (Reset-link deploys need Supabase Site URL/redirect allow-list = the `/PG-Management-app/` path.)
 - **Subscription management (done)** — `009_subscriptions.sql` adds `starts_at`/`expires_at` to `customers` (+ backfill; expiry-aware `my_owner_customer_id`). `create-customer` sets plan (admin-selected free/pro/business) + `starts_at`=now + `expires_at`=now+30d. The login gate blocks owner+tenant with a "subscription expired" message past `expires_at`; `Customer.expired`/`active` drive the admin UI (plan + renews/expired date + Expired pill). Enforced at login (no cron).
+- **Dashboard favourites + polish (done)** — quick-action tiles carry a stable key and a gold-star toggle (top-right); favourited tiles float to the front and persist **per user** on-device (`AppState.favoriteTiles`/`toggleFavorite`/`favoritesFirst`, key `favorites_<email>`, loaded on login/cleared on logout). Light visual polish (rounded tiles, favourite border/typography). Star tap toggles via `notifyListeners` (dashboard rebuilds through `AppScope`).
 
 ## In progress
-- Improvements batch tasks 7–9 (dashboard, navigation, rooms/beds) — pending, executed one at a time.
+- Improvements batch tasks 8–9 (navigation, rooms/beds) — pending, executed one at a time.
 
 ## P11 production checklist (verified 2026-07-10)
 - ✅ No demo/local/offline code, no seed/mock path (Hive + demo removed; only stray comments remained).
@@ -52,4 +53,4 @@ Removed the local Hive store, the demo/seed path (`_seed`, `debugSeedDemoData`),
 Before Prompts 8–11 add more features on the unenforced foundation, migrate the owner/tenant runtime from the `app_data` blob onto the relational `customer_id`-scoped tables so `004` RLS becomes the enforcement boundary, and make `payRent` a submission (not a paid-mark). Then P9/P8 land on solid ground.
 
 ## Test status
-`test/app_test.dart` — 113 passing; `flutter analyze` clean; `dart format` applied repo-wide; owner + tenant `flutter build web --release` succeed. See `10_TESTING_GUIDE.md`.
+`test/app_test.dart` — 115 passing; `flutter analyze` clean; `dart format` applied repo-wide; owner + tenant `flutter build web --release` succeed. See `10_TESTING_GUIDE.md`.

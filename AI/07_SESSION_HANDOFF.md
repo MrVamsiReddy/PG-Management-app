@@ -36,6 +36,26 @@ Next task:
 
 ## Latest
 ```
+### Session: 2026-07-10 · Improvements #7 — dashboard favourites + polish
+Prompt/goal: Better dashboard spacing/typography/hierarchy; favourite tiles (gold star top-right), favourites first, persisted per user.
+Commit(s): (this session)
+
+Summary:
+- AppState favourites: favoriteTiles set + isFavorite/toggleFavorite/favoritesFirst; persisted per user via SharedPreferences key favorites_<email>; loaded in _enterCloud, cleared on logout. toggle notifies (dashboard rebuilds via AppScope) and best-effort persists.
+- dashboard_screen _quickActions: each action has a stable key (qa.*); tiles reorder favourites-first, get a gold star toggle (Positioned top-right), a favourite border, and tightened typography/spacing.
+- No backend/migration.
+
+Files modified:
+- lib/src/app_state.dart (favourites), lib/src/dashboard_screen.dart (quick actions)
+- test/app_test.dart (favourites toggle/order + star widget test)
+- AI/06,07 updated
+
+Tests: 115 passing; analyze clean; dart format applied.
+
+Next task: #8 navigation (Customer → Manage → View All must have proper Back navigation; always return to previous screen).
+```
+
+```
 ### Session: 2026-07-10 · Improvements #6 — subscription management
 Prompt/goal: Customer creation stores plan + starts_at + expires_at (free/30d default; admin picks plan); auto-disable + block login on expiry with a message.
 Commit(s): (this session)

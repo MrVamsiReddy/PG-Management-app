@@ -1537,6 +1537,25 @@ void main() {
     expect(state.pushEnabled, isFalse);
   });
 
+  test('dashboard favourites toggle, persist in-memory and order first',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    expect(state.isFavorite('qa.recordRent'), isFalse);
+
+    state.toggleFavorite('qa.recordRent');
+    expect(state.isFavorite('qa.recordRent'), isTrue);
+    state.toggleFavorite('qa.recordRent');
+    expect(state.isFavorite('qa.recordRent'), isFalse);
+
+    // Favourites float to the front, preserving relative order otherwise.
+    state.toggleFavorite('qa.maintenance');
+    final items = ['qa.addTenant', 'qa.recordRent', 'qa.maintenance', 'qa.b'];
+    final ordered = state.favoritesFirst(items, (e) => e);
+    expect(ordered.first, 'qa.maintenance');
+    expect(
+        ordered, ['qa.maintenance', 'qa.addTenant', 'qa.recordRent', 'qa.b']);
+  });
+
   test('announcement audience filtering respects property and tenant', () {
     state.publishAnnouncement('HSR only', 'For HSR tenants', pgId: 'p1');
     state.publishAnnouncement('Everyone', 'For all tenants');
@@ -1665,6 +1684,15 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('త్వరిత చర్యలు'), findsOneWidget);
     expect(find.text('Quick actions'), findsNothing);
+  });
+
+  testWidgets('quick-action tiles show favourite stars on the dashboard',
+      (tester) async {
+    state.debugSignIn(UserRole.owner);
+    await tester
+        .pumpWidget(localized(state, const DashboardScreen(), wrap: true));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byIcon(Icons.star_border), findsWidgets);
   });
 
   testWidgets('the PG setup wizard is localized', (tester) async {

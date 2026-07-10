@@ -270,6 +270,7 @@ class AppState extends ChangeNotifier {
     utilities = [];
     notifications = [];
     submissions = [];
+    favoriteTiles = {};
     isLoggedIn = false;
     notifyListeners();
   }
@@ -662,6 +663,7 @@ class AppState extends ChangeNotifier {
     await _loadAll();
     await _ensureMonthlyDuesAtStartup();
     await loadSubmissions();
+    await loadFavorites();
     isLoggedIn = true;
     notifyListeners();
     return null;
@@ -868,6 +870,39 @@ class AppState extends ChangeNotifier {
     pushEnabled = value;
     notifyListeners();
   }
+
+  // ---- Dashboard favourites (persisted per user, on-device) ----
+
+  Set<String> favoriteTiles = {};
+
+  String get _favKey => 'favorites_${accountEmail ?? 'guest'}';
+
+  Future<void> loadFavorites() async {
+    favoriteTiles = {};
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      favoriteTiles = (prefs.getStringList(_favKey) ?? []).toSet();
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  bool isFavorite(String key) => favoriteTiles.contains(key);
+
+  void toggleFavorite(String key) {
+    if (!favoriteTiles.add(key)) favoriteTiles.remove(key);
+    notifyListeners();
+    try {
+      SharedPreferences.getInstance()
+          .then((p) => p.setStringList(_favKey, favoriteTiles.toList()))
+          .catchError((_) => false);
+    } catch (_) {}
+  }
+
+  /// Stable ordering with favourited items first.
+  List<T> favoritesFirst<T>(List<T> items, String Function(T) keyOf) => [
+        ...items.where((e) => isFavorite(keyOf(e))),
+        ...items.where((e) => !isFavorite(keyOf(e))),
+      ];
 
   List<Room> get pgRooms {
     final pg = activePg;
