@@ -299,7 +299,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                   width: 14,
                   height: 14,
                   decoration: BoxDecoration(
-                      color: done ? primary : Colors.white,
+                      color: done ? primary : surfaceCard,
                       shape: BoxShape.circle,
                       border:
                           Border.all(color: done ? primary : faint, width: 2))),

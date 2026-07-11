@@ -146,8 +146,7 @@ const Map<String, Map<String, String>> _strings = {
     'upi.openApp': 'Open UPI app',
     'upi.chooseApp': 'Pay with',
     'upi.otherApp': 'Other',
-    'upi.typeAmount':
-        'UPI apps block prefilled amounts above ₹2,000 — enter this amount in the app yourself:',
+    'upi.typeAmount': 'Enter this exact amount in the UPI app:',
     'upi.idCopied': 'UPI ID copied.',
     'upi.notEnabled':
         'UPI payments are not set up for this PG yet. Please contact your owner.',
@@ -416,8 +415,7 @@ const Map<String, Map<String, String>> _strings = {
     'upi.openApp': 'UPI ऐप खोलें',
     'upi.chooseApp': 'इससे भुगतान करें',
     'upi.otherApp': 'अन्य',
-    'upi.typeAmount':
-        'UPI ऐप ₹2,000 से अधिक की पहले से भरी राशि स्वीकार नहीं करते — यह राशि ऐप में खुद दर्ज करें:',
+    'upi.typeAmount': 'UPI ऐप में ठीक यही राशि दर्ज करें:',
     'upi.idCopied': 'UPI ID कॉपी की गई।',
     'upi.notEnabled':
         'इस पीजी के लिए UPI भुगतान अभी सेट नहीं है। कृपया अपने मालिक से संपर्क करें।',
@@ -678,8 +676,7 @@ const Map<String, Map<String, String>> _strings = {
     'upi.openApp': 'UPI యాప్ తెరవండి',
     'upi.chooseApp': 'దీనితో చెల్లించండి',
     'upi.otherApp': 'ఇతర',
-    'upi.typeAmount':
-        'UPI యాప్‌లు ₹2,000కి మించి ముందే నింపిన మొత్తాన్ని అనుమతించవు — ఈ మొత్తాన్ని యాప్‌లో మీరే నమోదు చేయండి:',
+    'upi.typeAmount': 'UPI యాప్‌లో సరిగ్గా ఇదే మొత్తాన్ని నమోదు చేయండి:',
     'upi.idCopied': 'UPI ID కాపీ చేయబడింది.',
     'upi.notEnabled':
         'ఈ పీజీకి UPI చెల్లింపులు ఇంకా సెటప్ కాలేదు. దయచేసి మీ యజమానిని సంప్రదించండి.',

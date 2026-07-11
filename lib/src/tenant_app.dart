@@ -133,7 +133,7 @@ class _TenantShellState extends State<TenantShell> {
     ];
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: canvas,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         scrolledUnderElevation: 0,
         toolbarHeight: 68,
         title: Row(children: [
@@ -313,7 +313,7 @@ class TenantHome extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 4),
             decoration: BoxDecoration(
-                color: Colors.white, borderRadius: BorderRadius.circular(16)),
+                color: surfaceCard, borderRadius: BorderRadius.circular(16)),
             child: Column(children: [
               Container(
                   padding: const EdgeInsets.all(10),

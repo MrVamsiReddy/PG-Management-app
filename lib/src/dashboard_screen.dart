@@ -420,7 +420,7 @@ class _RevenuePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final grid = Paint()
-      ..color = const Color(0xFFE9ECEB)
+      ..color = hairline
       ..strokeWidth = 1;
     for (var i = 0; i < 4; i++) {
       final y = size.height * i / 3;
@@ -462,7 +462,7 @@ class _RevenuePainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeCap = StrokeCap.round);
     for (final p in points) {
-      canvas.drawCircle(p, 4, Paint()..color = Colors.white);
+      canvas.drawCircle(p, 4, Paint()..color = surfaceCard);
       canvas.drawCircle(p, 3, Paint()..color = primary);
     }
   }

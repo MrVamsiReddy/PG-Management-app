@@ -241,9 +241,9 @@ Future<void> showAppSheet(BuildContext context, Widget child) =>
             BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * .9),
         padding: EdgeInsets.fromLTRB(
             20, 12, 20, MediaQuery.viewInsetsOf(context).bottom + 24),
-        decoration: const BoxDecoration(
-          color: canvas,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         ),
         child: child,
       ),

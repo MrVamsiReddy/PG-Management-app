@@ -185,7 +185,8 @@ class AnnouncementsScreen extends StatelessWidget {
                                 Container(
                                     padding: const EdgeInsets.all(9),
                                     decoration: BoxDecoration(
-                                        color: const Color(0xFFF9E8F0),
+                                        color:
+                                            Colors.pink.withValues(alpha: .12),
                                         borderRadius:
                                             BorderRadius.circular(11)),
                                     child: const Icon(Icons.campaign_outlined,
@@ -243,7 +244,7 @@ class AnnouncementsScreen extends StatelessWidget {
             Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                    color: const Color(0xFFF9E8F0),
+                    color: Colors.pink.withValues(alpha: .12),
                     borderRadius: BorderRadius.circular(12)),
                 child: const Icon(Icons.campaign_outlined,
                     color: Color(0xFFB65B87))),
@@ -364,13 +365,13 @@ class NotificationsScreen extends StatelessWidget {
                 final item = items[index];
                 return Card(
                     color: item.read
-                        ? Colors.white
+                        ? surfaceCard
                         : softTint.withValues(alpha: .55),
                     child: ListTile(
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 15, vertical: 8),
                       leading: CircleAvatar(
-                          backgroundColor: Colors.white,
+                          backgroundColor: surfaceCard,
                           child: Icon(notificationIcon(item.type),
                               color: primary, size: 21)),
                       title: Text(item.title,

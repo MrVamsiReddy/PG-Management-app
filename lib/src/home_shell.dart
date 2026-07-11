@@ -197,7 +197,7 @@ class _HomeShellState extends State<HomeShell> {
       body: wide
           ? Row(children: [
               NavigationRail(
-                backgroundColor: Colors.white,
+                backgroundColor: surfaceCard,
                 selectedIndex: index,
                 onDestinationSelected: (value) => setState(() => index = value),
                 labelType: NavigationRailLabelType.all,

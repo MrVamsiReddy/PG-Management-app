@@ -56,7 +56,7 @@ class AuthScreen extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                            color: const Color(0xFFFBE9E7),
+                            color: coral.withValues(alpha: .14),
                             borderRadius: BorderRadius.circular(14)),
                         child: Row(children: [
                           const Icon(Icons.info_outline,

@@ -113,14 +113,10 @@ Future<void> showUpiPayFlow(
                         child: Text(l.t('upi.otherApp'),
                             style: const TextStyle(fontSize: 12)))),
               ]),
-              if (payment.balance > upiPrefillLimit) ...[
-                const SizedBox(height: 10),
-                Text('${l.t('upi.typeAmount')} ${inr(payment.balance)}',
-                    style: const TextStyle(
-                        fontSize: 12,
-                        color: coral,
-                        fontWeight: FontWeight.w700)),
-              ],
+              const SizedBox(height: 10),
+              Text('${l.t('upi.typeAmount')} ${inr(payment.balance)}',
+                  style: const TextStyle(
+                      fontSize: 12, color: coral, fontWeight: FontWeight.w700)),
               const SizedBox(height: 14),
               Text(l.t('upi.afterPay'),
                   style: TextStyle(fontSize: 12, color: subtle)),
@@ -174,24 +170,18 @@ Future<void> showUpiPayFlow(
   );
 }
 
-/// UPI apps reject prefilled-amount deep links above ₹2,000 to personal
-/// (unverified) UPI ids — larger rents launch without `am` and the tenant
-/// types the amount in the app (typed payments carry the normal UPI limit).
-const upiPrefillLimit = 2000;
-
 /// The deep link for a specific UPI app (or the system chooser for 'other').
 /// App-specific schemes work from mobile browsers too, which is what makes
 /// the PWA able to open the installed app; on the web the generic chooser
 /// uses Android's intent:// syntax (Chrome shows the UPI app picker).
-/// Pass a null [amount] to let the tenant type it (see [upiPrefillLimit]).
+/// The amount is never prefilled: UPI apps reject prefilled intent payments
+/// to personal (unverified) ids above ₹2,000, so the tenant always types
+/// the amount — typed payments carry the normal UPI limit.
 Uri upiPayUri(String app,
-    {required String upiId,
-    required String payeeName,
-    required int? amount,
-    bool web = false}) {
+    {required String upiId, required String payeeName, bool web = false}) {
   final params = 'pa=${Uri.encodeComponent(upiId)}'
       '&pn=${Uri.encodeComponent(payeeName)}'
-      '${amount == null ? '' : '&am=$amount'}&cu=INR';
+      '&cu=INR';
   return switch (app) {
     'gpay' => Uri.parse('tez://upi/pay?$params'),
     'phonepe' => Uri.parse('phonepe://pay?$params'),
@@ -204,16 +194,17 @@ Uri upiPayUri(String app,
 
 Future<void> _openUpiApp(ScaffoldMessengerState messenger, UpiSettings s,
     Payment payment, String app) async {
-  final uri = upiPayUri(app,
-      upiId: s.upiId,
-      payeeName: s.payeeName,
-      amount: payment.balance > upiPrefillLimit ? null : payment.balance,
-      web: kIsWeb);
+  final uri =
+      upiPayUri(app, upiId: s.upiId, payeeName: s.payeeName, web: kIsWeb);
   try {
+    // On the web the current tab must navigate ('_self'): browsers only
+    // hand custom-scheme/intent links to apps on a same-tab user gesture —
+    // a new tab silently goes nowhere.
     final ok = await launchUrl(uri,
         mode: kIsWeb
             ? LaunchMode.platformDefault
-            : LaunchMode.externalApplication);
+            : LaunchMode.externalApplication,
+        webOnlyWindowName: '_self');
     if (!ok) throw Exception();
   } catch (_) {
     messenger.showSnackBar(const SnackBar(

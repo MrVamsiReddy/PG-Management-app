@@ -1667,25 +1667,23 @@ void main() {
 
   // ---- Prompt 9: manual UPI payments ----
 
-  test('UPI pay links target each app and work from the PWA', () {
-    Uri uri(String app, {int? amount = 1500, bool web = false}) =>
-        upiPayUri(app,
-            upiId: 'owner@upi', payeeName: 'PG & Co', amount: amount, web: web);
+  test('UPI pay links target each app and never prefill the amount', () {
+    Uri uri(String app, {bool web = false}) =>
+        upiPayUri(app, upiId: 'owner@upi', payeeName: 'PG & Co', web: web);
     expect(uri('gpay').toString(), startsWith('tez://upi/pay?'));
     expect(uri('phonepe').toString(), startsWith('phonepe://pay?'));
     expect(uri('paytm').toString(), startsWith('paytmmp://pay?'));
     expect(uri('other').toString(), startsWith('upi://pay?'));
     // On the web the generic chooser uses Android's intent:// syntax.
     expect(uri('other', web: true).toString(),
-        'intent://pay?pa=owner%40upi&pn=PG%20%26%20Co&am=1500&cu=INR#Intent;scheme=upi;end');
+        'intent://pay?pa=owner%40upi&pn=PG%20%26%20Co&cu=INR#Intent;scheme=upi;end');
     expect(uri('gpay').query, contains('pa=owner%40upi'));
-    expect(uri('gpay').query, contains('am=1500'));
     expect(uri('gpay').query, contains('cu=INR'));
-    // Above the ₹2,000 prefill cap the link carries no amount — the tenant
-    // types it in the app, avoiding the UPI intent limit.
-    expect(upiPrefillLimit, 2000);
-    expect(uri('gpay', amount: null).query, isNot(contains('am=')));
-    expect(uri('other', amount: null).query, contains('pa=owner%40upi'));
+    // Never prefilled: UPI apps reject prefilled intent payments above
+    // ₹2,000 to personal ids, so the tenant always types the amount.
+    for (final app in ['gpay', 'phonepe', 'paytm', 'other']) {
+      expect(uri(app).query, isNot(contains('am=')));
+    }
   });
 
   test('the Android manifest can see UPI apps (package visibility)', () {
