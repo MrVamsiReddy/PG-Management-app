@@ -20,6 +20,7 @@ import 'package:pg_management/src/supabase_config.dart';
 import 'package:pg_management/src/tenant_app.dart';
 import 'package:pg_management/src/theme.dart';
 import 'package:pg_management/src/update_check.dart';
+import 'package:pg_management/src/upi_screens.dart';
 
 // Cloud-only build: there is no local store, seed path or demo login in the
 // product. Tests inject an in-memory fixture directly into the public
@@ -1634,6 +1635,30 @@ void main() {
   });
 
   // ---- Prompt 9: manual UPI payments ----
+
+  test('UPI pay links target each app and work from the PWA', () {
+    Uri uri(String app, {bool web = false}) => upiPayUri(app,
+        upiId: 'owner@upi', payeeName: 'PG & Co', amount: 9500, web: web);
+    expect(uri('gpay').toString(), startsWith('tez://upi/pay?'));
+    expect(uri('phonepe').toString(), startsWith('phonepe://pay?'));
+    expect(uri('paytm').toString(), startsWith('paytmmp://pay?'));
+    expect(uri('other').toString(), startsWith('upi://pay?'));
+    // On the web the generic chooser uses Android's intent:// syntax.
+    expect(uri('other', web: true).toString(),
+        'intent://pay?pa=owner%40upi&pn=PG%20%26%20Co&am=9500&cu=INR#Intent;scheme=upi;end');
+    expect(uri('gpay').query, contains('pa=owner%40upi'));
+    expect(uri('gpay').query, contains('am=9500'));
+    expect(uri('gpay').query, contains('cu=INR'));
+  });
+
+  test('the Android manifest can see UPI apps (package visibility)', () {
+    final manifest =
+        File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
+    for (final scheme in ['upi', 'tez', 'phonepe', 'paytmmp']) {
+      expect(manifest, contains('android:scheme="$scheme"'),
+          reason: 'queries entry for $scheme:// must exist');
+    }
+  });
 
   test('UpiSettings.usable requires an enabled, valid UPI id', () {
     expect(const UpiSettings(enabled: true, upiId: 'a@bank').usable, isTrue);

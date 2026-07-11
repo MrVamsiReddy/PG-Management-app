@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -64,12 +65,35 @@ Future<void> showUpiPayFlow(
                       ]),
                 ),
               ),
-              const SizedBox(height: 10),
-              OutlinedButton.icon(
-                onPressed: () => _openUpiApp(messenger, settings, payment),
-                icon: const Icon(Icons.open_in_new),
-                label: Text(l.t('upi.openApp')),
-              ),
+              const SizedBox(height: 12),
+              Text(l.t('upi.chooseApp'),
+                  style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.black54)),
+              const SizedBox(height: 8),
+              Row(children: [
+                for (final app in const [
+                  ('gpay', 'GPay'),
+                  ('phonepe', 'PhonePe'),
+                  ('paytm', 'Paytm'),
+                ])
+                  Expanded(
+                      child: Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: OutlinedButton(
+                        onPressed: () =>
+                            _openUpiApp(messenger, settings, payment, app.$1),
+                        child:
+                            Text(app.$2, style: const TextStyle(fontSize: 12))),
+                  )),
+                Expanded(
+                    child: OutlinedButton(
+                        onPressed: () =>
+                            _openUpiApp(messenger, settings, payment, 'other'),
+                        child: Text(l.t('upi.otherApp'),
+                            style: const TextStyle(fontSize: 12)))),
+              ]),
               const SizedBox(height: 14),
               Text(l.t('upi.afterPay'),
                   style: const TextStyle(fontSize: 12, color: Colors.black54)),
@@ -123,16 +147,45 @@ Future<void> showUpiPayFlow(
   );
 }
 
-Future<void> _openUpiApp(
-    ScaffoldMessengerState messenger, UpiSettings s, Payment payment) async {
-  final uri = Uri.parse(
-      'upi://pay?pa=${Uri.encodeComponent(s.upiId)}&pn=${Uri.encodeComponent(s.payeeName)}&am=${payment.balance}&cu=INR');
+/// The deep link for a specific UPI app (or the system chooser for 'other').
+/// App-specific schemes work from mobile browsers too, which is what makes
+/// the PWA able to open the installed app; on the web the generic chooser
+/// uses Android's intent:// syntax (Chrome shows the UPI app picker).
+Uri upiPayUri(String app,
+    {required String upiId,
+    required String payeeName,
+    required int amount,
+    bool web = false}) {
+  final params = 'pa=${Uri.encodeComponent(upiId)}'
+      '&pn=${Uri.encodeComponent(payeeName)}'
+      '&am=$amount&cu=INR';
+  return switch (app) {
+    'gpay' => Uri.parse('tez://upi/pay?$params'),
+    'phonepe' => Uri.parse('phonepe://pay?$params'),
+    'paytm' => Uri.parse('paytmmp://pay?$params'),
+    _ => web
+        ? Uri.parse('intent://pay?$params#Intent;scheme=upi;end')
+        : Uri.parse('upi://pay?$params'),
+  };
+}
+
+Future<void> _openUpiApp(ScaffoldMessengerState messenger, UpiSettings s,
+    Payment payment, String app) async {
+  final uri = upiPayUri(app,
+      upiId: s.upiId,
+      payeeName: s.payeeName,
+      amount: payment.balance,
+      web: kIsWeb);
   try {
-    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final ok = await launchUrl(uri,
+        mode: kIsWeb
+            ? LaunchMode.platformDefault
+            : LaunchMode.externalApplication);
     if (!ok) throw Exception();
   } catch (_) {
     messenger.showSnackBar(const SnackBar(
-        content: Text('No UPI app found. Pay using the ID shown above.')));
+        content: Text(
+            'That UPI app did not open — try another one, or pay using the ID shown above.')));
   }
 }
 

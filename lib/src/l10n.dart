@@ -140,6 +140,8 @@ const Map<String, Map<String, String>> _strings = {
     'upi.payTo': 'Pay to',
     'upi.amount': 'Amount',
     'upi.openApp': 'Open UPI app',
+    'upi.chooseApp': 'Pay with',
+    'upi.otherApp': 'Other',
     'upi.notEnabled':
         'UPI payments are not set up for this PG yet. Please contact your owner.',
     'upi.afterPay':
@@ -401,6 +403,8 @@ const Map<String, Map<String, String>> _strings = {
     'upi.payTo': 'भुगतान प्राप्तकर्ता',
     'upi.amount': 'राशि',
     'upi.openApp': 'UPI ऐप खोलें',
+    'upi.chooseApp': 'इससे भुगतान करें',
+    'upi.otherApp': 'अन्य',
     'upi.notEnabled':
         'इस पीजी के लिए UPI भुगतान अभी सेट नहीं है। कृपया अपने मालिक से संपर्क करें।',
     'upi.afterPay':
@@ -654,6 +658,8 @@ const Map<String, Map<String, String>> _strings = {
     'upi.payTo': 'చెల్లించవలసినవారు',
     'upi.amount': 'మొత్తం',
     'upi.openApp': 'UPI యాప్ తెరవండి',
+    'upi.chooseApp': 'దీనితో చెల్లించండి',
+    'upi.otherApp': 'ఇతర',
     'upi.notEnabled':
         'ఈ పీజీకి UPI చెల్లింపులు ఇంకా సెటప్ కాలేదు. దయచేసి మీ యజమానిని సంప్రదించండి.',
     'upi.afterPay':
