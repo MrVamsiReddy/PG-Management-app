@@ -18,20 +18,25 @@ class OwnerAdminApp extends StatelessWidget {
       notifier: state,
       child: AnimatedBuilder(
         animation: state,
-        builder: (context, _) => MaterialApp(
-          debugShowCheckedModeBanner: false,
-          title: 'PG Management',
-          theme: buildAppTheme(),
-          locale: state.locale,
-          supportedLocales: AppLocalizations.supportedLocales,
-          localizationsDelegates: const [
-            AppLocalizations.delegate,
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          home: _home(),
-        ),
+        builder: (context, _) {
+          applyThemeTokens(resolveDark(state.themeMode));
+          return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            title: 'PG Management',
+            theme: buildAppTheme(),
+            darkTheme: buildDarkTheme(),
+            themeMode: state.themeMode,
+            locale: state.locale,
+            supportedLocales: AppLocalizations.supportedLocales,
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            home: _home(),
+          );
+        },
       ),
     );
   }

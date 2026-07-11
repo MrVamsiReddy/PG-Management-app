@@ -350,6 +350,37 @@ void main() {
     expect(theme.colorScheme.primary.toARGB32(), primary.toARGB32());
   });
 
+  test('dark theme is a real dark scheme and tokens follow it', () {
+    final dark = buildDarkTheme();
+    expect(dark.useMaterial3, isTrue);
+    expect(dark.colorScheme.brightness, Brightness.dark);
+    expect(dark.scaffoldBackgroundColor, isNot(canvas));
+
+    applyThemeTokens(true);
+    final darkCard = surfaceCard;
+    final darkSubtle = subtle;
+    applyThemeTokens(false);
+    expect(surfaceCard, Colors.white);
+    expect(darkCard, isNot(Colors.white));
+    expect(darkSubtle, isNot(subtle));
+
+    expect(resolveDark(ThemeMode.dark), isTrue);
+    expect(resolveDark(ThemeMode.light), isFalse);
+  });
+
+  test('theme mode persists on-device and reloads', () async {
+    SharedPreferences.setMockInitialValues({});
+    state.setThemeMode(ThemeMode.dark);
+    expect(state.themeMode, ThemeMode.dark);
+    await Future<void>.delayed(Duration.zero);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('app_theme'), 'dark');
+
+    final fresh = AppState();
+    await fresh.loadLanguage();
+    expect(fresh.themeMode, ThemeMode.dark);
+  });
+
   test('a fresh AppState holds no data and is signed out', () {
     final fresh = AppState();
     expect(fresh.isLoggedIn, isFalse);

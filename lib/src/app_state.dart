@@ -936,6 +936,9 @@ class AppState extends ChangeNotifier {
   // ---- Preferences (language persists on-device via SharedPreferences) ----
 
   static const _langKey = 'app_language';
+  static const _themeKey = 'app_theme';
+
+  ThemeMode themeMode = ThemeMode.system;
 
   Future<void> loadLanguage() async {
     try {
@@ -943,8 +946,27 @@ class AppState extends ChangeNotifier {
       final code = prefs.getString(_langKey);
       if (code != null) {
         language = AppLanguage.fromCode(code);
-        notifyListeners();
       }
+      final theme = prefs.getString(_themeKey);
+      if (theme != null) {
+        themeMode = ThemeMode.values
+            .firstWhere((m) => m.name == theme, orElse: () => ThemeMode.system);
+      }
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  /// Called by the bootstrap observer when the OS light/dark setting flips,
+  /// so ThemeMode.system apps rebuild with the right theme tokens.
+  void systemThemeChanged() => notifyListeners();
+
+  void setThemeMode(ThemeMode mode) {
+    themeMode = mode;
+    notifyListeners();
+    try {
+      SharedPreferences.getInstance()
+          .then((p) => p.setString(_themeKey, mode.name))
+          .catchError((_) => false);
     } catch (_) {}
   }
 

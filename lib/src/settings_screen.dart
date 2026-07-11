@@ -43,6 +43,42 @@ class SettingsScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 22),
+            _sectionLabel(context, l.t('settings.appearance')),
+            Card(
+              clipBehavior: Clip.antiAlias,
+              child: RadioGroup<ThemeMode>(
+                groupValue: state.themeMode,
+                onChanged: (value) {
+                  if (value != null) state.setThemeMode(value);
+                },
+                child: Column(children: [
+                  for (final (mode, key, icon) in [
+                    (
+                      ThemeMode.system,
+                      'settings.themeSystem',
+                      Icons.brightness_auto_outlined
+                    ),
+                    (
+                      ThemeMode.light,
+                      'settings.themeLight',
+                      Icons.light_mode_outlined
+                    ),
+                    (
+                      ThemeMode.dark,
+                      'settings.themeDark',
+                      Icons.dark_mode_outlined
+                    ),
+                  ])
+                    RadioListTile<ThemeMode>(
+                      value: mode,
+                      secondary: Icon(icon, color: primary, size: 21),
+                      title: Text(l.t(key),
+                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                    ),
+                ]),
+              ),
+            ),
+            const SizedBox(height: 22),
             _sectionLabel(context, l.t('settings.notifications')),
             Card(
               clipBehavior: Clip.antiAlias,
@@ -52,7 +88,7 @@ class SettingsScreen extends StatelessWidget {
                 secondary: Container(
                     padding: const EdgeInsets.all(9),
                     decoration: BoxDecoration(
-                        color: primarySoft,
+                        color: softTint,
                         borderRadius: BorderRadius.circular(10)),
                     child: const Icon(Icons.notifications_active_outlined,
                         color: primary, size: 21)),
@@ -71,7 +107,7 @@ class SettingsScreen extends StatelessWidget {
                     leading: Container(
                         padding: const EdgeInsets.all(9),
                         decoration: BoxDecoration(
-                            color: primarySoft,
+                            color: softTint,
                             borderRadius: BorderRadius.circular(10)),
                         child: const Icon(Icons.lock_outline,
                             color: primary, size: 21)),
@@ -86,7 +122,7 @@ class SettingsScreen extends StatelessWidget {
                       leading: Container(
                           padding: const EdgeInsets.all(9),
                           decoration: BoxDecoration(
-                              color: primarySoft,
+                              color: softTint,
                               borderRadius: BorderRadius.circular(10)),
                           child: const Icon(Icons.history,
                               color: primary, size: 21)),
@@ -107,7 +143,7 @@ class SettingsScreen extends StatelessWidget {
                 leading: Container(
                     padding: const EdgeInsets.all(9),
                     decoration: BoxDecoration(
-                        color: primarySoft,
+                        color: softTint,
                         borderRadius: BorderRadius.circular(10)),
                     child: const Icon(Icons.apartment_rounded,
                         color: primary, size: 21)),
@@ -123,11 +159,11 @@ class SettingsScreen extends StatelessWidget {
   Widget _sectionLabel(BuildContext context, String text) => Padding(
         padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
         child: Text(text.toUpperCase(),
-            style: const TextStyle(
+            style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w800,
                 letterSpacing: .8,
-                color: Colors.black45)),
+                color: subtle)),
       );
 
   void _changePassword(

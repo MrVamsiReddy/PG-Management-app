@@ -46,7 +46,7 @@ Future<void> showUpiPayFlow(
                   style: Theme.of(context).textTheme.headlineMedium),
               const SizedBox(height: 6),
               Card(
-                color: ink,
+                color: heroInk,
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
@@ -67,10 +67,10 @@ Future<void> showUpiPayFlow(
               ),
               const SizedBox(height: 12),
               Text(l.t('upi.chooseApp'),
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: Colors.black54)),
+                      color: subtle)),
               const SizedBox(height: 8),
               Row(children: [
                 for (final app in const [
@@ -96,7 +96,7 @@ Future<void> showUpiPayFlow(
               ]),
               const SizedBox(height: 14),
               Text(l.t('upi.afterPay'),
-                  style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                  style: TextStyle(fontSize: 12, color: subtle)),
               const SizedBox(height: 12),
               TextField(
                 controller: utr,
@@ -229,7 +229,7 @@ class PaymentReviewScreen extends StatelessWidget {
           const SizedBox(height: 4),
           Text('UTR: ${s.utr}', style: const TextStyle(fontSize: 13)),
           Text('${l.t('upi.submittedAt')}: ${formatWhen(s.submittedAt)}',
-              style: const TextStyle(fontSize: 12, color: Colors.black54)),
+              style: TextStyle(fontSize: 12, color: subtle)),
           if (dup != null) ...[
             const SizedBox(height: 8),
             Row(children: [

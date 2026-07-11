@@ -98,8 +98,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
               Expanded(
                 child: Text(
                     'Plan: ${c.plan}${c.expiresAt == null ? '' : ' · ${c.expired ? 'expired' : 'renews'} ${formatFullDate(c.expiresAt!)}'}',
-                    style:
-                        const TextStyle(fontSize: 12, color: Colors.black54)),
+                    style: TextStyle(fontSize: 12, color: subtle)),
               ),
               TextButton(
                   onPressed: () => _viewPgs(context, state, c),

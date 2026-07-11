@@ -22,20 +22,25 @@ class TenantApp extends StatelessWidget {
       notifier: state,
       child: AnimatedBuilder(
         animation: state,
-        builder: (context, _) => MaterialApp(
-          debugShowCheckedModeBanner: false,
-          title: 'PG Management',
-          theme: buildAppTheme(),
-          locale: state.locale,
-          supportedLocales: AppLocalizations.supportedLocales,
-          localizationsDelegates: const [
-            AppLocalizations.delegate,
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          home: _home(),
-        ),
+        builder: (context, _) {
+          applyThemeTokens(resolveDark(state.themeMode));
+          return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            title: 'PG Management',
+            theme: buildAppTheme(),
+            darkTheme: buildDarkTheme(),
+            themeMode: state.themeMode,
+            locale: state.locale,
+            supportedLocales: AppLocalizations.supportedLocales,
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            home: _home(),
+          );
+        },
       ),
     );
   }
@@ -230,7 +235,7 @@ class TenantHome extends StatelessWidget {
                                       builder: (_) =>
                                           const NotificationsScreen())),
                               leading: CircleAvatar(
-                                  backgroundColor: primarySoft,
+                                  backgroundColor: softTint,
                                   child: Icon(notificationIcon(n.type),
                                       color: primary, size: 20)),
                               title: Text(n.title,
@@ -239,8 +244,8 @@ class TenantHome extends StatelessWidget {
                               subtitle: Text(n.body,
                                   maxLines: 1, overflow: TextOverflow.ellipsis),
                               trailing: Text(relativeTime(n.createdAt),
-                                  style: const TextStyle(
-                                      fontSize: 10, color: Colors.black45)),
+                                  style:
+                                      TextStyle(fontSize: 10, color: subtle)),
                             ))
                         .toList()),
               ),
@@ -251,7 +256,7 @@ class TenantHome extends StatelessWidget {
   Widget _rentCard(BuildContext context, AppState state, Payment latest) {
     final paid = latest.status == PaymentStatus.paid;
     return Card(
-      color: ink,
+      color: heroInk,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => Navigator.push(
@@ -313,8 +318,7 @@ class TenantHome extends StatelessWidget {
               Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                      color: primarySoft,
-                      borderRadius: BorderRadius.circular(12)),
+                      color: softTint, borderRadius: BorderRadius.circular(12)),
                   child: Icon(icon, color: primary, size: 22)),
               const SizedBox(height: 8),
               Text(label,
@@ -340,7 +344,7 @@ class TenantProfileScreen extends StatelessWidget {
           const SizedBox(height: 6),
           CircleAvatar(
               radius: 43,
-              backgroundColor: primarySoft,
+              backgroundColor: softTint,
               child: Text(state.initials,
                   style: const TextStyle(
                       fontSize: 25,
@@ -353,8 +357,7 @@ class TenantProfileScreen extends StatelessWidget {
           if (state.accountEmail != null)
             Center(
                 child: Text(state.accountEmail!,
-                    style:
-                        const TextStyle(fontSize: 12, color: Colors.black45))),
+                    style: TextStyle(fontSize: 12, color: subtle))),
           Center(
               child: Text(
                   '${state.role.label} · Room ${state.currentTenantRoomLabel} · ${state.pgNameForTenant(state.currentTenantId)}')),
@@ -392,9 +395,9 @@ class TenantProfileScreen extends StatelessWidget {
                   foregroundColor: const Color(0xFFC94444),
                   padding: const EdgeInsets.all(15))),
           const SizedBox(height: 16),
-          const Center(
+          Center(
               child: Text('PG Management v3.0',
-                  style: TextStyle(fontSize: 11, color: Colors.black38))),
+                  style: TextStyle(fontSize: 11, color: subtle))),
         ]);
   }
 
@@ -405,7 +408,7 @@ class TenantProfileScreen extends StatelessWidget {
         leading: Container(
             padding: const EdgeInsets.all(9),
             decoration: BoxDecoration(
-                color: primarySoft, borderRadius: BorderRadius.circular(10)),
+                color: softTint, borderRadius: BorderRadius.circular(10)),
             child: Icon(icon, color: primary, size: 21)),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
         subtitle: Text(subtitle),
@@ -494,8 +497,7 @@ class TenantProfileScreen extends StatelessWidget {
               Text(l.t('help.title'),
                   style: Theme.of(context).textTheme.headlineMedium),
               const SizedBox(height: 8),
-              Text(l.t('help.intro'),
-                  style: const TextStyle(color: Colors.black54)),
+              Text(l.t('help.intro'), style: TextStyle(color: subtle)),
               const SizedBox(height: 16),
               ListTile(
                   contentPadding: EdgeInsets.zero,

@@ -123,46 +123,52 @@ class StatCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final content = Padding(
       padding: const EdgeInsets.all(17),
-      // Grid cells vary with screen width; scale down rather than overflow.
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: Alignment.topLeft,
-        child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(children: [
-                Container(
-                  padding: const EdgeInsets.all(9),
-                  decoration: BoxDecoration(
-                      color: tint.withValues(alpha: .13),
-                      borderRadius: BorderRadius.circular(11)),
-                  child: Icon(icon, color: tint, size: 21),
-                ),
-                if (onTap != null) ...[
-                  const SizedBox(width: 40),
-                  const Icon(Icons.chevron_right,
-                      size: 18, color: Colors.black26),
-                ],
-              ]),
-              const SizedBox(height: 16),
-              Text(value,
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineMedium
-                      ?.copyWith(fontSize: 25)),
-              const SizedBox(height: 3),
-              Text(label, style: Theme.of(context).textTheme.bodyMedium),
-              if (caption != null) ...[
-                const SizedBox(height: 8),
-                Text(caption!,
-                    style: const TextStyle(
-                        color: primary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12)),
-              ],
+      child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Full-width header: the chevron affordance pins to the card's
+            // top-right corner instead of floating beside the icon.
+            Row(children: [
+              Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                    color: tint.withValues(alpha: .13),
+                    borderRadius: BorderRadius.circular(11)),
+                child: Icon(icon, color: tint, size: 21),
+              ),
+              const Spacer(),
+              if (onTap != null)
+                Icon(Icons.chevron_right, size: 18, color: faint),
             ]),
-      ),
+            const SizedBox(height: 14),
+            // Numbers vary in width; scale down rather than overflow in
+            // narrow grid cells.
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.topLeft,
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(value,
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineMedium
+                            ?.copyWith(fontSize: 25)),
+                    const SizedBox(height: 3),
+                    Text(label, style: Theme.of(context).textTheme.bodyMedium),
+                    if (caption != null) ...[
+                      const SizedBox(height: 8),
+                      Text(caption!,
+                          style: const TextStyle(
+                              color: primary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12)),
+                    ],
+                  ]),
+            ),
+          ]),
     );
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -218,7 +224,7 @@ class EmptyState extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.all(40),
         child: Column(children: [
-          Icon(icon, size: 46, color: Colors.black26),
+          Icon(icon, size: 46, color: faint),
           const SizedBox(height: 12),
           Text(title, style: Theme.of(context).textTheme.titleMedium),
         ]),
@@ -252,7 +258,7 @@ class SheetHandle extends StatelessWidget {
           height: 4,
           margin: const EdgeInsets.only(bottom: 20),
           decoration: BoxDecoration(
-              color: Colors.black12, borderRadius: BorderRadius.circular(4)),
+              color: hairline, borderRadius: BorderRadius.circular(4)),
         ),
       );
 }

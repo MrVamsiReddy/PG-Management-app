@@ -84,7 +84,7 @@ class DashboardScreen extends StatelessWidget {
                           onTap: () =>
                               _open(context, const NotificationsScreen()),
                           leading: CircleAvatar(
-                              backgroundColor: primarySoft,
+                              backgroundColor: softTint,
                               child: Icon(notificationIcon(n.type),
                                   color: primary, size: 20)),
                           title: Text(n.title,
@@ -93,8 +93,7 @@ class DashboardScreen extends StatelessWidget {
                           subtitle: Text(n.body,
                               maxLines: 1, overflow: TextOverflow.ellipsis),
                           trailing: Text(relativeTime(n.createdAt),
-                              style: const TextStyle(
-                                  fontSize: 10, color: Colors.black45)),
+                              style: TextStyle(fontSize: 10, color: subtle)),
                         ))
                     .toList(),
               ),
@@ -145,60 +144,69 @@ class DashboardScreen extends StatelessWidget {
 
   Widget _managerStats(
       BuildContext context, AppState state, AppLocalizations l) {
+    return LayoutBuilder(builder: (context, constraints) {
+      final count = constraints.maxWidth > 680 ? 4 : 2;
+      return GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        // Fixed tile height: on wide screens the cards keep a compact,
+        // consistent size instead of stretching into tall empty boxes.
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: count,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          mainAxisExtent: 172,
+        ),
+        itemBuilder: (context, i) => _statTiles(context, state, l)[i],
+        itemCount: 4,
+      );
+    });
+  }
+
+  List<Widget> _statTiles(
+      BuildContext context, AppState state, AppLocalizations l) {
     final pg = state.activePg;
     final beds = pg?.beds ?? 0;
     final occupied = pg?.occupied ?? 0;
     final occupancy = beds == 0 ? 0 : (occupied / beds * 100).round();
-    return LayoutBuilder(builder: (context, constraints) {
-      final count = constraints.maxWidth > 680 ? 4 : 2;
-      return GridView.count(
-        crossAxisCount: count,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: constraints.maxWidth > 680 ? 1.25 : .92,
-        children: [
-          StatCard(
-            label: l.t('dash.occupancy'),
-            value: '$occupancy%',
-            icon: Icons.bed_rounded,
-            tint: primary,
-            caption: '$occupied/$beds ${l.t('dash.beds')}',
-            onTap: () => _open(context, const RoomsScreen()),
-          ),
-          StatCard(
-            label: l.t('dash.collected'),
-            value: inr(state.pgCollectedAmount),
-            icon: Icons.savings_outlined,
-            tint: const Color(0xFF3478C7),
-            caption: l.t('dash.thisMonth'),
-            onTap: () =>
-                _open(context, const PaymentsScreen(initialFilter: 'Paid')),
-          ),
-          StatCard(
-            label: l.t('dash.outstanding'),
-            value: inr(state.pgDueAmount),
-            icon: Icons.pending_actions,
-            tint: coral,
-            caption:
-                '${state.pgPayments.where((e) => e.status != PaymentStatus.paid).length} ${l.t('dash.dues')}',
-            onTap: () =>
-                _open(context, const PaymentsScreen(initialFilter: 'Due')),
-          ),
-          StatCard(
-            label: l.t('dash.openRequests'),
-            value:
-                '${state.pgMaintenance.where((e) => e.status != MaintenanceStatus.resolved).length}',
-            icon: Icons.build_circle_outlined,
-            tint: warning,
-            caption: l.t('dash.needsAttention'),
-            onTap: () =>
-                _open(context, const MaintenanceScreen(initialFilter: 'Open')),
-          ),
-        ],
-      );
-    });
+    return [
+      StatCard(
+        label: l.t('dash.occupancy'),
+        value: '$occupancy%',
+        icon: Icons.bed_rounded,
+        tint: primary,
+        caption: '$occupied/$beds ${l.t('dash.beds')}',
+        onTap: () => _open(context, const RoomsScreen()),
+      ),
+      StatCard(
+        label: l.t('dash.collected'),
+        value: inr(state.pgCollectedAmount),
+        icon: Icons.savings_outlined,
+        tint: const Color(0xFF3478C7),
+        caption: l.t('dash.thisMonth'),
+        onTap: () =>
+            _open(context, const PaymentsScreen(initialFilter: 'Paid')),
+      ),
+      StatCard(
+        label: l.t('dash.outstanding'),
+        value: inr(state.pgDueAmount),
+        icon: Icons.pending_actions,
+        tint: coral,
+        caption:
+            '${state.pgPayments.where((e) => e.status != PaymentStatus.paid).length} ${l.t('dash.dues')}',
+        onTap: () => _open(context, const PaymentsScreen(initialFilter: 'Due')),
+      ),
+      StatCard(
+        label: l.t('dash.openRequests'),
+        value:
+            '${state.pgMaintenance.where((e) => e.status != MaintenanceStatus.resolved).length}',
+        icon: Icons.build_circle_outlined,
+        tint: warning,
+        caption: l.t('dash.needsAttention'),
+        onTap: () =>
+            _open(context, const MaintenanceScreen(initialFilter: 'Open')),
+      ),
+    ];
   }
 
   Widget _tenantHero(BuildContext context, AppState state, AppLocalizations l) {
@@ -206,7 +214,7 @@ class DashboardScreen extends StatelessWidget {
     final latest = due ?? _latestTenantPayment(state);
     if (latest == null) {
       return Card(
-          color: ink,
+          color: heroInk,
           child: Padding(
             padding: const EdgeInsets.all(22),
             child: Text(l.t('dash.noRent'),
@@ -218,7 +226,7 @@ class DashboardScreen extends StatelessWidget {
     }
     final paid = latest.status == PaymentStatus.paid;
     return Card(
-      color: ink,
+      color: heroInk,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => _open(context, const PaymentsScreen()),
@@ -330,15 +338,15 @@ class DashboardScreen extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(vertical: 18, horizontal: 4),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: surfaceCard,
                   borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: Colors.black12),
+                  border: Border.all(color: hairline),
                 ),
                 child: Column(children: [
                   Container(
                       padding: const EdgeInsets.all(11),
                       decoration: BoxDecoration(
-                          color: primarySoft,
+                          color: softTint,
                           borderRadius: BorderRadius.circular(13)),
                       child: Icon(a.$2, color: primary, size: 22)),
                   const SizedBox(height: 9),
@@ -362,7 +370,7 @@ class DashboardScreen extends StatelessWidget {
       ListView(
         padding: const EdgeInsets.fromLTRB(20, 60, 20, 40),
         children: [
-          const Icon(Icons.apartment_outlined, size: 56, color: Colors.black26),
+          Icon(Icons.apartment_outlined, size: 56, color: faint),
           const SizedBox(height: 16),
           Text(
               '${l.t('dash.welcomeUser')}, ${state.displayName.split(' ').first}',
@@ -370,8 +378,7 @@ class DashboardScreen extends StatelessWidget {
               style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 8),
           Text(l.t('dash.emptyWorkspace'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.black54)),
+              textAlign: TextAlign.center, style: TextStyle(color: subtle)),
           const SizedBox(height: 22),
           FilledButton.icon(
             onPressed: () => _open(context, const PgSetupWizard()),

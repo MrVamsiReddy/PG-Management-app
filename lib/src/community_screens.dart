@@ -40,10 +40,10 @@ class VisitorsScreen extends StatelessWidget {
                       padding: const EdgeInsets.all(15),
                       child: Column(children: [
                         Row(children: [
-                          const CircleAvatar(
-                              backgroundColor: primarySoft,
-                              child:
-                                  Icon(Icons.badge_outlined, color: primary)),
+                          CircleAvatar(
+                              backgroundColor: softTint,
+                              child: const Icon(Icons.badge_outlined,
+                                  color: primary)),
                           const SizedBox(width: 11),
                           Expanded(
                               child: Column(
@@ -60,8 +60,7 @@ class VisitorsScreen extends StatelessWidget {
                         ]),
                         const Divider(height: 23),
                         Row(children: [
-                          const Icon(Icons.schedule,
-                              size: 16, color: Colors.black45),
+                          Icon(Icons.schedule, size: 16, color: subtle),
                           const SizedBox(width: 5),
                           Text(formatWhen(visitor.expectedAt),
                               style: const TextStyle(fontSize: 11)),
@@ -197,7 +196,7 @@ class AnnouncementsScreen extends StatelessWidget {
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 8, vertical: 3),
                                       decoration: BoxDecoration(
-                                          color: primarySoft,
+                                          color: softTint,
                                           borderRadius:
                                               BorderRadius.circular(8)),
                                       child: Text(
@@ -209,8 +208,8 @@ class AnnouncementsScreen extends StatelessWidget {
                                   const SizedBox(width: 8),
                                 ],
                                 Text(relativeTime(item.postedAt),
-                                    style: const TextStyle(
-                                        fontSize: 11, color: Colors.black45)),
+                                    style:
+                                        TextStyle(fontSize: 11, color: subtle)),
                               ]),
                               const SizedBox(height: 13),
                               Text(item.title,
@@ -256,7 +255,7 @@ class AnnouncementsScreen extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
               '${item.pgId == null ? l.t('ann.audienceAll') : state.pgById(item.pgId!)?.name ?? ''} · ${relativeTime(item.postedAt)}',
-              style: const TextStyle(fontSize: 12, color: Colors.black45)),
+              style: TextStyle(fontSize: 12, color: subtle)),
           const SizedBox(height: 16),
           Text(item.body, style: const TextStyle(height: 1.4)),
           const Divider(height: 30),
@@ -366,7 +365,7 @@ class NotificationsScreen extends StatelessWidget {
                 return Card(
                     color: item.read
                         ? Colors.white
-                        : primarySoft.withValues(alpha: .55),
+                        : softTint.withValues(alpha: .55),
                     child: ListTile(
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 15, vertical: 8),

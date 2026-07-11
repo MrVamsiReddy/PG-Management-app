@@ -82,7 +82,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                               Row(children: [
                                 CircleAvatar(
                                     radius: 13,
-                                    backgroundColor: primarySoft,
+                                    backgroundColor: softTint,
                                     child: Icon(
                                         item.assignee == null
                                             ? Icons.person_add_alt
@@ -95,8 +95,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                                         fontSize: 12,
                                         fontWeight: FontWeight.w700)),
                                 const Spacer(),
-                                const Icon(Icons.chevron_right,
-                                    color: Colors.black38)
+                                Icon(Icons.chevron_right, color: subtle)
                               ]),
                             ])),
                   ),
@@ -294,20 +293,20 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
             child: Column(children: [
               if (!first)
                 Expanded(
-                    child: Container(
-                        width: 2, color: done ? primary : Colors.black12)),
+                    child:
+                        Container(width: 2, color: done ? primary : hairline)),
               Container(
                   width: 14,
                   height: 14,
                   decoration: BoxDecoration(
                       color: done ? primary : Colors.white,
                       shape: BoxShape.circle,
-                      border: Border.all(
-                          color: done ? primary : Colors.black26, width: 2))),
+                      border:
+                          Border.all(color: done ? primary : faint, width: 2))),
               if (!last)
                 Expanded(
-                    child: Container(
-                        width: 2, color: done ? primary : Colors.black12))
+                    child:
+                        Container(width: 2, color: done ? primary : hairline))
             ])),
         Expanded(
             child: Padding(
@@ -318,7 +317,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                       Text(title,
                           style: TextStyle(
                               fontWeight: FontWeight.w700,
-                              color: done ? ink : Colors.black38)),
+                              color: done ? ink : subtle)),
                       Text(subtitle, style: const TextStyle(fontSize: 11))
                     ]))),
       ]));

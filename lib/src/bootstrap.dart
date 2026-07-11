@@ -30,5 +30,15 @@ Future<AppState> bootstrap() async {
     }
   });
   onPushWhileOpen(() => unawaited(state.refresh()));
+  WidgetsBinding.instance.addObserver(_SystemThemeObserver(state));
   return state;
+}
+
+/// Rebuilds the app when the OS light/dark setting flips, so
+/// ThemeMode.system (and the theme tokens) follow it live.
+class _SystemThemeObserver with WidgetsBindingObserver {
+  _SystemThemeObserver(this.state);
+  final AppState state;
+  @override
+  void didChangePlatformBrightness() => state.systemThemeChanged();
 }

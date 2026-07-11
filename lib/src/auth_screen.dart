@@ -50,7 +50,7 @@ class AuthScreen extends StatelessWidget {
                     const SizedBox(height: 8),
                     Text(l.t('auth.chooseSub'),
                         textAlign: TextAlign.center,
-                        style: const TextStyle(color: Colors.black54)),
+                        style: TextStyle(color: subtle)),
                     if (state.authNotice != null) ...[
                       const SizedBox(height: 18),
                       Container(
@@ -113,7 +113,7 @@ class AuthScreen extends StatelessWidget {
           leading: Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                  color: primarySoft, borderRadius: BorderRadius.circular(12)),
+                  color: softTint, borderRadius: BorderRadius.circular(12)),
               child: Icon(icon, color: primary)),
           title:
               Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
@@ -210,7 +210,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           style: Theme.of(context)
                               .textTheme
                               .bodyLarge
-                              ?.copyWith(color: Colors.black54)),
+                              ?.copyWith(color: subtle)),
                       const SizedBox(height: 24),
                       TextFormField(
                         controller: email,
@@ -356,7 +356,7 @@ class _SetPasswordScreenState extends State<SetPasswordScreen> {
                         style: Theme.of(context)
                             .textTheme
                             .bodyLarge
-                            ?.copyWith(color: Colors.black54),
+                            ?.copyWith(color: subtle),
                       ),
                       const SizedBox(height: 24),
                       if (!state.passwordRecovery) ...[
@@ -490,7 +490,7 @@ class _AdminSetupScreenState extends State<AdminSetupScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(l.t('adminSetup.intro'),
-                          style: const TextStyle(color: Colors.black54)),
+                          style: TextStyle(color: subtle)),
                       const SizedBox(height: 20),
                       TextFormField(
                         controller: name,

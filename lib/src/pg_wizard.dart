@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app_state.dart';
 import 'l10n.dart';
+import 'theme.dart';
 import 'widgets.dart';
 
 /// Creates a PG from just its basic details. Rooms, beds, sharing type and
@@ -58,7 +59,7 @@ class _PgSetupWizardState extends State<PgSetupWizard> {
               style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 4),
           Text(l.t('wiz.basicInfo'),
-              style: const TextStyle(fontSize: 13, color: Colors.black54)),
+              style: TextStyle(fontSize: 13, color: subtle)),
           const SizedBox(height: 12),
           FormLabel(l.t('wiz.propName')),
           TextField(

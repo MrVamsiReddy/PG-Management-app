@@ -86,7 +86,7 @@ class PgListingsScreen extends StatelessWidget {
                                   icon: const Icon(Icons.edit_outlined,
                                       color: Colors.white),
                                   style: IconButton.styleFrom(
-                                      backgroundColor: Colors.black26)),
+                                      backgroundColor: faint)),
                               const SizedBox(width: 6),
                               IconButton(
                                   tooltip: 'Delete PG',
@@ -95,7 +95,7 @@ class PgListingsScreen extends StatelessWidget {
                                   icon: const Icon(Icons.delete_outline,
                                       color: Colors.white),
                                   style: IconButton.styleFrom(
-                                      backgroundColor: Colors.black26)),
+                                      backgroundColor: faint)),
                             ])),
                       ]),
                     ),
@@ -108,8 +108,8 @@ class PgListingsScreen extends StatelessWidget {
                                 style: Theme.of(context).textTheme.titleLarge),
                             const SizedBox(height: 5),
                             Row(children: [
-                              const Icon(Icons.location_on_outlined,
-                                  size: 16, color: Colors.black45),
+                              Icon(Icons.location_on_outlined,
+                                  size: 16, color: subtle),
                               const SizedBox(width: 4),
                               Expanded(
                                   child: Text(pg.address,
@@ -120,7 +120,7 @@ class PgListingsScreen extends StatelessWidget {
                                 value: occupancy / 100,
                                 minHeight: 7,
                                 borderRadius: BorderRadius.circular(8),
-                                backgroundColor: primarySoft),
+                                backgroundColor: softTint),
                             const SizedBox(height: 7),
                             Row(
                                 mainAxisAlignment:
@@ -137,9 +137,8 @@ class PgListingsScreen extends StatelessWidget {
                             Row(children: [
                               Expanded(
                                   child: Text(pg.amenities,
-                                      style: const TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.black54))),
+                                      style: TextStyle(
+                                          fontSize: 12, color: subtle))),
                               if (active)
                                 const StatusPill('Managing')
                               else
@@ -338,7 +337,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                             height: 48,
                             alignment: Alignment.center,
                             decoration: BoxDecoration(
-                                color: primarySoft,
+                                color: softTint,
                                 borderRadius: BorderRadius.circular(13)),
                             child: Text(room.number,
                                 style: const TextStyle(
@@ -388,8 +387,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                           style: Theme.of(context).textTheme.headlineMedium),
                       const SizedBox(height: 6),
                       Text('In ${pg.name} — switch property from the top bar.',
-                          style: const TextStyle(
-                              fontSize: 12, color: Colors.black54)),
+                          style: TextStyle(fontSize: 12, color: subtle)),
                       const FormLabel('Room number'),
                       TextField(
                           controller: number,
@@ -569,9 +567,8 @@ void _editRentDialog(BuildContext context, AppState state, Room room) {
             keyboardType: TextInputType.number,
             decoration: const InputDecoration(prefixText: '₹ ')),
         const SizedBox(height: 8),
-        const Text(
-            'Only future dues use the new rent; past payments keep theirs.',
-            style: TextStyle(fontSize: 11, color: Colors.black54)),
+        Text('Only future dues use the new rent; past payments keep theirs.',
+            style: TextStyle(fontSize: 11, color: subtle)),
       ]),
       actions: [
         TextButton(
@@ -680,7 +677,7 @@ class RoomDetailsScreen extends StatelessWidget {
                   margin: const EdgeInsets.only(bottom: 8),
                   child: ListTile(
                     leading: CircleAvatar(
-                        backgroundColor: primarySoft,
+                        backgroundColor: softTint,
                         child: Text(t.initials,
                             style: const TextStyle(
                                 color: primary, fontWeight: FontWeight.w800))),
@@ -698,7 +695,7 @@ class RoomDetailsScreen extends StatelessWidget {
   Widget _detail(String label, String value) => Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text(label, style: const TextStyle(color: Colors.black54)),
+        Text(label, style: TextStyle(color: subtle)),
         Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
       ]));
 }
@@ -753,7 +750,7 @@ class _TenantsScreenState extends State<TenantsScreen> {
                   child: ExpansionTile(
                     shape: const Border(),
                     leading: CircleAvatar(
-                        backgroundColor: primarySoft,
+                        backgroundColor: softTint,
                         child: Text(tenant.initials,
                             style: const TextStyle(
                                 color: primary, fontWeight: FontWeight.w800))),
@@ -857,7 +854,7 @@ class _TenantsScreenState extends State<TenantsScreen> {
   Widget _detail(IconData icon, String label, String value) => Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(children: [
-        Icon(icon, size: 17, color: Colors.black45),
+        Icon(icon, size: 17, color: subtle),
         const SizedBox(width: 8),
         Text('$label: ', style: const TextStyle(fontSize: 12)),
         Text(value,
@@ -1080,9 +1077,7 @@ class _TenantsScreenState extends State<TenantsScreen> {
                     enabled: !full,
                     child: Text(
                         'Room ${r.number} · Floor ${r.floor} · ${r.type} · ${full ? 'Full' : '$free free'}',
-                        style: full
-                            ? const TextStyle(color: Colors.black38)
-                            : null),
+                        style: full ? TextStyle(color: subtle) : null),
                   );
                 }),
                 const DropdownMenuItem(
@@ -1142,8 +1137,7 @@ class _TenantsScreenState extends State<TenantsScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                    color: primarySoft,
-                    borderRadius: BorderRadius.circular(12)),
+                    color: softTint, borderRadius: BorderRadius.circular(12)),
                 child: Text(
                     '${selected.type} · ${inr(selected.rent)} / bed / month (inherited)',
                     style: const TextStyle(

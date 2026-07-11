@@ -107,7 +107,7 @@ class _HomeShellState extends State<HomeShell> {
     );
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: canvas,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         scrolledUnderElevation: 0,
         toolbarHeight: 68,
         title: Row(children: [
@@ -165,7 +165,7 @@ class _HomeShellState extends State<HomeShell> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-                color: primarySoft, borderRadius: BorderRadius.circular(8)),
+                color: softTint, borderRadius: BorderRadius.circular(8)),
             child: Text(state.role.label,
                 style: const TextStyle(
                     color: primary, fontSize: 10, fontWeight: FontWeight.w800)),
@@ -237,7 +237,7 @@ class ProfileScreen extends StatelessWidget {
         const SizedBox(height: 6),
         CircleAvatar(
           radius: 43,
-          backgroundColor: primarySoft,
+          backgroundColor: softTint,
           child: Text(state.initials,
               style: const TextStyle(
                   fontSize: 25, fontWeight: FontWeight.w800, color: primary)),
@@ -249,7 +249,7 @@ class ProfileScreen extends StatelessWidget {
         if (state.accountEmail != null)
           Center(
               child: Text(state.accountEmail!,
-                  style: const TextStyle(fontSize: 12, color: Colors.black45))),
+                  style: TextStyle(fontSize: 12, color: subtle))),
         Center(
             child: Text(tenant
                 ? '${state.role.label} · Room ${state.currentTenantRoomLabel} · ${state.pgNameForTenant(state.currentTenantId)}'
@@ -287,9 +287,9 @@ class ProfileScreen extends StatelessWidget {
               padding: const EdgeInsets.all(15)),
         ),
         const SizedBox(height: 16),
-        const Center(
+        Center(
             child: Text('PG Management v3.0',
-                style: TextStyle(fontSize: 11, color: Colors.black38))),
+                style: TextStyle(fontSize: 11, color: subtle))),
       ],
     );
   }
@@ -301,7 +301,7 @@ class ProfileScreen extends StatelessWidget {
         leading: Container(
             padding: const EdgeInsets.all(9),
             decoration: BoxDecoration(
-                color: primarySoft, borderRadius: BorderRadius.circular(10)),
+                color: softTint, borderRadius: BorderRadius.circular(10)),
             child: Icon(icon, color: primary, size: 21)),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
         subtitle: Text(subtitle),
@@ -370,7 +370,7 @@ class ProfileScreen extends StatelessWidget {
                       const SizedBox(height: 8),
                       Text(
                           'Aadhaar ${state.currentTenant?.kyc.label.toLowerCase() ?? 'pending'}',
-                          style: const TextStyle(color: Colors.black54)),
+                          style: TextStyle(color: subtle)),
                       const SizedBox(height: 14),
                       if (doc != null) ...[
                         ClipRRect(
@@ -411,8 +411,7 @@ class ProfileScreen extends StatelessWidget {
               Text(l.t('help.title'),
                   style: Theme.of(context).textTheme.headlineMedium),
               const SizedBox(height: 8),
-              Text(l.t('help.intro'),
-                  style: const TextStyle(color: Colors.black54)),
+              Text(l.t('help.intro'), style: TextStyle(color: subtle)),
               const SizedBox(height: 16),
               ListTile(
                 contentPadding: EdgeInsets.zero,

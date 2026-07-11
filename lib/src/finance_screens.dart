@@ -103,7 +103,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
               const SizedBox(height: 20),
             ] else ...[
               Card(
-                  color: ink,
+                  color: heroInk,
                   child: Padding(
                       padding: const EdgeInsets.all(22),
                       child: Column(
@@ -152,7 +152,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                     leading: Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                            color: primarySoft,
+                            color: softTint,
                             borderRadius: BorderRadius.circular(12)),
                         child: const Icon(Icons.receipt_long_outlined,
                             color: primary)),
