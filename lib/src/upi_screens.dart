@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_state.dart';
@@ -21,6 +22,10 @@ Future<void> showUpiPayFlow(
     BuildContext context, AppState state, Payment payment) async {
   final l = AppLocalizations.of(context);
   final messenger = ScaffoldMessenger.of(context);
+  // A rent change may have replaced this due since the caller built it —
+  // always pay against the live row.
+  payment = state.payments
+      .firstWhere((p) => p.id == payment.id, orElse: () => payment);
   final pgId = state.pgIdForPayment(payment);
   final settings = await state.loadUpiSettings(pgId);
   if (!context.mounted) return;
@@ -54,11 +59,25 @@ Future<void> showUpiPayFlow(
                       children: [
                         Text('${l.t('upi.payTo')}: ${settings.payeeName}',
                             style: const TextStyle(color: Colors.white)),
-                        Text(settings.upiId,
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 18)),
+                        InkWell(
+                          onTap: () {
+                            Clipboard.setData(
+                                ClipboardData(text: settings.upiId));
+                            messenger.showSnackBar(
+                                SnackBar(content: Text(l.t('upi.idCopied'))));
+                          },
+                          child: Row(children: [
+                            Flexible(
+                                child: Text(settings.upiId,
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 18))),
+                            const SizedBox(width: 8),
+                            const Icon(Icons.copy,
+                                size: 15, color: Colors.white70),
+                          ]),
+                        ),
                         const SizedBox(height: 6),
                         Text('${l.t('upi.amount')}: ${inr(payment.balance)}',
                             style: const TextStyle(color: Colors.white70)),
@@ -94,6 +113,14 @@ Future<void> showUpiPayFlow(
                         child: Text(l.t('upi.otherApp'),
                             style: const TextStyle(fontSize: 12)))),
               ]),
+              if (payment.balance > upiPrefillLimit) ...[
+                const SizedBox(height: 10),
+                Text('${l.t('upi.typeAmount')} ${inr(payment.balance)}',
+                    style: const TextStyle(
+                        fontSize: 12,
+                        color: coral,
+                        fontWeight: FontWeight.w700)),
+              ],
               const SizedBox(height: 14),
               Text(l.t('upi.afterPay'),
                   style: TextStyle(fontSize: 12, color: subtle)),
@@ -147,18 +174,24 @@ Future<void> showUpiPayFlow(
   );
 }
 
+/// UPI apps reject prefilled-amount deep links above ₹2,000 to personal
+/// (unverified) UPI ids — larger rents launch without `am` and the tenant
+/// types the amount in the app (typed payments carry the normal UPI limit).
+const upiPrefillLimit = 2000;
+
 /// The deep link for a specific UPI app (or the system chooser for 'other').
 /// App-specific schemes work from mobile browsers too, which is what makes
 /// the PWA able to open the installed app; on the web the generic chooser
 /// uses Android's intent:// syntax (Chrome shows the UPI app picker).
+/// Pass a null [amount] to let the tenant type it (see [upiPrefillLimit]).
 Uri upiPayUri(String app,
     {required String upiId,
     required String payeeName,
-    required int amount,
+    required int? amount,
     bool web = false}) {
   final params = 'pa=${Uri.encodeComponent(upiId)}'
       '&pn=${Uri.encodeComponent(payeeName)}'
-      '&am=$amount&cu=INR';
+      '${amount == null ? '' : '&am=$amount'}&cu=INR';
   return switch (app) {
     'gpay' => Uri.parse('tez://upi/pay?$params'),
     'phonepe' => Uri.parse('phonepe://pay?$params'),
@@ -174,7 +207,7 @@ Future<void> _openUpiApp(ScaffoldMessengerState messenger, UpiSettings s,
   final uri = upiPayUri(app,
       upiId: s.upiId,
       payeeName: s.payeeName,
-      amount: payment.balance,
+      amount: payment.balance > upiPrefillLimit ? null : payment.balance,
       web: kIsWeb);
   try {
     final ok = await launchUrl(uri,
