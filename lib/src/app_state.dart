@@ -1826,11 +1826,24 @@ class AppState extends ChangeNotifier {
   Future<String?> submitPayment(
       {required Payment payment,
       required String utr,
+      required int paidAmount,
+      String note = '',
       Uint8List? screenshot}) async {
-    final client = supabaseOrNull;
-    if (client == null || !isLoggedIn) return 'Sign in to submit a payment.';
     final ref = utr.trim();
     if (ref.length < 6) return 'Enter the 12-digit UPI reference (UTR).';
+    if (paidAmount <= 0) return 'Enter the amount you paid.';
+    // One live submission per due: wait for the owner's decision first.
+    final latest = latestSubmissionFor(payment.id);
+    if (latest != null && latest.status != UpiStatus.rejected) {
+      return 'This payment is already submitted and awaiting review.';
+    }
+    // A UTR is unique per transaction — a repeat is a mistake or a re-use.
+    if (submissions
+        .any((s) => s.utr == ref && s.status != UpiStatus.rejected)) {
+      return 'This UTR was already submitted. Check the reference number.';
+    }
+    final client = supabaseOrNull;
+    if (client == null || !isLoggedIn) return 'Sign in to submit a payment.';
     final pgId = pgIdForPayment(payment);
     try {
       String? path;
@@ -1853,14 +1866,15 @@ class AppState extends ChangeNotifier {
         'member_email': (accountEmail ?? '').toLowerCase(),
         'payment_id': payment.id,
         'period': payment.period.toIso8601String(),
-        'amount': payment.balance,
+        'amount': paidAmount,
         'utr': ref,
+        'note': note.trim().isEmpty ? null : note.trim(),
         'screenshot_path': path,
       });
       _audit('payment_submitted',
           entityType: 'payment',
           entityId: payment.id,
-          after: {'utr': ref, 'amount': payment.balance});
+          after: {'utr': ref, 'amount': paidAmount});
       await loadSubmissions();
       notifyListeners();
       return null;
@@ -1909,6 +1923,16 @@ class AppState extends ChangeNotifier {
         'status': 'rejected',
         'rejection_reason': reason.trim(),
       }).eq('id', s.id);
+      // The due stays unpaid; tell the tenant why so they can resubmit.
+      _notify(
+          'Payment rejected',
+          'Your payment of ${inr(s.amount)} was rejected: ${reason.trim()}',
+          NotificationType.payment,
+          scope: NotificationScope.tenant,
+          tenantId: s.tenantId,
+          pgId: _pgIdForTenant(s.tenantId),
+          relatedEntityId: s.paymentId);
+      _persist({'notifications'});
       _audit('payment_rejected',
           entityType: 'payment',
           entityId: s.paymentId,

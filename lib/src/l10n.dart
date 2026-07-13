@@ -148,6 +148,12 @@ const Map<String, Map<String, String>> _strings = {
     'upi.otherApp': 'Other',
     'upi.typeAmount': 'Enter this exact amount in the UPI app:',
     'upi.idCopied': 'UPI ID copied.',
+    'upi.copyAmount': 'Copy amount',
+    'upi.copyId': 'Copy UPI ID',
+    'upi.amountCopied': 'Amount copied.',
+    'upi.paidAmount': 'Amount you paid',
+    'upi.note': 'Note (optional)',
+    'upi.dueAmount': 'Due',
     'upi.notEnabled':
         'UPI payments are not set up for this PG yet. Please contact your owner.',
     'upi.afterPay':
@@ -417,6 +423,12 @@ const Map<String, Map<String, String>> _strings = {
     'upi.otherApp': 'अन्य',
     'upi.typeAmount': 'UPI ऐप में ठीक यही राशि दर्ज करें:',
     'upi.idCopied': 'UPI ID कॉपी की गई।',
+    'upi.copyAmount': 'राशि कॉपी करें',
+    'upi.copyId': 'UPI ID कॉपी करें',
+    'upi.amountCopied': 'राशि कॉपी की गई।',
+    'upi.paidAmount': 'आपने जो राशि चुकाई',
+    'upi.note': 'नोट (वैकल्पिक)',
+    'upi.dueAmount': 'बकाया',
     'upi.notEnabled':
         'इस पीजी के लिए UPI भुगतान अभी सेट नहीं है। कृपया अपने मालिक से संपर्क करें।',
     'upi.afterPay':
@@ -678,6 +690,12 @@ const Map<String, Map<String, String>> _strings = {
     'upi.otherApp': 'ఇతర',
     'upi.typeAmount': 'UPI యాప్‌లో సరిగ్గా ఇదే మొత్తాన్ని నమోదు చేయండి:',
     'upi.idCopied': 'UPI ID కాపీ చేయబడింది.',
+    'upi.copyAmount': 'మొత్తాన్ని కాపీ చేయండి',
+    'upi.copyId': 'UPI IDని కాపీ చేయండి',
+    'upi.amountCopied': 'మొత్తం కాపీ చేయబడింది.',
+    'upi.paidAmount': 'మీరు చెల్లించిన మొత్తం',
+    'upi.note': 'గమనిక (ఐచ్ఛికం)',
+    'upi.dueAmount': 'బకాయి',
     'upi.notEnabled':
         'ఈ పీజీకి UPI చెల్లింపులు ఇంకా సెటప్ కాలేదు. దయచేసి మీ యజమానిని సంప్రదించండి.',
     'upi.afterPay':

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_state.dart';
@@ -22,10 +23,15 @@ Future<void> showUpiPayFlow(
     BuildContext context, AppState state, Payment payment) async {
   final l = AppLocalizations.of(context);
   final messenger = ScaffoldMessenger.of(context);
-  // A rent change may have replaced this due since the caller built it —
-  // always pay against the live row.
-  payment = state.payments
-      .firstWhere((p) => p.id == payment.id, orElse: () => payment);
+  // Rent is never cached: reload from the database, then pay against the
+  // live row (a rent change may have rewritten this due since the caller
+  // built it). If the row vanished, fall back to the latest unsettled due.
+  await state.refresh();
+  payment = state.payments.firstWhere((p) => p.id == payment.id,
+      orElse: () => state.payments.firstWhere(
+          (p) =>
+              p.tenantId == payment.tenantId && p.status != PaymentStatus.paid,
+          orElse: () => payment));
   final pgId = state.pgIdForPayment(payment);
   final settings = await state.loadUpiSettings(pgId);
   if (!context.mounted) return;
@@ -33,8 +39,13 @@ Future<void> showUpiPayFlow(
     messenger.showSnackBar(SnackBar(content: Text(l.t('upi.notEnabled'))));
     return;
   }
+  final qrData =
+      upiPayUri('other', upiId: settings.upiId, payeeName: settings.payeeName)
+          .toString();
 
   final utr = TextEditingController();
+  final paidAmount = TextEditingController(text: '${payment.balance}');
+  final note = TextEditingController();
   String? screenshot;
   var busy = false;
 
@@ -85,6 +96,45 @@ Future<void> showUpiPayFlow(
                 ),
               ),
               const SizedBox(height: 12),
+              // QR carries payee + note only (never an amount) so any UPI
+              // app can scan it for any rent. White backdrop keeps it
+              // scannable in dark mode.
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14)),
+                  child: QrImageView(data: qrData, size: 164, gapless: true),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(children: [
+                Expanded(
+                    child: OutlinedButton.icon(
+                        onPressed: () {
+                          Clipboard.setData(
+                              ClipboardData(text: '${payment.balance}'));
+                          messenger.showSnackBar(
+                              SnackBar(content: Text(l.t('upi.amountCopied'))));
+                        },
+                        icon: const Icon(Icons.currency_rupee, size: 16),
+                        label: Text(l.t('upi.copyAmount'),
+                            style: const TextStyle(fontSize: 12)))),
+                const SizedBox(width: 8),
+                Expanded(
+                    child: OutlinedButton.icon(
+                        onPressed: () {
+                          Clipboard.setData(
+                              ClipboardData(text: settings.upiId));
+                          messenger.showSnackBar(
+                              SnackBar(content: Text(l.t('upi.idCopied'))));
+                        },
+                        icon: const Icon(Icons.copy, size: 16),
+                        label: Text(l.t('upi.copyId'),
+                            style: const TextStyle(fontSize: 12)))),
+              ]),
+              const SizedBox(height: 12),
               Text(l.t('upi.chooseApp'),
                   style: TextStyle(
                       fontSize: 12,
@@ -127,6 +177,18 @@ Future<void> showUpiPayFlow(
                     labelText: l.t('upi.utr'), hintText: l.t('upi.utrHint')),
               ),
               const SizedBox(height: 10),
+              TextField(
+                controller: paidAmount,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                    labelText: l.t('upi.paidAmount'), prefixText: '₹ '),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: note,
+                decoration: InputDecoration(labelText: l.t('upi.note')),
+              ),
+              const SizedBox(height: 10),
               OutlinedButton.icon(
                 onPressed: () async {
                   final picked = await pickImageBase64(context);
@@ -146,6 +208,10 @@ Future<void> showUpiPayFlow(
                         final error = await state.submitPayment(
                           payment: payment,
                           utr: utr.text,
+                          paidAmount: int.tryParse(paidAmount.text
+                                  .replaceAll(RegExp(r'[^0-9]'), '')) ??
+                              0,
+                          note: note.text,
                           screenshot: screenshot == null
                               ? null
                               : base64Decode(screenshot!),
@@ -181,6 +247,7 @@ Uri upiPayUri(String app,
     {required String upiId, required String payeeName, bool web = false}) {
   final params = 'pa=${Uri.encodeComponent(upiId)}'
       '&pn=${Uri.encodeComponent(payeeName)}'
+      '&tn=${Uri.encodeComponent('PG Rent')}'
       '&cu=INR';
   return switch (app) {
     'gpay' => Uri.parse('tez://upi/pay?$params'),
@@ -238,6 +305,9 @@ class PaymentReviewScreen extends StatelessWidget {
   Widget _card(BuildContext context, AppState state, AppLocalizations l,
       UpiSubmission s) {
     final dup = state.duplicateOf(s);
+    final dueRows = state.payments.where((p) => p.id == s.paymentId).toList();
+    final due = dueRows.isEmpty ? null : dueRows.first.balance;
+    final mismatch = due != null && due != s.amount;
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
@@ -252,6 +322,15 @@ class PaymentReviewScreen extends StatelessWidget {
           ]),
           const SizedBox(height: 4),
           Text('UTR: ${s.utr}', style: const TextStyle(fontSize: 13)),
+          if (due != null)
+            Text('${l.t('upi.dueAmount')}: ${inr(due)}',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: mismatch ? coral : subtle,
+                    fontWeight: mismatch ? FontWeight.w700 : null)),
+          if ((s.note ?? '').isNotEmpty)
+            Text('${l.t('upi.note')}: ${s.note}',
+                style: const TextStyle(fontSize: 12)),
           Text('${l.t('upi.submittedAt')}: ${formatWhen(s.submittedAt)}',
               style: TextStyle(fontSize: 12, color: subtle)),
           if (dup != null) ...[

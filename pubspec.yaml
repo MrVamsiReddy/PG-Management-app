@@ -1,7 +1,7 @@
 name: pg_management
 description: A complete role-based PG management platform.
 publish_to: "none"
-version: 1.14.0+15
+version: 1.15.0+16
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -20,6 +20,7 @@ dependencies:
   package_info_plus: ^10.2.0
   pdf: ^3.13.0
   printing: ^5.15.0
+  qr_flutter: ^4.1.0
   share_plus: ^13.2.0
   shared_preferences: ^2.3.2
   supabase_flutter: ^2.15.3

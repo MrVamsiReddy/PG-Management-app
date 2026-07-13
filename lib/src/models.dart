@@ -33,6 +33,7 @@ class UpiSubmission {
     required this.submittedAt,
     this.pgId = '',
     this.period = '',
+    this.note,
     this.screenshotPath,
     this.rejectionReason,
     this.confirmedAt,
@@ -47,6 +48,7 @@ class UpiSubmission {
   final DateTime submittedAt;
   final String pgId;
   final String period;
+  final String? note;
   final String? screenshotPath;
   final String? rejectionReason;
   final DateTime? confirmedAt;
@@ -68,6 +70,7 @@ class UpiSubmission {
             DateTime.now(),
         pgId: r['pg_id'] as String? ?? '',
         period: r['period'] as String? ?? '',
+        note: r['note'] as String?,
         screenshotPath: r['screenshot_path'] as String?,
         rejectionReason: r['rejection_reason'] as String?,
         confirmedAt: r['confirmed_at'] == null

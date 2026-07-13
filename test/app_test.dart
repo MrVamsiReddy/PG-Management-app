@@ -1094,10 +1094,71 @@ void main() {
     final due = state.tenantDuePayment!;
     // The only tenant action is submitting proof; it fails closed offline and
     // never flips the due to paid.
-    final error = await state.submitPayment(payment: due, utr: '123456789012');
+    final error = await state.submitPayment(
+        payment: due, utr: '123456789012', paidAmount: due.balance);
     expect(error, isNotNull);
     expect(state.payments.firstWhere((p) => p.id == due.id).status,
         PaymentStatus.due);
+  });
+
+  test('submission validation: UTR, amount, duplicate UTR, duplicate pending',
+      () async {
+    state.debugSignIn(UserRole.tenant, tenantId: 't1');
+    final due = state.tenantDuePayment!;
+
+    expect(await state.submitPayment(payment: due, utr: '12', paidAmount: 100),
+        contains('UTR'));
+    expect(
+        await state.submitPayment(
+            payment: due, utr: '123456789012', paidAmount: 0),
+        contains('amount'));
+
+    // A live (pending) submission blocks a second one for the same due.
+    state.submissions = [
+      UpiSubmission(
+          id: 'sub1',
+          tenantId: 't1',
+          paymentId: due.id,
+          amount: due.balance,
+          utr: '999888777666',
+          status: UpiStatus.pendingConfirmation,
+          submittedAt: DateTime.now()),
+    ];
+    expect(
+        await state.submitPayment(
+            payment: due, utr: '111222333444', paidAmount: due.balance),
+        contains('awaiting review'));
+
+    // A UTR already used on any live submission is refused outright.
+    final other = state.payments.firstWhere(
+        (p) => p.tenantId != 't1' && p.status != PaymentStatus.paid);
+    expect(
+        await state.submitPayment(
+            payment: other, utr: '999888777666', paidAmount: 100),
+        contains('already submitted'));
+
+    // A rejected submission frees the due for a resubmission (fails closed
+    // offline, but past the duplicate guards).
+    state.submissions = [
+      UpiSubmission(
+          id: 'sub1',
+          tenantId: 't1',
+          paymentId: due.id,
+          amount: due.balance,
+          utr: '999888777666',
+          status: UpiStatus.rejected,
+          submittedAt: DateTime.now()),
+    ];
+    expect(
+        await state.submitPayment(
+            payment: due, utr: '111222333444', paidAmount: due.balance),
+        contains('Sign in'));
+  });
+
+  test('the note migration adds the optional submission note', () {
+    final sql = File('supabase/012_submission_note.sql').readAsStringSync();
+    expect(sql, contains('upi_submissions'));
+    expect(sql, contains('add column if not exists note'));
   });
 
   test('confirm and reject fail closed without a cloud connection', () async {
@@ -1676,8 +1737,9 @@ void main() {
     expect(uri('other').toString(), startsWith('upi://pay?'));
     // On the web the generic chooser uses Android's intent:// syntax.
     expect(uri('other', web: true).toString(),
-        'intent://pay?pa=owner%40upi&pn=PG%20%26%20Co&cu=INR#Intent;scheme=upi;end');
+        'intent://pay?pa=owner%40upi&pn=PG%20%26%20Co&tn=PG%20Rent&cu=INR#Intent;scheme=upi;end');
     expect(uri('gpay').query, contains('pa=owner%40upi'));
+    expect(uri('gpay').query, contains('tn=PG%20Rent'));
     expect(uri('gpay').query, contains('cu=INR'));
     // Never prefilled: UPI apps reject prefilled intent payments above
     // ₹2,000 to personal ids, so the tenant always types the amount.
