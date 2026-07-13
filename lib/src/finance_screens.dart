@@ -44,7 +44,9 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     if (filter != 'All') items = items.where(_matches).toList();
     return Scaffold(
       appBar: AppBar(
-        title: Text(tenant ? 'My rent' : 'Rent collection'),
+        title: Text(tenant
+            ? AppLocalizations.of(context).t('nav.myRent')
+            : AppLocalizations.of(context).t('pay.title')),
         actions: [
           if (!tenant) ...[
             IconButton(
@@ -62,7 +64,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                         UpiSettingsScreen(pgId: state.activePg?.id ?? ''))),
                 icon: const Icon(Icons.account_balance_outlined)),
             IconButton(
-                tooltip: 'Export CSV',
+                tooltip: AppLocalizations.of(context).t('pay.exportCsv'),
                 onPressed: () => _exportCsv(state),
                 icon: const Icon(Icons.table_view_outlined)),
           ],
@@ -78,7 +80,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
           : FloatingActionButton.extended(
               onPressed: () => _recordPayment(state),
               icon: const Icon(Icons.add),
-              label: const Text('Record payment')),
+              label: Text(AppLocalizations.of(context).t('pay.record'))),
       body: ListView(
           padding: const EdgeInsets.fromLTRB(20, 10, 20, 100),
           children: [
@@ -86,19 +88,22 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
               Row(children: [
                 Expanded(
                     child: StatCard(
-                        label: 'Collected',
+                        label: AppLocalizations.of(context).t('dash.collected'),
                         value: inr(state.pgCollectedAmount),
                         icon: Icons.check_circle_outline,
                         tint: primary,
-                        caption: 'This month')),
+                        caption:
+                            AppLocalizations.of(context).t('dash.thisMonth'))),
                 const SizedBox(width: 12),
                 Expanded(
                     child: StatCard(
-                        label: 'Outstanding',
+                        label:
+                            AppLocalizations.of(context).t('dash.outstanding'),
                         value: inr(state.pgDueAmount),
                         icon: Icons.schedule,
                         tint: coral,
-                        caption: 'Needs follow-up')),
+                        caption:
+                            AppLocalizations.of(context).t('pay.followUp'))),
               ]),
               const SizedBox(height: 20),
             ] else ...[
@@ -109,7 +114,12 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                       child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(due == null ? 'ALL CAUGHT UP' : 'NEXT PAYMENT',
+                            Text(
+                                due == null
+                                    ? AppLocalizations.of(context)
+                                        .t('pay.caughtUp')
+                                    : AppLocalizations.of(context)
+                                        .t('pay.next'),
                                 style: const TextStyle(
                                     color: Colors.white54,
                                     fontSize: 11,
@@ -124,8 +134,8 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                             const SizedBox(height: 4),
                             Text(
                               due == null
-                                  ? 'No dues pending · Room ${state.currentTenantRoomLabel}'
-                                  : '${formatMonth(due.period)} · ${due.status == PaymentStatus.partial ? 'Balance after part payment' : 'Due ${formatDay(due.dueDate)}'} · Room ${state.currentTenantRoomLabel}',
+                                  ? '${AppLocalizations.of(context).t('pay.noDues')} · ${AppLocalizations.of(context).t('common.room')} ${state.currentTenantRoomLabel}'
+                                  : '${formatMonth(due.period)} · ${due.status == PaymentStatus.partial ? AppLocalizations.of(context).t('pay.afterPart') : '${AppLocalizations.of(context).t('rent.dueBy')} ${formatDay(due.dueDate)}'} · ${AppLocalizations.of(context).t('common.room')} ${state.currentTenantRoomLabel}',
                               style: const TextStyle(color: Colors.white60),
                             ),
                           ]))),
@@ -139,7 +149,8 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                         .map((e) => Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: ChoiceChip(
-                                label: Text(e),
+                                label: Text(AppLocalizations.of(context)
+                                    .status(e == 'All' ? 'All' : e)),
                                 selected: filter == e,
                                 onSelected: (_) => setState(() => filter = e))))
                         .toList())),
@@ -162,7 +173,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                             : state.tenantName(payment.tenantId),
                         style: const TextStyle(fontWeight: FontWeight.w700)),
                     subtitle: Text(
-                        '${formatMonth(payment.period)} · ${payment.status == PaymentStatus.paid ? 'Paid ${formatDay(payment.paidDate!)}' : 'Due ${formatDay(payment.dueDate)}'}'),
+                        '${formatMonth(payment.period)} · ${payment.status == PaymentStatus.paid ? '${AppLocalizations.of(context).t('status.paid')} ${formatDay(payment.paidDate!)}' : '${AppLocalizations.of(context).t('rent.dueBy')} ${formatDay(payment.dueDate)}'}'),
                     trailing: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.end,
@@ -178,9 +189,9 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                   ),
                 )),
             if (items.isEmpty)
-              const EmptyState(
+              EmptyState(
                   icon: Icons.receipt_long_outlined,
-                  title: 'No payments found'),
+                  title: AppLocalizations.of(context).t('pay.none')),
           ]),
     );
   }
@@ -199,9 +210,8 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     } catch (_) {
       await Clipboard.setData(ClipboardData(text: csv));
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content:
-              Text('CSV copied to clipboard — paste it into a spreadsheet.')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(AppLocalizations.of(context).t('pay.csvCopied'))));
     }
   }
 
@@ -220,9 +230,9 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const SheetHandle(),
-                      Text('Record a payment',
+                      Text(AppLocalizations.of(context).t('pay.recordTitle'),
                           style: Theme.of(context).textTheme.headlineMedium),
-                      const FormLabel('Tenant'),
+                      FormLabel(AppLocalizations.of(context).t('pay.tenant')),
                       DropdownButtonFormField<String>(
                         initialValue: tenantId,
                         items: scoped
@@ -235,12 +245,13 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                               '${state.roomById(state.tenantById(v)!.roomId)?.rent ?? 9000}';
                         }),
                       ),
-                      const FormLabel('Amount received'),
+                      FormLabel(
+                          AppLocalizations.of(context).t('pay.amountReceived')),
                       TextField(
                           controller: amount,
                           keyboardType: TextInputType.number,
                           decoration: const InputDecoration(prefixText: '₹ ')),
-                      const FormLabel('Payment method'),
+                      FormLabel(AppLocalizations.of(context).t('pay.method')),
                       DropdownButtonFormField<String>(
                           initialValue: method,
                           items: ['UPI', 'Cash', 'Bank transfer', 'Card']
@@ -259,7 +270,8 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                                 method: method);
                             Navigator.pop(context);
                           },
-                          child: const Text('Save & generate receipt')),
+                          child: Text(AppLocalizations.of(context)
+                              .t('pay.saveReceipt'))),
                     ])));
   }
 
@@ -272,21 +284,26 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
           const SheetHandle(),
           const Icon(Icons.apartment_rounded, color: primary, size: 38),
           const SizedBox(height: 8),
-          Text('PAYMENT RECEIPT',
+          Text(AppLocalizations.of(context).t('pay.receipt'),
               style: Theme.of(context).textTheme.titleLarge),
           Text(
               '${state.pgNameForTenant(payment.tenantId)} · Receipt #PGM-$ref'),
           const Divider(height: 30),
-          _receiptRow('Received from', state.tenantName(payment.tenantId)),
-          _receiptRow('For', formatMonth(payment.period)),
-          _receiptRow('Payment date',
+          _receiptRow(AppLocalizations.of(context).t('pay.receivedFrom'),
+              state.tenantName(payment.tenantId)),
+          _receiptRow(AppLocalizations.of(context).t('pay.forMonth'),
+              formatMonth(payment.period)),
+          _receiptRow(AppLocalizations.of(context).t('pay.date'),
               payment.paidDate == null ? '—' : formatDay(payment.paidDate!)),
-          if (payment.method != null) _receiptRow('Method', payment.method!),
-          _receiptRow('Status', payment.displayStatus),
+          if (payment.method != null)
+            _receiptRow(
+                AppLocalizations.of(context).t('pay.method'), payment.method!),
+          _receiptRow(AppLocalizations.of(context).t('pay.status'),
+              AppLocalizations.of(context).status(payment.displayStatus)),
           const Divider(height: 28),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            const Text('TOTAL PAID',
-                style: TextStyle(fontWeight: FontWeight.w800)),
+            Text(AppLocalizations.of(context).t('pay.totalPaid'),
+                style: const TextStyle(fontWeight: FontWeight.w800)),
             Text(inr(payment.amount),
                 style: Theme.of(context).textTheme.headlineMedium)
           ]),
@@ -297,14 +314,16 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                     onPressed: () =>
                         _exportReceipt(state, payment, ref, share: true),
                     icon: const Icon(Icons.share_outlined),
-                    label: const Text('Share'))),
+                    label:
+                        Text(AppLocalizations.of(context).t('common.share')))),
             const SizedBox(width: 8),
             Expanded(
                 child: FilledButton.icon(
                     onPressed: () =>
                         _exportReceipt(state, payment, ref, share: false),
                     icon: const Icon(Icons.download_outlined),
-                    label: const Text('Download'))),
+                    label: Text(
+                        AppLocalizations.of(context).t('common.download')))),
           ]),
         ]));
   }
@@ -334,8 +353,8 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
       }
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Sharing is not available on this device.')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(AppLocalizations.of(context).t('common.noShare'))));
     }
   }
 

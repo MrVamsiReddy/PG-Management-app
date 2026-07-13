@@ -35,10 +35,18 @@ Future<AppState> bootstrap() async {
 }
 
 /// Rebuilds the app when the OS light/dark setting flips, so
-/// ThemeMode.system (and the theme tokens) follow it live.
+/// ThemeMode.system (and the theme tokens) follow it live. Also re-fetches
+/// workspace data whenever the app returns to the foreground — the safety
+/// net for changes made while this device was asleep or offline.
 class _SystemThemeObserver with WidgetsBindingObserver {
   _SystemThemeObserver(this.state);
   final AppState state;
   @override
   void didChangePlatformBrightness() => state.systemThemeChanged();
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycleState) {
+    if (lifecycleState == AppLifecycleState.resumed && state.isLoggedIn) {
+      unawaited(state.refresh());
+    }
+  }
 }

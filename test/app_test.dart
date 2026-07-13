@@ -1155,6 +1155,17 @@ void main() {
         contains('Sign in'));
   });
 
+  test('live sync: realtime publication + workspace subscription', () {
+    final sql = File('supabase/013_realtime.sql').readAsStringSync();
+    expect(sql, contains('supabase_realtime'));
+    expect(sql, contains('app_data'));
+    expect(sql, contains('upi_submissions'));
+    final src = File('lib/src/app_state.dart').readAsStringSync();
+    expect(src, contains('onPostgresChanges'));
+    expect(src, contains('_subscribeRealtime'));
+    expect(src, contains('_unsubscribeRealtime'));
+  });
+
   test('the note migration adds the optional submission note', () {
     final sql = File('supabase/012_submission_note.sql').readAsStringSync();
     expect(sql, contains('upi_submissions'));
@@ -2164,13 +2175,13 @@ void main() {
 
     await tester.tap(tileFor(find.textContaining('RENT')));
     await settle(tester);
-    expect(find.text('My rent'), findsOneWidget);
+    expect(find.text('My Rent'), findsOneWidget);
     await tester.pageBack();
     await settle(tester);
 
     await tester.tap(tileFor(find.text('Raise issue')));
     await settle(tester);
-    expect(find.text('My requests'), findsOneWidget);
+    expect(find.text('My Requests'), findsOneWidget);
   });
 
   testWidgets('auth screen shows role portals and no demo or sign-up',

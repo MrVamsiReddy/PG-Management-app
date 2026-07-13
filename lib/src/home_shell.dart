@@ -125,7 +125,7 @@ class _HomeShellState extends State<HomeShell> {
           if (state.role != UserRole.tenant && state.activePg != null)
             Flexible(
               child: PopupMenuButton<String>(
-                tooltip: 'Switch property',
+                tooltip: AppLocalizations.of(context).t('pg.switch'),
                 onSelected: state.selectPg,
                 itemBuilder: (_) => state.pgs
                     .map((p) => PopupMenuItem(
@@ -174,7 +174,7 @@ class _HomeShellState extends State<HomeShell> {
         actions: [
           Stack(children: [
             IconButton(
-              tooltip: 'Notifications',
+              tooltip: AppLocalizations.of(context).t('nav.notifications'),
               onPressed: () => Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -323,18 +323,19 @@ class ProfileScreen extends StatelessWidget {
                       const SheetHandle(),
                       Text(l.t('profile.personal'),
                           style: Theme.of(context).textTheme.headlineMedium),
-                      const FormLabel('Full name'),
+                      FormLabel(
+                          AppLocalizations.of(context).t('form.fullName')),
                       TextField(
                           controller: name,
                           textCapitalization: TextCapitalization.words),
                       if (tenant) ...[
-                        const FormLabel('Phone number'),
+                        FormLabel(AppLocalizations.of(context).t('form.phone')),
                         TextField(
                             controller: phone,
                             keyboardType: TextInputType.phone),
                       ],
                       if (state.accountEmail != null) ...[
-                        const FormLabel('Email'),
+                        FormLabel(AppLocalizations.of(context).t('ten.email')),
                         TextField(
                             controller:
                                 TextEditingController(text: state.accountEmail),
@@ -378,9 +379,10 @@ class ProfileScreen extends StatelessWidget {
                             child: base64Image(doc, height: 180)),
                         const SizedBox(height: 12),
                       ] else
-                        const EmptyState(
+                        EmptyState(
                             icon: Icons.badge_outlined,
-                            title: 'No document uploaded yet'),
+                            title:
+                                AppLocalizations.of(context).t('prof.noDoc')),
                       OutlinedButton.icon(
                         onPressed: () async {
                           final picked = await pickImageBase64(context);
@@ -394,8 +396,9 @@ class ProfileScreen extends StatelessWidget {
                             ? Icons.upload_file_outlined
                             : Icons.cached),
                         label: Text(doc == null
-                            ? 'Upload document'
-                            : 'Replace document'),
+                            ? AppLocalizations.of(context).t('prof.uploadDoc')
+                            : AppLocalizations.of(context)
+                                .t('prof.replaceDoc')),
                       ),
                     ])));
   }

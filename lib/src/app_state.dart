@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -7,6 +8,10 @@ import 'package:supabase_flutter/supabase_flutter.dart'
         AuthException,
         FileOptions,
         FunctionException,
+        PostgresChangeEvent,
+        PostgresChangeFilter,
+        PostgresChangeFilterType,
+        RealtimeChannel,
         SupabaseClient,
         User,
         UserAttributes;
@@ -254,6 +259,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    _unsubscribeRealtime();
     try {
       await supabaseOrNull?.auth.signOut();
     } catch (_) {}
@@ -780,9 +786,68 @@ class AppState extends ChangeNotifier {
     await _loadAll();
     await _ensureMonthlyDuesAtStartup();
     await loadSubmissions();
+    _subscribeRealtime(supabaseOrNull!, workspaceOwnerId);
     isLoggedIn = true;
     notifyListeners();
     return null;
+  }
+
+  // ---- Live sync: any workspace write refreshes every open app ----
+
+  RealtimeChannel? _realtimeChannel;
+  Timer? _realtimeDebounce;
+
+  void _subscribeRealtime(SupabaseClient client, String ownerId) {
+    _unsubscribeRealtime();
+    // A save writes several rows at once — debounce into one reload.
+    void onChange(dynamic _) {
+      _realtimeDebounce?.cancel();
+      _realtimeDebounce = Timer(const Duration(milliseconds: 600), () async {
+        if (!isLoggedIn) return;
+        try {
+          await _loadAll();
+          await _ensureMonthlyDuesAtStartup();
+          await loadSubmissions();
+          notifyListeners();
+        } catch (_) {}
+      });
+    }
+
+    try {
+      _realtimeChannel = client.channel('workspace-$ownerId')
+        ..onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'app_data',
+            filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'owner_id',
+                value: ownerId),
+            callback: onChange)
+        ..onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'upi_submissions',
+            filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'owner_id',
+                value: ownerId),
+            callback: onChange)
+        ..subscribe();
+    } catch (_) {
+      _realtimeChannel = null;
+    }
+  }
+
+  void _unsubscribeRealtime() {
+    _realtimeDebounce?.cancel();
+    final channel = _realtimeChannel;
+    _realtimeChannel = null;
+    if (channel != null) {
+      try {
+        supabaseOrNull?.removeChannel(channel);
+      } catch (_) {}
+    }
   }
 
   /// Creates the tenant's login via the `invite` Edge Function: a temporary

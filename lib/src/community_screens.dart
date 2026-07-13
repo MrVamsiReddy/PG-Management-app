@@ -18,22 +18,24 @@ class VisitorsScreen extends StatelessWidget {
             .toList()
         : state.pgVisitors;
     return Scaffold(
-      appBar: AppBar(title: const Text('Visitors')),
+      appBar:
+          AppBar(title: Text(AppLocalizations.of(context).t('nav.visitors'))),
       floatingActionButton: FloatingActionButton.extended(
           onPressed: () => _addVisitor(context, state),
           icon: const Icon(Icons.person_add_alt),
-          label: const Text('Add visitor')),
+          label: Text(AppLocalizations.of(context).t('qa.addVisitor'))),
       body: ListView(
           padding: const EdgeInsets.fromLTRB(20, 10, 20, 100),
           children: [
             PageHeader(
-                title: 'Visitor log',
+                title: AppLocalizations.of(context).t('vis.log'),
                 subtitle:
-                    '${entries.where((e) => e.status == VisitorStatus.inside).length} inside · ${entries.where((e) => e.status == VisitorStatus.awaitingApproval).length} awaiting approval'),
+                    '${entries.where((e) => e.status == VisitorStatus.inside).length} ${AppLocalizations.of(context).t('status.inside').toLowerCase()} · ${entries.where((e) => e.status == VisitorStatus.awaitingApproval).length} ${AppLocalizations.of(context).t('status.awaiting').toLowerCase()}'),
             const SizedBox(height: 18),
             if (entries.isEmpty)
-              const EmptyState(
-                  icon: Icons.badge_outlined, title: 'No visitors yet'),
+              EmptyState(
+                  icon: Icons.badge_outlined,
+                  title: AppLocalizations.of(context).t('vis.none')),
             ...entries.map((visitor) => Card(
                   margin: const EdgeInsets.only(bottom: 10),
                   child: Padding(
@@ -53,7 +55,7 @@ class VisitorsScreen extends StatelessWidget {
                                     style: const TextStyle(
                                         fontWeight: FontWeight.w800)),
                                 Text(
-                                    'For ${state.tenantName(visitor.tenantId)} · ${visitor.purpose}',
+                                    '${AppLocalizations.of(context).t('vis.forTenant')} ${state.tenantName(visitor.tenantId)} · ${visitor.purpose}',
                                     style: const TextStyle(fontSize: 11))
                               ])),
                           StatusPill(visitor.status.label),
@@ -70,14 +72,16 @@ class VisitorsScreen extends StatelessWidget {
                             TextButton(
                                 onPressed: () => state.setVisitorStatus(
                                     visitor.id, VisitorStatus.declined),
-                                child: const Text('Decline')),
+                                child: Text(AppLocalizations.of(context)
+                                    .t('vis.decline'))),
                             FilledButton(
                                 onPressed: () => state.setVisitorStatus(
                                     visitor.id, VisitorStatus.inside),
                                 style: FilledButton.styleFrom(
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 13, vertical: 9)),
-                                child: const Text('Approve')),
+                                child: Text(AppLocalizations.of(context)
+                                    .t('vis.approve'))),
                           ] else if (visitor.status == VisitorStatus.inside)
                             OutlinedButton(
                                 onPressed: () => state.setVisitorStatus(
@@ -85,7 +89,8 @@ class VisitorsScreen extends StatelessWidget {
                                 style: OutlinedButton.styleFrom(
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 12, vertical: 8)),
-                                child: const Text('Check out')),
+                                child: Text(AppLocalizations.of(context)
+                                    .t('vis.checkOut'))),
                         ]),
                       ])),
                 )),
@@ -109,12 +114,13 @@ class VisitorsScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const SheetHandle(),
-                      Text('Pre-approve visitor',
+                      Text(AppLocalizations.of(context).t('vis.preApprove'),
                           style: Theme.of(context).textTheme.headlineMedium),
-                      const FormLabel('Visitor name'),
+                      FormLabel(AppLocalizations.of(context).t('vis.name')),
                       TextField(controller: name),
                       if (state.role != UserRole.tenant) ...[
-                        const FormLabel('Visiting tenant'),
+                        FormLabel(
+                            AppLocalizations.of(context).t('vis.visiting')),
                         DropdownButtonFormField<String>(
                             initialValue: tenantId,
                             items: scoped
@@ -124,11 +130,12 @@ class VisitorsScreen extends StatelessWidget {
                             onChanged: (v) =>
                                 setModalState(() => tenantId = v!)),
                       ],
-                      const FormLabel('Purpose'),
+                      FormLabel(AppLocalizations.of(context).t('vis.purpose')),
                       TextField(
                           controller: purpose,
-                          decoration: const InputDecoration(
-                              hintText: 'Family, friend, delivery...')),
+                          decoration: InputDecoration(
+                              hintText: AppLocalizations.of(context)
+                                  .t('vis.purposeHint'))),
                       const SizedBox(height: 20),
                       FilledButton(
                           onPressed: () {
@@ -141,7 +148,8 @@ class VisitorsScreen extends StatelessWidget {
                                     : purpose.text.trim());
                             Navigator.pop(context);
                           },
-                          child: const Text('Create visitor pass')),
+                          child: Text(AppLocalizations.of(context)
+                              .t('vis.createPass'))),
                     ])));
   }
 }
@@ -290,15 +298,16 @@ class AnnouncementsScreen extends StatelessWidget {
                       FormLabel(l.t('ann.titleLabel')),
                       TextField(
                           controller: title,
-                          decoration: const InputDecoration(
-                              hintText: 'Keep it clear and brief')),
+                          decoration: InputDecoration(
+                              hintText: AppLocalizations.of(context)
+                                  .t('ann.titleHint'))),
                       FormLabel(l.t('ann.messageLabel')),
                       TextField(
                           controller: body,
                           maxLines: 5,
-                          decoration: const InputDecoration(
-                              hintText:
-                                  'Write the update for your tenants...')),
+                          decoration: InputDecoration(
+                              hintText: AppLocalizations.of(context)
+                                  .t('ann.bodyHint'))),
                       FormLabel(l.t('ann.audience')),
                       DropdownButtonFormField<String?>(
                         initialValue: audience,
@@ -348,15 +357,17 @@ class NotificationsScreen extends StatelessWidget {
     // active property's managerial and workspace notifications.
     final items = state.visibleNotifications;
     return Scaffold(
-      appBar: AppBar(title: const Text('Notifications'), actions: [
-        TextButton(
-            onPressed: state.markAllNotificationsRead,
-            child: const Text('Mark all read'))
-      ]),
+      appBar: AppBar(
+          title: Text(AppLocalizations.of(context).t('nav.notifications')),
+          actions: [
+            TextButton(
+                onPressed: state.markAllNotificationsRead,
+                child: Text(AppLocalizations.of(context).t('ntf.markAll')))
+          ]),
       body: items.isEmpty
-          ? const EmptyState(
+          ? EmptyState(
               icon: Icons.notifications_none_rounded,
-              title: 'No notifications yet')
+              title: AppLocalizations.of(context).t('ntf.none'))
           : ListView.separated(
               padding: const EdgeInsets.fromLTRB(20, 10, 20, 40),
               itemCount: items.length,

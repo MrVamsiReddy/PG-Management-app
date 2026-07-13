@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'app_state.dart';
+import 'l10n.dart';
 import 'theme.dart';
 
 export 'format.dart';
@@ -18,12 +19,12 @@ class ManagerOnly extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (AppScope.of(context).role == UserRole.tenant) {
+      final l = AppLocalizations.of(context);
       return Scaffold(
-        appBar: AppBar(title: const Text('Not available')),
-        body: const Center(
+        appBar: AppBar(title: Text(l.t('common.notAvailable'))),
+        body: Center(
             child: EmptyState(
-                icon: Icons.lock_outline,
-                title: 'This area is for PG managers')),
+                icon: Icons.lock_outline, title: l.t('common.managersOnly'))),
       );
     }
     return child;
@@ -33,17 +34,18 @@ class ManagerOnly extends StatelessWidget {
 /// Camera/gallery chooser → picked image compressed and returned as base64
 /// (small enough to store inline), or null if cancelled or unavailable.
 Future<String?> pickImageBase64(BuildContext context) async {
+  final l = AppLocalizations.of(context);
   final source = await showModalBottomSheet<ImageSource>(
     context: context,
     builder: (context) => SafeArea(
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         ListTile(
             leading: const Icon(Icons.photo_camera_outlined),
-            title: const Text('Take a photo'),
+            title: Text(l.t('common.takePhoto')),
             onTap: () => Navigator.pop(context, ImageSource.camera)),
         ListTile(
             leading: const Icon(Icons.photo_library_outlined),
-            title: const Text('Choose from gallery'),
+            title: Text(l.t('common.fromGallery')),
             onTap: () => Navigator.pop(context, ImageSource.gallery)),
       ]),
     ),
@@ -208,7 +210,8 @@ class StatusPill extends StatelessWidget {
       decoration: BoxDecoration(
           color: color.withValues(alpha: .11),
           borderRadius: BorderRadius.circular(20)),
-      child: Text(text,
+      // Colors key off the English label above; the display is localized.
+      child: Text(AppLocalizations.of(context).status(text),
           style: TextStyle(
               color: color, fontWeight: FontWeight.w700, fontSize: 11)),
     );

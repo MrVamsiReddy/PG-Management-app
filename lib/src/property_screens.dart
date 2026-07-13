@@ -17,11 +17,11 @@ class PgListingsScreen extends StatelessWidget {
     final state = AppScope.of(context);
     return ManagerOnly(
         child: Scaffold(
-      appBar: AppBar(title: const Text('PG properties')),
+      appBar: AppBar(title: Text(AppLocalizations.of(context).t('pg.title'))),
       floatingActionButton: FloatingActionButton.extended(
           onPressed: () => _editPg(context, state),
           icon: const Icon(Icons.add),
-          label: const Text('Add PG')),
+          label: Text(AppLocalizations.of(context).t('pg.addShort'))),
       body: ListView.builder(
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 100),
         itemCount: state.pgs.length,
@@ -38,8 +38,9 @@ class PgListingsScreen extends StatelessWidget {
                   ? null
                   : () {
                       state.selectPg(pg.id);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Now managing ${pg.name}')));
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(
+                              '${AppLocalizations.of(context).t('pg.nowManaging')} ${pg.name}')));
                     },
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -89,7 +90,8 @@ class PgListingsScreen extends StatelessWidget {
                                       backgroundColor: faint)),
                               const SizedBox(width: 6),
                               IconButton(
-                                  tooltip: 'Delete PG',
+                                  tooltip: AppLocalizations.of(context)
+                                      .t('pg.deleteTip'),
                                   onPressed: () =>
                                       _deletePg(context, state, pg),
                                   icon: const Icon(Icons.delete_outline,
@@ -126,11 +128,13 @@ class PgListingsScreen extends StatelessWidget {
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text('$occupancy% occupied',
+                                  Text(
+                                      '$occupancy% ${AppLocalizations.of(context).t('pg.occupiedWord')}',
                                       style: const TextStyle(
                                           fontWeight: FontWeight.w700,
                                           fontSize: 12)),
-                                  Text('${pg.occupied} of ${pg.beds} beds',
+                                  Text(
+                                      '${pg.occupied}/${pg.beds} ${AppLocalizations.of(context).t('dash.beds')}',
                                       style: const TextStyle(fontSize: 12))
                                 ]),
                             const Divider(height: 26),
@@ -142,8 +146,10 @@ class PgListingsScreen extends StatelessWidget {
                               if (active)
                                 const StatusPill('Managing')
                               else
-                                const Text('Tap to manage',
-                                    style: TextStyle(
+                                Text(
+                                    AppLocalizations.of(context)
+                                        .t('pg.tapManage'),
+                                    style: const TextStyle(
                                         fontSize: 11,
                                         color: primary,
                                         fontWeight: FontWeight.w700)),
@@ -160,27 +166,28 @@ class PgListingsScreen extends StatelessWidget {
 
   void _deletePg(BuildContext context, AppState state, Pg pg) async {
     final messenger = ScaffoldMessenger.of(context);
+    final deletedWord = AppLocalizations.of(context).t('common.deleted');
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text('Delete ${pg.name}?'),
-        content: const Text(
-            'This removes the property, its rooms and its announcements. It is blocked while tenants live there. This cannot be undone.'),
+        title: Text(
+            '${AppLocalizations.of(context).t('common.delete')} ${pg.name}?'),
+        content: Text(AppLocalizations.of(context).t('pg.deleteBody')),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Cancel')),
+              child: Text(AppLocalizations.of(context).t('common.cancel'))),
           FilledButton(
               style: FilledButton.styleFrom(backgroundColor: coral),
               onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Delete')),
+              child: Text(AppLocalizations.of(context).t('common.delete'))),
         ],
       ),
     );
     if (confirmed != true) return;
     final error = state.removePg(pg.id);
-    messenger
-        .showSnackBar(SnackBar(content: Text(error ?? '${pg.name} deleted.')));
+    messenger.showSnackBar(
+        SnackBar(content: Text(error ?? '${pg.name} $deletedWord')));
   }
 
   void _editPg(BuildContext context, AppState state, {Pg? existing}) {
@@ -200,27 +207,27 @@ class PgListingsScreen extends StatelessWidget {
                       const SheetHandle(),
                       Text(
                           existing == null
-                              ? 'Add a PG property'
-                              : 'Edit property',
+                              ? AppLocalizations.of(context).t('pg.add')
+                              : AppLocalizations.of(context).t('pg.edit'),
                           style: Theme.of(context).textTheme.headlineMedium),
-                      const FormLabel('Property name'),
+                      FormLabel(AppLocalizations.of(context).t('pg.name')),
                       TextField(
                           controller: name,
                           decoration: const InputDecoration(
                               hintText: 'e.g. Indiranagar PG')),
-                      const FormLabel('Full address'),
+                      FormLabel(AppLocalizations.of(context).t('pg.address')),
                       TextField(
                           controller: address,
                           maxLines: 2,
                           decoration: const InputDecoration(
                               hintText: 'Street, area and city')),
-                      const FormLabel('Total beds'),
+                      FormLabel(AppLocalizations.of(context).t('pg.totalBeds')),
                       TextField(
                           controller: beds,
                           keyboardType: TextInputType.number,
                           decoration: const InputDecoration(
                               prefixIcon: Icon(Icons.bed_outlined))),
-                      const FormLabel('Amenities'),
+                      FormLabel(AppLocalizations.of(context).t('pg.amenities')),
                       TextField(controller: amenities, maxLines: 2),
                       const SizedBox(height: 14),
                       if (photo != null) ...[
@@ -240,8 +247,8 @@ class PgListingsScreen extends StatelessWidget {
                             ? Icons.add_a_photo_outlined
                             : Icons.check_circle_outline),
                         label: Text(photo == null
-                            ? 'Add property photo'
-                            : 'Photo added · tap to change'),
+                            ? AppLocalizations.of(context).t('pg.addPhoto')
+                            : AppLocalizations.of(context).t('pg.photoAdded')),
                       ),
                       const SizedBox(height: 18),
                       FilledButton(
@@ -269,8 +276,8 @@ class PgListingsScreen extends StatelessWidget {
                             Navigator.pop(context);
                           },
                           child: Text(existing == null
-                              ? 'Create property'
-                              : 'Save changes')),
+                              ? AppLocalizations.of(context).t('pg.create')
+                              : AppLocalizations.of(context).t('common.save'))),
                     ]))));
   }
 }
@@ -293,17 +300,18 @@ class _RoomsScreenState extends State<RoomsScreen> {
     final rooms = state.pgRooms.where((e) => e.floor == selected).toList();
     return ManagerOnly(
         child: Scaffold(
-      appBar: AppBar(title: const Text('Rooms & beds')),
+      appBar: AppBar(title: Text(AppLocalizations.of(context).t('room.title'))),
       floatingActionButton: FloatingActionButton.extended(
           onPressed: () => _addRoom(context, state),
           icon: const Icon(Icons.add),
-          label: const Text('Add room')),
+          label: Text(AppLocalizations.of(context).t('room.add'))),
       body: ListView(
           padding: const EdgeInsets.fromLTRB(20, 10, 20, 100),
           children: [
-            const PageHeader(
-                title: 'Bed occupancy',
-                subtitle: 'Live floor-wise availability'),
+            PageHeader(
+                title: AppLocalizations.of(context).t('room.occupancy'),
+                subtitle:
+                    AppLocalizations.of(context).t('room.liveAvailability')),
             const SizedBox(height: 18),
             if (floors.isNotEmpty)
               SizedBox(
@@ -360,9 +368,9 @@ class _RoomsScreenState extends State<RoomsScreen> {
                   ),
                 )),
             if (rooms.isEmpty)
-              const EmptyState(
+              EmptyState(
                   icon: Icons.meeting_room_outlined,
-                  title: 'No rooms on this floor'),
+                  title: AppLocalizations.of(context).t('room.noneFloor')),
           ]),
     ));
   }
@@ -383,37 +391,47 @@ class _RoomsScreenState extends State<RoomsScreen> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                       const SheetHandle(),
-                      Text('Add a room',
+                      Text(AppLocalizations.of(context).t('room.addTitle'),
                           style: Theme.of(context).textTheme.headlineMedium),
                       const SizedBox(height: 6),
                       Text('In ${pg.name} — switch property from the top bar.',
                           style: TextStyle(fontSize: 12, color: subtle)),
-                      const FormLabel('Room number'),
+                      FormLabel(AppLocalizations.of(context).t('room.number')),
                       TextField(
                           controller: number,
                           decoration:
                               const InputDecoration(hintText: 'e.g. 204')),
-                      const FormLabel('Floor'),
+                      FormLabel(AppLocalizations.of(context).t('room.floor')),
                       DropdownButtonFormField<int>(
                           initialValue: roomFloor,
                           items: [1, 2, 3, 4, 5]
                               .map((e) => DropdownMenuItem(
-                                  value: e, child: Text('Floor $e')))
+                                  value: e,
+                                  child: Text(
+                                      '${AppLocalizations.of(context).t('room.floor')} $e')))
                               .toList(),
                           onChanged: (v) =>
                               setModalState(() => roomFloor = v!)),
-                      const FormLabel('Sharing type'),
+                      FormLabel(AppLocalizations.of(context).t('room.sharing')),
                       DropdownButtonFormField<int>(
                           initialValue: beds,
-                          items: const [
-                            DropdownMenuItem(value: 1, child: Text('Single')),
+                          items: [
                             DropdownMenuItem(
-                                value: 2, child: Text('Double sharing')),
+                                value: 1,
+                                child: Text(AppLocalizations.of(context)
+                                    .t('share.single'))),
                             DropdownMenuItem(
-                                value: 3, child: Text('Triple sharing'))
+                                value: 2,
+                                child: Text(AppLocalizations.of(context)
+                                    .t('share.double'))),
+                            DropdownMenuItem(
+                                value: 3,
+                                child: Text(AppLocalizations.of(context)
+                                    .t('share.triple')))
                           ],
                           onChanged: (v) => setModalState(() => beds = v!)),
-                      const FormLabel('Monthly rent per bed'),
+                      FormLabel(
+                          AppLocalizations.of(context).t('room.rentPerBed')),
                       TextField(
                           controller: rent,
                           keyboardType: TextInputType.number,
@@ -434,7 +452,8 @@ class _RoomsScreenState extends State<RoomsScreen> {
                             setState(() => floor = roomFloor);
                             Navigator.pop(context);
                           },
-                          child: const Text('Add room')),
+                          child:
+                              Text(AppLocalizations.of(context).t('room.add'))),
                     ]))));
   }
 }
@@ -450,7 +469,7 @@ class RoomMenuButton extends StatelessWidget {
     final state = AppScope.of(context);
     return PopupMenuButton<String>(
       icon: const Icon(Icons.more_vert),
-      tooltip: 'Room options',
+      tooltip: AppLocalizations.of(context).t('room.options'),
       onSelected: (v) {
         switch (v) {
           case 'edit':
@@ -463,13 +482,20 @@ class RoomMenuButton extends StatelessWidget {
             _deleteRoom(context, state, room, onDeleted);
         }
       },
-      itemBuilder: (_) => const [
-        PopupMenuItem(value: 'edit', child: Text('Edit room')),
-        PopupMenuItem(value: 'sharing', child: Text('Edit sharing type')),
-        PopupMenuItem(value: 'rent', child: Text('Edit current rent')),
+      itemBuilder: (_) => [
+        PopupMenuItem(
+            value: 'edit',
+            child: Text(AppLocalizations.of(context).t('room.editRoom'))),
+        PopupMenuItem(
+            value: 'sharing',
+            child: Text(AppLocalizations.of(context).t('room.editSharing'))),
+        PopupMenuItem(
+            value: 'rent',
+            child: Text(AppLocalizations.of(context).t('room.editRent'))),
         PopupMenuItem(
             value: 'delete',
-            child: Text('Delete room', style: TextStyle(color: coral))),
+            child: Text(AppLocalizations.of(context).t('room.delete'),
+                style: const TextStyle(color: coral))),
       ],
     );
   }
@@ -482,15 +508,15 @@ void _editRoomDialog(BuildContext context, AppState state, Room room) {
   showDialog<void>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: const Text('Edit room'),
+      title: Text(AppLocalizations.of(context).t('room.editRoom')),
       content: StatefulBuilder(
         builder: (context, setLocal) => Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const FormLabel('Room number'),
+              FormLabel(AppLocalizations.of(context).t('room.number')),
               TextField(controller: number),
-              const FormLabel('Floor'),
+              FormLabel(AppLocalizations.of(context).t('room.floor')),
               TextField(
                 keyboardType: TextInputType.number,
                 controller: TextEditingController(text: '$floor'),
@@ -501,7 +527,7 @@ void _editRoomDialog(BuildContext context, AppState state, Room room) {
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel')),
+            child: Text(AppLocalizations.of(context).t('common.cancel'))),
         FilledButton(
             onPressed: () {
               final error =
@@ -511,7 +537,7 @@ void _editRoomDialog(BuildContext context, AppState state, Room room) {
                 messenger.showSnackBar(SnackBar(content: Text(error)));
               }
             },
-            child: const Text('Save')),
+            child: Text(AppLocalizations.of(context).t('common.save'))),
       ],
     ),
   );
@@ -523,15 +549,23 @@ void _editSharingDialog(BuildContext context, AppState state, Room room) {
   showDialog<void>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: const Text('Edit sharing type'),
+      title: Text(AppLocalizations.of(context).t('room.editSharing')),
       content: StatefulBuilder(
         builder: (context, setLocal) => DropdownButtonFormField<int>(
           initialValue: beds,
-          items: const [
-            DropdownMenuItem(value: 1, child: Text('Single')),
-            DropdownMenuItem(value: 2, child: Text('Double sharing')),
-            DropdownMenuItem(value: 3, child: Text('Triple sharing')),
-            DropdownMenuItem(value: 4, child: Text('Four sharing')),
+          items: [
+            DropdownMenuItem(
+                value: 1,
+                child: Text(AppLocalizations.of(context).t('share.single'))),
+            DropdownMenuItem(
+                value: 2,
+                child: Text(AppLocalizations.of(context).t('share.double'))),
+            DropdownMenuItem(
+                value: 3,
+                child: Text(AppLocalizations.of(context).t('share.triple'))),
+            DropdownMenuItem(
+                value: 4,
+                child: Text(AppLocalizations.of(context).t('share.four'))),
           ],
           onChanged: (v) => setLocal(() => beds = v ?? beds),
         ),
@@ -539,7 +573,7 @@ void _editSharingDialog(BuildContext context, AppState state, Room room) {
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel')),
+            child: Text(AppLocalizations.of(context).t('common.cancel'))),
         FilledButton(
             onPressed: () {
               final error = state.setRoomBeds(room.id, beds);
@@ -548,7 +582,7 @@ void _editSharingDialog(BuildContext context, AppState state, Room room) {
                 messenger.showSnackBar(SnackBar(content: Text(error)));
               }
             },
-            child: const Text('Save')),
+            child: Text(AppLocalizations.of(context).t('common.save'))),
       ],
     ),
   );
@@ -560,7 +594,7 @@ void _editRentDialog(BuildContext context, AppState state, Room room) {
   showDialog<void>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: const Text('Edit current rent'),
+      title: Text(AppLocalizations.of(context).t('room.editRent')),
       content: Column(mainAxisSize: MainAxisSize.min, children: [
         TextField(
             controller: rent,
@@ -573,7 +607,7 @@ void _editRentDialog(BuildContext context, AppState state, Room room) {
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel')),
+            child: Text(AppLocalizations.of(context).t('common.cancel'))),
         FilledButton(
             onPressed: () {
               final value = int.tryParse(rent.text) ?? 0;
@@ -583,7 +617,7 @@ void _editRentDialog(BuildContext context, AppState state, Room room) {
               messenger
                   .showSnackBar(const SnackBar(content: Text('Rent updated.')));
             },
-            child: const Text('Save')),
+            child: Text(AppLocalizations.of(context).t('common.save'))),
       ],
     ),
   );
@@ -592,6 +626,8 @@ void _editRentDialog(BuildContext context, AppState state, Room room) {
 void _deleteRoom(BuildContext context, AppState state, Room room,
     VoidCallback? onDeleted) async {
   final messenger = ScaffoldMessenger.of(context);
+  final roomWord = AppLocalizations.of(context).t('common.room');
+  final deletedWord = AppLocalizations.of(context).t('common.deleted');
   if (room.occupied > 0 || state.takenBeds(room.id).isNotEmpty) {
     messenger.showSnackBar(SnackBar(
         content: Text(
@@ -601,24 +637,24 @@ void _deleteRoom(BuildContext context, AppState state, Room room,
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: Text('Delete room ${room.number}?'),
-      content: const Text(
-          'This removes the room and its empty beds. This cannot be undone.'),
+      title: Text(
+          '${AppLocalizations.of(context).t('room.delete')} ${room.number}?'),
+      content: Text(AppLocalizations.of(context).t('room.deleteBody')),
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel')),
+            child: Text(AppLocalizations.of(context).t('common.cancel'))),
         FilledButton(
             style: FilledButton.styleFrom(backgroundColor: coral),
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Delete')),
+            child: Text(AppLocalizations.of(context).t('common.delete'))),
       ],
     ),
   );
   if (confirmed != true) return;
   final error = state.removeRoom(room.id);
-  messenger.showSnackBar(
-      SnackBar(content: Text(error ?? 'Room ${room.number} deleted.')));
+  messenger.showSnackBar(SnackBar(
+      content: Text(error ?? '$roomWord ${room.number} $deletedWord')));
   if (error == null) onDeleted?.call();
 }
 
@@ -633,8 +669,9 @@ class RoomDetailsScreen extends StatelessWidget {
     if (room == null) {
       return Scaffold(
         appBar: AppBar(),
-        body: const EmptyState(
-            icon: Icons.meeting_room_outlined, title: 'Room not found'),
+        body: EmptyState(
+            icon: Icons.meeting_room_outlined,
+            title: AppLocalizations.of(context).t('room.notFound')),
       );
     }
     final occupants = state.tenants.where((t) => t.roomId == roomId).toList();
@@ -656,22 +693,27 @@ class RoomDetailsScreen extends StatelessWidget {
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _detail('Floor', 'Floor ${room.floor}'),
-                    _detail('Sharing type', room.type),
-                    _detail('Current rent', '${inr(room.rent)} / bed / month'),
-                    _detail('Beds', '${room.beds}'),
-                    _detail('Occupancy',
+                    _detail(AppLocalizations.of(context).t('room.floor'),
+                        '${AppLocalizations.of(context).t('room.floor')} ${room.floor}'),
+                    _detail(AppLocalizations.of(context).t('room.sharing'),
+                        room.type),
+                    _detail(AppLocalizations.of(context).t('room.currentRent'),
+                        '${inr(room.rent)} ${AppLocalizations.of(context).t('room.perBedMonth')}'),
+                    _detail(AppLocalizations.of(context).t('dash.beds'),
+                        '${room.beds}'),
+                    _detail(AppLocalizations.of(context).t('dash.occupancy'),
                         '${room.occupied} filled · $free available'),
                   ]),
             ),
           ),
           const SizedBox(height: 18),
-          Text('Assigned tenants',
+          Text(AppLocalizations.of(context).t('room.assigned'),
               style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 8),
           if (occupants.isEmpty)
-            const EmptyState(
-                icon: Icons.person_outline, title: 'No tenants in this room')
+            EmptyState(
+                icon: Icons.person_outline,
+                title: AppLocalizations.of(context).t('room.noTenants'))
           else
             ...occupants.map((t) => Card(
                   margin: const EdgeInsets.only(bottom: 8),
@@ -722,11 +764,11 @@ class _TenantsScreenState extends State<TenantsScreen> {
             .toList();
     return ManagerOnly(
         child: Scaffold(
-      appBar: AppBar(title: const Text('Tenants')),
+      appBar: AppBar(title: Text(AppLocalizations.of(context).t('ten.title'))),
       floatingActionButton: FloatingActionButton.extended(
           onPressed: () => _onboard(context, state),
           icon: const Icon(Icons.person_add_alt_1),
-          label: const Text('Onboard')),
+          label: Text(AppLocalizations.of(context).t('ten.onboard'))),
       body: ListView(
           padding: const EdgeInsets.fromLTRB(20, 10, 20, 100),
           children: [
@@ -737,14 +779,15 @@ class _TenantsScreenState extends State<TenantsScreen> {
             const SizedBox(height: 18),
             TextField(
                 onChanged: (value) => setState(() => query = value),
-                decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.search),
-                    hintText: 'Search by name, room or phone')),
+                decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.search),
+                    hintText:
+                        AppLocalizations.of(context).t('ten.searchHint'))),
             const SizedBox(height: 14),
             if (results.isEmpty)
-              const EmptyState(
+              EmptyState(
                   icon: Icons.person_search_outlined,
-                  title: 'No tenants match your search'),
+                  title: AppLocalizations.of(context).t('ten.noMatch')),
             ...results.map((tenant) => Card(
                   margin: const EdgeInsets.only(bottom: 10),
                   child: ExpansionTile(
@@ -768,11 +811,20 @@ class _TenantsScreenState extends State<TenantsScreen> {
                                 const Divider(height: 1),
                                 const SizedBox(height: 10),
                                 if ((tenant.email ?? '').isNotEmpty)
-                                  _detail(Icons.mail_outline, 'Email',
+                                  _detail(
+                                      Icons.mail_outline,
+                                      AppLocalizations.of(context)
+                                          .t('ten.email'),
                                       tenant.email!),
                                 _detail(
-                                    Icons.call_outlined, 'Phone', tenant.phone),
-                                _detail(Icons.calendar_today_outlined, 'Joined',
+                                    Icons.call_outlined,
+                                    AppLocalizations.of(context)
+                                        .t('form.phone'),
+                                    tenant.phone),
+                                _detail(
+                                    Icons.calendar_today_outlined,
+                                    AppLocalizations.of(context)
+                                        .t('ten.joined'),
                                     formatFullDate(tenant.joinDate)),
                                 _detail(Icons.verified_user_outlined, 'KYC',
                                     tenant.kyc.label),
@@ -783,7 +835,9 @@ class _TenantsScreenState extends State<TenantsScreen> {
                                           onPressed: () => _call(tenant.phone),
                                           icon: const Icon(Icons.call_outlined,
                                               size: 18),
-                                          label: const Text('Call'))),
+                                          label: Text(
+                                              AppLocalizations.of(context)
+                                                  .t('ten.call')))),
                                   if (tenant.kycDoc != null) ...[
                                     const SizedBox(width: 8),
                                     Expanded(
@@ -979,8 +1033,8 @@ class _TenantsScreenState extends State<TenantsScreen> {
   void _onboard(BuildContext context, AppState state) {
     final messenger = ScaffoldMessenger.of(context);
     if (state.pgs.isEmpty) {
-      messenger
-          .showSnackBar(const SnackBar(content: Text('Create a PG first.')));
+      messenger.showSnackBar(SnackBar(
+          content: Text(AppLocalizations.of(context).t('ten.pgFirst'))));
       return;
     }
 
@@ -1017,12 +1071,11 @@ class _TenantsScreenState extends State<TenantsScreen> {
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             const SheetHandle(),
-            Text('Onboard tenant',
+            Text(AppLocalizations.of(context).t('ten.onboardTitle'),
                 style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height: 6),
-            const Text(
-                'Select the room and set its sharing type and rent — the tenant inherits them.'),
-            const FormLabel('Full name'),
+            Text(AppLocalizations.of(context).t('ten.onboardSub')),
+            FormLabel(AppLocalizations.of(context).t('form.fullName')),
             TextFormField(
               controller: name,
               textCapitalization: TextCapitalization.words,
@@ -1030,27 +1083,27 @@ class _TenantsScreenState extends State<TenantsScreen> {
                   ? 'Enter the tenant\'s name'
                   : null,
             ),
-            const FormLabel('Phone number'),
+            FormLabel(AppLocalizations.of(context).t('form.phone')),
             TextFormField(
               controller: phone,
               keyboardType: TextInputType.phone,
               validator: (v) =>
                   (v == null || v.replaceAll(RegExp(r'[^0-9]'), '').length < 10)
-                      ? 'Enter a valid 10-digit number'
+                      ? AppLocalizations.of(context).t('form.phoneInvalid')
                       : null,
             ),
-            const FormLabel('Email address'),
+            FormLabel(AppLocalizations.of(context).t('ten.email')),
             TextFormField(
               controller: email,
               keyboardType: TextInputType.emailAddress,
               autocorrect: false,
-              decoration:
-                  const InputDecoration(hintText: 'Used for their app invite'),
+              decoration: InputDecoration(
+                  hintText: AppLocalizations.of(context).t('ten.emailHint')),
               validator: (v) {
                 final e = (v ?? '').trim();
                 return e.contains('@') && e.contains('.')
                     ? null
-                    : 'Enter a valid email address';
+                    : AppLocalizations.of(context).t('form.emailInvalid');
               },
             ),
             const FormLabel('PG'),
@@ -1065,7 +1118,7 @@ class _TenantsScreenState extends State<TenantsScreen> {
                 roomChoice = newRoom;
               }),
             ),
-            const FormLabel('Room'),
+            FormLabel(AppLocalizations.of(context).t('common.room')),
             DropdownButtonFormField<String>(
               initialValue: roomChoice,
               items: [
@@ -1080,8 +1133,10 @@ class _TenantsScreenState extends State<TenantsScreen> {
                         style: full ? TextStyle(color: subtle) : null),
                   );
                 }),
-                const DropdownMenuItem(
-                    value: newRoom, child: Text('＋ New room')),
+                DropdownMenuItem(
+                    value: newRoom,
+                    child: Text(
+                        '＋ ${AppLocalizations.of(context).t('room.add')}')),
               ],
               onChanged: (v) => setModalState(() {
                 roomChoice = v!;
@@ -1091,11 +1146,11 @@ class _TenantsScreenState extends State<TenantsScreen> {
               }),
             ),
             if (isNew) ...[
-              const FormLabel('Room number'),
+              FormLabel(AppLocalizations.of(context).t('room.number')),
               TextFormField(
                 controller: roomNumber,
                 validator: (v) => (v == null || v.trim().isEmpty)
-                    ? 'Enter a room number'
+                    ? AppLocalizations.of(context).t('room.numberReq')
                     : null,
               ),
               Row(children: [
@@ -1103,7 +1158,7 @@ class _TenantsScreenState extends State<TenantsScreen> {
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                      const FormLabel('Floor'),
+                      FormLabel(AppLocalizations.of(context).t('room.floor')),
                       TextFormField(
                           controller: floorCtl,
                           keyboardType: TextInputType.number),
@@ -1113,20 +1168,32 @@ class _TenantsScreenState extends State<TenantsScreen> {
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                      const FormLabel('Sharing type'),
+                      FormLabel(AppLocalizations.of(context).t('room.sharing')),
                       DropdownButtonFormField<int>(
                         initialValue: sharing,
-                        items: const [
-                          DropdownMenuItem(value: 1, child: Text('Single')),
-                          DropdownMenuItem(value: 2, child: Text('Double')),
-                          DropdownMenuItem(value: 3, child: Text('Triple')),
-                          DropdownMenuItem(value: 4, child: Text('Four')),
+                        items: [
+                          DropdownMenuItem(
+                              value: 1,
+                              child: Text(AppLocalizations.of(context)
+                                  .t('share.single'))),
+                          DropdownMenuItem(
+                              value: 2,
+                              child: Text(AppLocalizations.of(context)
+                                  .t('share.double'))),
+                          DropdownMenuItem(
+                              value: 3,
+                              child: Text(AppLocalizations.of(context)
+                                  .t('share.triple'))),
+                          DropdownMenuItem(
+                              value: 4,
+                              child: Text(AppLocalizations.of(context)
+                                  .t('share.four'))),
                         ],
                         onChanged: (v) => setModalState(() => sharing = v ?? 2),
                       ),
                     ])),
               ]),
-              const FormLabel('Current room rent'),
+              FormLabel(AppLocalizations.of(context).t('room.currentRent')),
               TextFormField(
                 controller: rent,
                 keyboardType: TextInputType.number,
@@ -1146,22 +1213,24 @@ class _TenantsScreenState extends State<TenantsScreen> {
                         color: primary)),
               ),
             ],
-            const FormLabel('Bed label'),
+            FormLabel(AppLocalizations.of(context).t('ten.bed')),
             TextFormField(
               controller: bed,
               textCapitalization: TextCapitalization.characters,
               decoration: const InputDecoration(hintText: 'e.g. B'),
               validator: (v) {
                 final b = (v ?? '').trim();
-                if (b.isEmpty) return 'Enter a bed label';
+                if (b.isEmpty) {
+                  return AppLocalizations.of(context).t('ten.bedReq');
+                }
                 if (!isNew &&
                     state.takenBeds(roomChoice).contains(b.toUpperCase())) {
-                  return 'That bed is already taken in this room';
+                  return AppLocalizations.of(context).t('ten.bedTaken');
                 }
                 return null;
               },
             ),
-            const FormLabel('Identity document'),
+            FormLabel(AppLocalizations.of(context).t('ten.kycDoc')),
             OutlinedButton.icon(
               onPressed: () async {
                 final picked = await pickImageBase64(context);
@@ -1173,17 +1242,19 @@ class _TenantsScreenState extends State<TenantsScreen> {
                   ? Icons.upload_file_outlined
                   : Icons.check_circle_outline),
               label: Text(kycDoc == null
-                  ? 'Upload Aadhaar / passport'
-                  : 'Document attached · tap to change'),
+                  ? AppLocalizations.of(context).t('ten.uploadKyc')
+                  : AppLocalizations.of(context).t('ten.kycAttached')),
             ),
             const SizedBox(height: 16),
             FilledButton(
                 onPressed: () async {
+                  final emailedWord =
+                      AppLocalizations.of(context).t('inv.emailed');
                   if (!formKey.currentState!.validate()) return;
                   if (kycDoc == null) {
-                    messenger.showSnackBar(const SnackBar(
-                        content:
-                            Text('Upload the identity document to continue.')));
+                    messenger.showSnackBar(SnackBar(
+                        content: Text(AppLocalizations.of(context)
+                            .t('ten.kycRequired'))));
                     return;
                   }
                   final roomId = isNew
@@ -1208,7 +1279,7 @@ class _TenantsScreenState extends State<TenantsScreen> {
                   Navigator.pop(context);
                   messenger.showSnackBar(SnackBar(
                       content: Text(
-                          '${name.text.trim()} onboarded to room ${state.roomNumber(roomId)}.')));
+                          '${name.text.trim()} ${AppLocalizations.of(context).t('ten.onboardedTo')} ${state.roomNumber(roomId)}.')));
                   // The invite is created and emailed automatically; the
                   // share sheet stays as the fallback when email delivery
                   // is unavailable.
@@ -1221,13 +1292,14 @@ class _TenantsScreenState extends State<TenantsScreen> {
                   }
                   if (result.emailSent) {
                     messenger.showSnackBar(SnackBar(
-                        content: Text('Invite emailed to ${result.email}.')));
+                        content: Text('$emailedWord ${result.email}')));
                   } else {
                     await _shareInvite(
                         messenger, state, tenant, result.email ?? '', result);
                   }
                 },
-                child: const Text('Onboard tenant')),
+                child:
+                    Text(AppLocalizations.of(context).t('ten.onboardTitle'))),
           ]),
         ),
       );

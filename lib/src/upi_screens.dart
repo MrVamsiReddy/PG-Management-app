@@ -274,9 +274,10 @@ Future<void> _openUpiApp(ScaffoldMessengerState messenger, UpiSettings s,
         webOnlyWindowName: '_self');
     if (!ok) throw Exception();
   } catch (_) {
-    messenger.showSnackBar(const SnackBar(
-        content: Text(
-            'That UPI app did not open — try another one, or pay using the ID shown above.')));
+    if (!messenger.mounted) return;
+    messenger.showSnackBar(SnackBar(
+        content:
+            Text(AppLocalizations.of(messenger.context).t('upi.launchFail'))));
   }
 }
 
@@ -463,7 +464,7 @@ class _UpiSettingsScreenState extends State<UpiSettingsScreen> {
                       decoration: InputDecoration(
                           hintText: 'name@bank', labelText: l.t('upi.upiId'))),
                   const SizedBox(height: 12),
-                  const FormLabel('Payee'),
+                  FormLabel(AppLocalizations.of(context).t('upi.payee')),
                   TextField(
                       controller: _payee,
                       decoration:

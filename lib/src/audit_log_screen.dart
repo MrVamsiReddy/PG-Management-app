@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
+import 'l10n.dart';
 import 'widgets.dart';
 
 class AuditLogScreen extends StatefulWidget {
@@ -38,7 +39,7 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
     final state = AppScope.of(context);
     _future ??= state.loadAuditLogs();
     return Scaffold(
-      appBar: AppBar(title: const Text('Audit log')),
+      appBar: AppBar(title: Text(AppLocalizations.of(context).t('adm.audit'))),
       body: RefreshIndicator(
         onRefresh: () async => setState(() => _future = state.loadAuditLogs()),
         child: FutureBuilder<List<AuditLog>>(
@@ -49,9 +50,11 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
             }
             final logs = snap.data ?? [];
             if (logs.isEmpty) {
-              return ListView(children: const [
-                SizedBox(height: 80),
-                EmptyState(icon: Icons.history, title: 'No activity yet'),
+              return ListView(children: [
+                const SizedBox(height: 80),
+                EmptyState(
+                    icon: Icons.history,
+                    title: AppLocalizations.of(context).t('adm.noActivity')),
               ]);
             }
             return ListView.builder(

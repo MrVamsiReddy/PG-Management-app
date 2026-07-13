@@ -126,8 +126,8 @@ class SettingsScreen extends StatelessWidget {
                               borderRadius: BorderRadius.circular(10)),
                           child: const Icon(Icons.history,
                               color: primary, size: 21)),
-                      title: const Text('Activity log',
-                          style: TextStyle(fontWeight: FontWeight.w700)),
+                      title: Text(l.t('set.activity'),
+                          style: const TextStyle(fontWeight: FontWeight.w700)),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () => Navigator.of(context).push(MaterialPageRoute(
                           builder: (_) => const AuditLogScreen())),
@@ -178,8 +178,7 @@ class SettingsScreen extends StatelessWidget {
           controller: password,
           obscureText: true,
           autofocus: true,
-          decoration:
-              const InputDecoration(labelText: 'New password (6+ characters)'),
+          decoration: InputDecoration(labelText: l.t('set.newPw')),
         ),
         actions: [
           TextButton(
@@ -191,7 +190,7 @@ class SettingsScreen extends StatelessWidget {
                 final error = await state.changePassword(password.text);
                 if (dialogContext.mounted) Navigator.pop(dialogContext);
                 messenger.showSnackBar(
-                    SnackBar(content: Text(error ?? 'Password updated.')));
+                    SnackBar(content: Text(error ?? l.t('set.pwUpdated'))));
               },
               child: Text(l.t('common.update'))),
         ],

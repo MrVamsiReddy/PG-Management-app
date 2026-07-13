@@ -66,12 +66,13 @@ class _WrongApp extends StatelessWidget {
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               const Icon(Icons.info_outline, size: 48, color: primary),
               const SizedBox(height: 16),
-              const Text(
-                  'This is the tenant app, but your account is not a tenant account. Use the owner/admin app.',
+              Text(AppLocalizations.of(context).t('com.wrongAppTenant'),
                   textAlign: TextAlign.center),
               const SizedBox(height: 16),
               FilledButton(
-                  onPressed: state.logout, child: const Text('Sign out')),
+                  onPressed: state.logout,
+                  child:
+                      Text(AppLocalizations.of(context).t('common.signOut'))),
             ]),
           ),
         ),
@@ -153,7 +154,7 @@ class _TenantShellState extends State<TenantShell> {
         ]),
         actions: [
           IconButton(
-              tooltip: 'Notifications',
+              tooltip: AppLocalizations.of(context).t('nav.notifications'),
               onPressed: () => Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -190,39 +191,44 @@ class TenantHome extends StatelessWidget {
       child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 40),
           children: [
-            Text('Hello, ${state.displayName.split(' ').first} 👋',
+            Text(
+                '${AppLocalizations.of(context).t('dash.hello')}, ${state.displayName.split(' ').first} 👋',
                 style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height: 20),
             if (latest != null)
               _rentCard(context, state, latest)
             else
-              const EmptyState(
+              EmptyState(
                   icon: Icons.receipt_long_outlined,
-                  title: 'No rent scheduled yet'),
+                  title: AppLocalizations.of(context).t('dash.noRent')),
             const SizedBox(height: 24),
             Row(children: [
-              _quick(context, 'Pay rent', Icons.account_balance_wallet_outlined,
+              _quick(
+                  context,
+                  AppLocalizations.of(context).t('qa.payRent'),
+                  Icons.account_balance_wallet_outlined,
                   const PaymentsScreen()),
               const SizedBox(width: 8),
-              _quick(context, 'Raise issue', Icons.build_outlined,
-                  const MaintenanceScreen()),
+              _quick(context, AppLocalizations.of(context).t('qa.raiseIssue'),
+                  Icons.build_outlined, const MaintenanceScreen()),
               const SizedBox(width: 8),
-              _quick(context, 'Add visitor', Icons.badge_outlined,
-                  const VisitorsScreen()),
+              _quick(context, AppLocalizations.of(context).t('qa.addVisitor'),
+                  Icons.badge_outlined, const VisitorsScreen()),
               const SizedBox(width: 8),
-              _quick(context, 'Updates', Icons.campaign_outlined,
-                  const AnnouncementsScreen()),
+              _quick(context, AppLocalizations.of(context).t('qa.updates'),
+                  Icons.campaign_outlined, const AnnouncementsScreen()),
             ]),
             const SizedBox(height: 24),
-            Text('Recent activity',
+            Text(AppLocalizations.of(context).t('dash.recent'),
                 style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
             if (recent.isEmpty)
-              const Card(
+              Card(
                   clipBehavior: Clip.antiAlias,
                   child: EmptyState(
                       icon: Icons.notifications_none_rounded,
-                      title: 'Nothing new yet'))
+                      title:
+                          AppLocalizations.of(context).t('empty.nothingNew')))
             else
               Card(
                 clipBehavior: Clip.antiAlias,
@@ -283,8 +289,8 @@ class TenantHome extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
                 paid
-                    ? 'Paid on ${formatDay(latest.paidDate!)} · Room ${state.currentTenantRoomLabel}'
-                    : 'Due by ${formatDay(latest.dueDate)} · Room ${state.currentTenantRoomLabel}',
+                    ? '${AppLocalizations.of(context).t('rent.paidOn')} ${formatDay(latest.paidDate!)} · ${AppLocalizations.of(context).t('common.room')} ${state.currentTenantRoomLabel}'
+                    : '${AppLocalizations.of(context).t('rent.dueBy')} ${formatDay(latest.dueDate)} · ${AppLocalizations.of(context).t('common.room')} ${state.currentTenantRoomLabel}',
                 style: const TextStyle(color: Colors.white60)),
             const SizedBox(height: 18),
             OutlinedButton.icon(
@@ -292,7 +298,9 @@ class TenantHome extends StatelessWidget {
                   MaterialPageRoute(builder: (_) => const PaymentsScreen())),
               icon:
                   Icon(paid ? Icons.receipt_long_outlined : Icons.lock_outline),
-              label: Text(paid ? 'View receipt' : 'Pay now'),
+              label: Text(paid
+                  ? AppLocalizations.of(context).t('rent.viewReceipt')
+                  : AppLocalizations.of(context).t('rent.payNow')),
               style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.white,
                   side: const BorderSide(color: Colors.white30)),
@@ -428,11 +436,11 @@ class TenantProfileScreen extends StatelessWidget {
               const SheetHandle(),
               Text(l.t('profile.personal'),
                   style: Theme.of(context).textTheme.headlineMedium),
-              const FormLabel('Full name'),
+              FormLabel(AppLocalizations.of(context).t('form.fullName')),
               TextField(
                   controller: name,
                   textCapitalization: TextCapitalization.words),
-              const FormLabel('Phone number'),
+              FormLabel(AppLocalizations.of(context).t('form.phone')),
               TextField(controller: phone, keyboardType: TextInputType.phone),
               const SizedBox(height: 20),
               FilledButton(
@@ -465,9 +473,9 @@ class TenantProfileScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(14),
                     child: base64Image(doc, height: 180))
               else
-                const EmptyState(
+                EmptyState(
                     icon: Icons.badge_outlined,
-                    title: 'No document uploaded yet'),
+                    title: AppLocalizations.of(context).t('prof.noDoc')),
               const SizedBox(height: 12),
               OutlinedButton.icon(
                 onPressed: () async {
@@ -480,8 +488,9 @@ class TenantProfileScreen extends StatelessWidget {
                 },
                 icon: Icon(
                     doc == null ? Icons.upload_file_outlined : Icons.cached),
-                label:
-                    Text(doc == null ? 'Upload document' : 'Replace document'),
+                label: Text(doc == null
+                    ? AppLocalizations.of(context).t('prof.uploadDoc')
+                    : AppLocalizations.of(context).t('prof.replaceDoc')),
               ),
             ]));
   }

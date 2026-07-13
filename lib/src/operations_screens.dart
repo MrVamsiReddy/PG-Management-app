@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
+import 'l10n.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -29,16 +30,20 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
         ? mine
         : mine.where((e) => e.status.label == filter).toList();
     return Scaffold(
-      appBar: AppBar(title: const Text('Maintenance')),
+      appBar: AppBar(title: Text(AppLocalizations.of(context).t('mnt.title'))),
       floatingActionButton: FloatingActionButton.extended(
           onPressed: () => _raiseIssue(context, state),
           icon: const Icon(Icons.add),
-          label: Text(manager ? 'Create request' : 'Raise issue')),
+          label: Text(manager
+              ? AppLocalizations.of(context).t('mnt.create')
+              : AppLocalizations.of(context).t('qa.raiseIssue'))),
       body: ListView(
           padding: const EdgeInsets.fromLTRB(20, 10, 20, 100),
           children: [
             PageHeader(
-                title: manager ? 'Service desk' : 'My requests',
+                title: manager
+                    ? AppLocalizations.of(context).t('mnt.desk')
+                    : AppLocalizations.of(context).t('nav.myRequests'),
                 subtitle:
                     '${mine.where((e) => e.status != MaintenanceStatus.resolved).length} active · ${mine.where((e) => e.status == MaintenanceStatus.resolved).length} resolved'),
             const SizedBox(height: 16),
@@ -50,7 +55,8 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                         .map((e) => Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: ChoiceChip(
-                                label: Text(e),
+                                label: Text(
+                                    AppLocalizations.of(context).status(e)),
                                 selected: filter == e,
                                 onSelected: (_) => setState(() => filter = e))))
                         .toList())),
@@ -90,7 +96,10 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                                         size: 15,
                                         color: primary)),
                                 const SizedBox(width: 7),
-                                Text(item.assignee ?? 'Unassigned',
+                                Text(
+                                    item.assignee ??
+                                        AppLocalizations.of(context)
+                                            .t('mnt.unassigned'),
                                     style: const TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w700)),
@@ -101,8 +110,9 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                   ),
                 )),
             if (items.isEmpty)
-              const EmptyState(
-                  icon: Icons.build_outlined, title: 'No requests here'),
+              EmptyState(
+                  icon: Icons.build_outlined,
+                  title: AppLocalizations.of(context).t('mnt.none')),
           ]),
     );
   }
@@ -127,15 +137,16 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                       const SheetHandle(),
-                      Text('Raise maintenance issue',
+                      Text(AppLocalizations.of(context).t('mnt.raiseTitle'),
                           style: Theme.of(context).textTheme.headlineMedium),
-                      const FormLabel('What needs fixing?'),
+                      FormLabel(AppLocalizations.of(context).t('mnt.what')),
                       TextField(
                           controller: title,
                           maxLines: 2,
-                          decoration: const InputDecoration(
-                              hintText: 'Describe the issue briefly')),
-                      const FormLabel('Room'),
+                          decoration: InputDecoration(
+                              hintText: AppLocalizations.of(context)
+                                  .t('mnt.describe'))),
+                      FormLabel(AppLocalizations.of(context).t('common.room')),
                       if (manager)
                         DropdownButtonFormField<String>(
                           initialValue: roomId,
@@ -152,7 +163,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                             enabled: false,
                             decoration: InputDecoration(
                                 hintText: 'Room ${state.roomNumber(roomId)}')),
-                      const FormLabel('Category'),
+                      FormLabel(AppLocalizations.of(context).t('mnt.category')),
                       DropdownButtonFormField<String>(
                           initialValue: category,
                           items: [
@@ -167,7 +178,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                                   DropdownMenuItem(value: e, child: Text(e)))
                               .toList(),
                           onChanged: (v) => setModalState(() => category = v!)),
-                      const FormLabel('Priority'),
+                      FormLabel(AppLocalizations.of(context).t('mnt.priority')),
                       SegmentedButton<Priority>(
                           segments: Priority.values
                               .map((e) =>
@@ -194,8 +205,8 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                             ? Icons.add_a_photo_outlined
                             : Icons.check_circle_outline),
                         label: Text(photo == null
-                            ? 'Attach a photo'
-                            : 'Photo attached · tap to change'),
+                            ? AppLocalizations.of(context).t('mnt.attach')
+                            : AppLocalizations.of(context).t('mnt.attached')),
                       ),
                       const SizedBox(height: 18),
                       FilledButton(
@@ -209,7 +220,8 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                                 photo: photo);
                             Navigator.pop(context);
                           },
-                          child: const Text('Submit request')),
+                          child: Text(
+                              AppLocalizations.of(context).t('mnt.submit'))),
                     ]))));
   }
 
@@ -240,21 +252,29 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                     child: base64Image(item.photo!, height: 160)),
               ],
               const SizedBox(height: 24),
-              Text('Status timeline',
+              Text(AppLocalizations.of(context).t('mnt.timeline'),
                   style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 13),
-              _timeline('Request created', formatWhen(item.createdAt), true,
+              _timeline(AppLocalizations.of(context).t('mnt.created'),
+                  formatWhen(item.createdAt), true,
                   first: true),
-              _timeline('Assigned to technician', item.assignee ?? 'Unassigned',
+              _timeline(
+                  AppLocalizations.of(context).t('mnt.assigned'),
+                  item.assignee ??
+                      AppLocalizations.of(context).t('mnt.unassigned'),
                   item.status != MaintenanceStatus.open),
-              _timeline('Work in progress', 'Technician attending',
+              _timeline(
+                  AppLocalizations.of(context).t('mnt.working'),
+                  AppLocalizations.of(context).t('mnt.attending'),
                   item.status != MaintenanceStatus.open),
-              _timeline('Issue resolved', 'Awaiting completion',
+              _timeline(
+                  AppLocalizations.of(context).t('mnt.resolvedStep'),
+                  AppLocalizations.of(context).t('mnt.awaitDone'),
                   item.status == MaintenanceStatus.resolved,
                   last: true),
               if (manager && item.status != MaintenanceStatus.resolved) ...[
                 if (open) ...[
-                  const FormLabel('Assign technician'),
+                  FormLabel(AppLocalizations.of(context).t('mnt.assignTech')),
                   TextField(
                       controller: assignee,
                       decoration: const InputDecoration(
@@ -278,8 +298,9 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                       Navigator.pop(context);
                     },
                     icon: Icon(open ? Icons.play_arrow_rounded : Icons.check),
-                    label: Text(
-                        open ? 'Assign & start work' : 'Mark as resolved')),
+                    label: Text(open
+                        ? AppLocalizations.of(context).t('mnt.assignStart')
+                        : AppLocalizations.of(context).t('mnt.markResolved'))),
               ],
             ])));
   }
