@@ -71,6 +71,8 @@ String adminSetupMessage(String? code) => switch (code) {
       'code:key_expired' =>
         'The admin setup key has expired. Request a new key.',
       'code:invalid_key' => 'Invalid setup key.',
+      'code:key_too_short' =>
+        'The server setup key is too short. Set ADMIN_SETUP_KEY to at least 24 random characters.',
       'code:weak_password' => 'Use at least 8 characters for the password.',
       'code:missing_fields' => 'Please fill in all fields.',
       'code:create_failed' =>
@@ -101,6 +103,8 @@ String inviteActionMessage(String? code) => switch (code) {
         'This email belongs to a PG owner or admin account and cannot be a tenant login.',
       'code:email_in_use_tenant' =>
         'Another tenant in your PG already uses this email.',
+      'code:email_taken' =>
+        'This email already has an account that was not created by your PG. Ask the tenant for a different email, or contact support.',
       'code:rate_limited' =>
         'Too many invites in the last hour. Please try again later.',
       'code:missing_fields' => 'Please fill in all fields.',

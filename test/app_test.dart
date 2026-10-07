@@ -2738,4 +2738,105 @@ void main() {
             bed: state.suggestBed(other.id)),
         contains('email'));
   });
+
+  // ---- 2026-10-08 review fixes ----
+
+  test('recordPayment clears the oldest unpaid month first', () {
+    final now = DateTime.now();
+    final current = state.payments
+        .firstWhere((p) => p.tenantId == 't2' && p.status == PaymentStatus.due);
+    final arrears = Payment(
+        id: 'pay-arrears-t2',
+        tenantId: 't2',
+        period: DateTime(now.year, now.month - 1),
+        amount: 4000,
+        status: PaymentStatus.due,
+        dueDate: DateTime(now.year, now.month - 1, 5));
+    state.payments.add(arrears);
+    final before = state.payments.length;
+
+    state.recordPayment(tenantId: 't2', amount: 5000, method: 'Cash');
+
+    expect(state.payments.length, before);
+    expect(state.payments.firstWhere((p) => p.id == arrears.id).status,
+        PaymentStatus.paid);
+    final rest = state.payments.firstWhere((p) => p.id == current.id);
+    expect(rest.status, PaymentStatus.partial);
+    expect(rest.collected, 1000);
+  });
+
+  test('money beyond every due becomes one advance row, never lost', () {
+    final due = state.payments
+        .firstWhere((p) => p.tenantId == 't2' && p.status == PaymentStatus.due);
+    final before = state.payments.length;
+
+    state.recordPayment(
+        tenantId: 't2', amount: due.amount + 700, method: 'UPI');
+
+    expect(state.payments.firstWhere((p) => p.id == due.id).status,
+        PaymentStatus.paid);
+    expect(state.payments.length, before + 1);
+    expect(state.payments.first.amount, 700);
+    expect(state.payments.first.status, PaymentStatus.paid);
+  });
+
+  test('CSV cells never start with a spreadsheet formula', () {
+    final i = state.tenants.indexWhere((t) => t.id == 't2');
+    state.tenants[i] =
+        state.tenants[i].copyWith(name: '=HYPERLINK("http://x","y")');
+    final csv = state.paymentsCsv();
+    expect(csv, isNot(contains('"=HYPERLINK')));
+    expect(csv, contains('"\'=HYPERLINK'));
+  });
+
+  test('receipt numbers are stable and differ between payments', () {
+    Payment pay(String id) => Payment(
+        id: id,
+        tenantId: 't1',
+        period: DateTime(2026, 10),
+        amount: 1,
+        status: PaymentStatus.due,
+        dueDate: DateTime(2026, 10, 5));
+    final a = pay('pay-2026-10-t17599000000_1').receiptRef;
+    final b = pay('pay-2026-10-t17599000000_2').receiptRef;
+    expect(a, pay('pay-2026-10-t17599000000_1').receiptRef);
+    expect(a, isNot(b));
+    expect(a, matches(RegExp(r'^[0-9A-Z]{7}$')));
+  });
+
+  test('016 closes sign-up, push and data-loss gaps', () {
+    final sql = File('supabase/016_review_fixes.sql').readAsStringSync();
+    // No profile, no workspace — after converting existing legacy owners.
+    expect(sql, contains("'legacy'"));
+    expect(sql, contains('function public.workspace_active'));
+    expect(sql, contains('), false)'));
+    // Devices register only under the user's own email.
+    expect(sql, contains('email = lower((select auth.email()))'));
+    // Edits keep fields an older app version doesn't know.
+    expect(sql, contains('e || (changed -> id)'));
+    // Owner deletion no longer trips the change trigger.
+    expect(sql, contains("tg_op = 'DELETE'"));
+    expect(sql, contains('function public.tenant_workspace'));
+
+    // Older files skip what newer ones replaced.
+    final f14 = File('supabase/014_tenant_isolation.sql').readAsStringSync();
+    expect(f14, contains("to_regprocedure('public._tenant_new_item"));
+    expect(f14, contains("to_regprocedure('public._migration_016()')"));
+    final f15 = File('supabase/015_security_hardening.sql').readAsStringSync();
+    expect(f15, contains("to_regprocedure('public._migration_016()')"));
+
+    // The base sent to owner_save holds only items this version parsed.
+    final repo = File('lib/src/repositories.dart').readAsStringSync();
+    expect(repo, contains('_base = items.map(toMap).toList()'));
+
+    final invite = File('supabase/functions/invite/index.ts').readAsStringSync();
+    expect(invite, isNot(contains('Legacy owners have no profile')));
+    expect(invite, contains('"code:email_taken"'));
+    final push = File('supabase/functions/push/index.ts').readAsStringSync();
+    expect(push, contains('inPg'));
+    final remove =
+        File('supabase/functions/remove-tenant/index.ts').readAsStringSync();
+    expect(remove, contains('"code:not_owner"'));
+    expect(remove, contains('cleanText(body.tenantName'));
+  });
 }

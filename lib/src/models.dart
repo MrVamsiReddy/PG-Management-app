@@ -403,6 +403,20 @@ class Payment {
   /// Money still owed.
   int get balance => amount - collected;
 
+  /// Receipt number: 7 characters derived from the whole payment id (FNV-1a),
+  /// the same on every device. The old "last 4 characters of the id" scheme
+  /// repeated across tenants and months.
+  String get receiptRef {
+    var hash = 0x811c9dc5;
+    for (final unit in id.codeUnits) {
+      hash ^= unit;
+      // hash * 0x01000193 mod 2^32, split so every step stays below 2^53 and
+      // the web build (JS numbers) gets the same result as mobile.
+      hash = (hash * 0x193 + (hash & 0xff) * 0x1000000) % 0x100000000;
+    }
+    return hash.toRadixString(36).toUpperCase().padLeft(7, '0');
+  }
+
   bool get isOverdue =>
       status == PaymentStatus.due && DateTime.now().isAfter(dueDate);
   String get displayStatus => switch (status) {

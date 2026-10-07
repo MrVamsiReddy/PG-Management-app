@@ -191,29 +191,101 @@ class AppState extends ChangeNotifier {
   List<AppNotification> notifications = [];
 
   Future<void> _loadAll() async {
-    pgs = await _pgRepo?.loadAll() ?? [];
-    rooms = await _roomRepo?.loadAll() ?? [];
-    tenants = await _tenantRepo?.loadAll() ?? [];
-    payments = await _paymentRepo?.loadAll() ?? [];
-    maintenance = await _maintenanceRepo?.loadAll() ?? [];
-    visitors = await _visitorRepo?.loadAll() ?? [];
-    announcements = await _announcementRepo?.loadAll() ?? [];
-    attendance = await _attendanceRepo?.loadAll() ?? [];
-    utilities = await _utilityRepo?.loadAll() ?? [];
-    notifications = await _notificationRepo?.loadAll() ?? [];
+    // Tenants get their whole filtered view in one call
+    // (016_review_fixes.sql); a database without it falls back to one call
+    // per collection.
+    Map<String, dynamic>? tenantView;
+    final client = supabaseOrNull;
+    final owner = _workspaceOwnerId;
+    if (role == UserRole.tenant && client != null && owner != null) {
+      try {
+        final data =
+            await client.rpc('tenant_workspace', params: {'p_owner': owner});
+        if (data is Map) tenantView = Map<String, dynamic>.from(data);
+      } catch (_) {}
+    }
+    final view = tenantView;
+    Future<List<T>> load<T>(String key, Repository<T>? repo) async {
+      if (repo == null) return <T>[];
+      if (view != null && repo is TenantRepository<T>) {
+        return repo.parse(view[key] as List? ?? const []);
+      }
+      return repo.loadAll();
+    }
+
+    // Collections load side by side, not one after another.
+    await Future.wait<void>([
+      load('pgs', _pgRepo).then((v) {
+        pgs = v;
+      }),
+      load('rooms', _roomRepo).then((v) {
+        rooms = v;
+      }),
+      load('tenants', _tenantRepo).then((v) {
+        tenants = v;
+      }),
+      load('payments', _paymentRepo).then((v) {
+        payments = v;
+      }),
+      load('maintenance', _maintenanceRepo).then((v) {
+        maintenance = v;
+      }),
+      load('visitors', _visitorRepo).then((v) {
+        visitors = v;
+      }),
+      load('announcements', _announcementRepo).then((v) {
+        announcements = v;
+      }),
+      load('attendance', _attendanceRepo).then((v) {
+        attendance = v;
+      }),
+      load('utilities', _utilityRepo).then((v) {
+        utilities = v;
+      }),
+      load('notifications', _notificationRepo).then((v) {
+        notifications = v;
+      }),
+    ]);
+    if (role != UserRole.tenant) _deriveOccupancy();
+  }
+
+  /// Recomputes the stored bed counters from the tenant list. Two devices
+  /// onboarding or removing tenants at once can leave the counters wrong
+  /// (each save keeps the last copy of a room); the tenant list is the
+  /// truth. A corrected room or PG is written back with its next save.
+  void _deriveOccupancy() {
+    final perRoom = <String, int>{};
+    for (final t in tenants) {
+      perRoom[t.roomId] = (perRoom[t.roomId] ?? 0) + 1;
+    }
+    for (var i = 0; i < rooms.length; i++) {
+      final count = perRoom[rooms[i].id] ?? 0;
+      if (rooms[i].occupied != count) {
+        rooms[i] = rooms[i].copyWith(occupied: count);
+      }
+    }
+    for (var i = 0; i < pgs.length; i++) {
+      final pgRooms = rooms.where((r) => r.pgId == pgs[i].id).toList();
+      if (pgRooms.isEmpty) continue;
+      final beds = pgRooms.fold(0, (sum, r) => sum + r.beds);
+      final occupied = pgRooms.fold(0, (sum, r) => sum + r.occupied);
+      if (pgs[i].beds != beds || pgs[i].occupied != occupied) {
+        pgs[i] = pgs[i].copyWith(beds: beds, occupied: occupied);
+      }
+    }
   }
 
   /// Saves only the collections that changed. A failed save is never silent:
   /// the user is told, and the collections are reloaded so the screen shows
-  /// what the server actually holds.
-  Future<void> _persist(Set<String> keys) {
+  /// what the server actually holds. Completes with false when it failed.
+  Future<bool> _persist(Set<String> keys) {
     final run = _persistNow(keys);
     _inFlightSaves.add(run);
     run.whenComplete(() => _inFlightSaves.remove(run));
     return run;
   }
 
-  Future<void> _persistNow(Set<String> keys) async {
+  Future<bool> _persistNow(Set<String> keys) async {
     final saves = <Future<void>>[];
     void save(String key, Repository? repo, List items) {
       if (keys.contains(key) && repo != null) saves.add(repo.saveAll(items));
@@ -229,15 +301,18 @@ class AppState extends ChangeNotifier {
     save('attendance', _attendanceRepo, attendance);
     save('utilities', _utilityRepo, utilities);
     save('notifications', _notificationRepo, notifications);
+    var ok = true;
     try {
       await Future.wait(saves);
     } catch (_) {
+      ok = false;
       _showSaveFailed();
       try {
         await _loadAll();
       } catch (_) {}
     }
     notifyListeners();
+    return ok;
   }
 
   void _showSaveFailed() {
@@ -251,7 +326,7 @@ class AppState extends ChangeNotifier {
     final user = supabaseOrNull?.auth.currentUser;
     if (user != null) {
       final gate = await _fetchAccessGate(user);
-      if (gate.error != null) {
+      if (gate.error != null && gate.error != 'code:network') {
         await logout();
         authNotice = gate.error;
         notifyListeners();
@@ -717,7 +792,8 @@ class AppState extends ChangeNotifier {
     if (user == null) return;
     try {
       final error = await _enterCloud(user);
-      if (error != null) {
+      // Offline at startup: keep the session for the next try.
+      if (error != null && error != 'code:network') {
         authNotice = error;
         try {
           await supabaseOrNull?.auth.signOut();
@@ -753,7 +829,7 @@ class AppState extends ChangeNotifier {
             .maybeSingle();
       }
     } catch (_) {
-      return (role: null, customerId: null, error: null);
+      return (role: null, customerId: null, error: 'code:network');
     }
     return evaluateProfileAccess(profile: profile, customer: customer);
   }
@@ -787,15 +863,14 @@ class AppState extends ChangeNotifier {
       } catch (_) {}
     }
 
-    UserRole resolvedRole;
-    if (linkedTenantId != null) {
-      resolvedRole = UserRole.tenant;
-    } else {
-      final metaRole = user.userMetadata?['role'] as String?;
-      resolvedRole = UserRole.values
-          .firstWhere((e) => e.name == metaRole, orElse: () => UserRole.owner);
+    // Every owner and admin has a profile; tenants have a profile or a
+    // workspace link. Anything else was not created by this platform (for
+    // example through open sign-up) and gets nothing. The role is never
+    // taken from user_metadata, which the user can edit.
+    if (gate.role == null && linkedTenantId == null) {
+      return 'This account is not linked to any PG business yet. Contact support.';
     }
-    if (gate.role != null) resolvedRole = gate.role!;
+    final resolvedRole = gate.role ?? UserRole.tenant;
 
     if (portal != null) {
       final mismatch = portalError(resolvedRole, portal);
@@ -1197,7 +1272,7 @@ class AppState extends ChangeNotifier {
   Future<void> updateKycDoc(String base64) async {
     final i = tenants.indexWhere((t) => t.id == currentTenantId);
     if (i == -1) return;
-    tenants[i] = tenants[i].copyWith(kycDoc: base64);
+    tenants[i] = tenants[i].copyWith(kycDoc: base64, kyc: KycStatus.pending);
     await _persist({'tenants'});
   }
 
@@ -1274,14 +1349,17 @@ class AppState extends ChangeNotifier {
           relatedEntityId: relatedEntityId,
           customerId: customerId,
         ));
-    if (push) _pushToWorkspace(title, body, scope: scope, tenantId: tenantId);
+    if (push) {
+      _pushToWorkspace(title, body,
+          scope: scope, tenantId: tenantId, pgId: pgId);
+    }
   }
 
   /// Fire-and-forget push via the `push` Edge Function. Scope and tenant are
   /// passed so the function can target the right devices; push failures never
   /// block the action itself.
   void _pushToWorkspace(String title, String body,
-      {required NotificationScope scope, String? tenantId}) {
+      {required NotificationScope scope, String? tenantId, String? pgId}) {
     final client = supabaseOrNull;
     final owner = _workspaceOwnerId;
     if (client == null || owner == null || !pushEnabled) return;
@@ -1291,6 +1369,7 @@ class AppState extends ChangeNotifier {
       'body': body,
       'scope': scope.name,
       if (tenantId != null) 'tenantId': tenantId,
+      if (pgId != null) 'pgId': pgId,
     }).ignore();
   }
 
@@ -1737,7 +1816,7 @@ class AppState extends ChangeNotifier {
         pgs[p] = pgs[p].copyWith(occupied: pgs[p].occupied - 1);
       }
     }
-    await _persist({
+    final saved = await _persist({
       'tenants',
       'payments',
       'visitors',
@@ -1746,6 +1825,16 @@ class AppState extends ChangeNotifier {
       'rooms',
       'pgs'
     });
+    // The removal didn't reach the server (the tenant is back after the
+    // reload): keep their login too.
+    if (!saved) {
+      return (
+        error: 'Could not remove the tenant. Check your connection and try '
+            'again.',
+        email: null,
+        emailSent: false
+      );
+    }
     _audit('tenant_removed', entityType: 'tenant', entityId: tenantId, before: {
       'name': tenant.name,
       'room_id': tenant.roomId,
@@ -1791,7 +1880,14 @@ class AppState extends ChangeNotifier {
 
   /// Rent collection as spreadsheet-ready CSV (newest first, like the UI).
   String paymentsCsv() {
-    String cell(String value) => '"${value.replaceAll('"', '""')}"';
+    // Spreadsheets run a cell starting with = + - @ (or tab/CR) as a
+    // formula, and tenants choose their own names: prefix those with '.
+    String cell(String value) {
+      final safe = value.isNotEmpty && '=+-@\t\r'.contains(value[0])
+          ? "'$value"
+          : value;
+      return '"${safe.replaceAll('"', '""')}"';
+    }
     final rows = <String>[
       'Receipt,Tenant,Month,Amount,Collected,Balance,Status,Due date,Paid date,Method'
     ];
@@ -2056,6 +2152,12 @@ class AppState extends ChangeNotifier {
   Future<String?> confirmSubmission(UpiSubmission s) async {
     final client = supabaseOrNull;
     if (client == null || !isLoggedIn) return 'Sign in to confirm payments.';
+    // The due has to be in the books before the submission is confirmed, or
+    // the money would be confirmed but never recorded.
+    if (!payments
+        .any((p) => p.id == s.paymentId && p.tenantId == s.tenantId)) {
+      return 'This rent due is no longer in the books. Refresh and try again.';
+    }
     try {
       // Only a pending submission can be confirmed (not one rejected from
       // another screen in the meantime).
@@ -2074,13 +2176,18 @@ class AppState extends ChangeNotifier {
         notifyListeners();
         return 'This payment was already reviewed.';
       }
-      _markConfirmedPaid(s);
+      final saved = await _markConfirmedPaid(s);
       _audit('payment_confirmed',
           entityType: 'payment',
           entityId: s.paymentId,
           after: {'utr': s.utr, 'amount': s.amount});
       await loadSubmissions();
       notifyListeners();
+      if (!saved) {
+        return 'The payment is confirmed, but the rent record could not be '
+            'saved. Refresh; if the due still shows unpaid, use Record '
+            'payment for ${inr(s.amount)}.';
+      }
       return null;
     } catch (_) {
       return 'Could not confirm the payment. Check your connection.';
@@ -2128,117 +2235,138 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Records the confirmed amount against the due: the amount the tenant
-  /// actually submitted, so a short payment leaves the due part-paid.
-  void _markConfirmedPaid(UpiSubmission s) {
-    final i = payments
-        .indexWhere((p) => p.id == s.paymentId && p.tenantId == s.tenantId);
-    if (i == -1) return;
-    final due = payments[i];
-    final collected = due.collected + s.amount;
-    final settled = collected >= due.amount;
-    final paid = payments[i] = due.copyWith(
-        status: settled ? PaymentStatus.paid : PaymentStatus.partial,
-        paidAmount: settled ? due.amount : collected,
-        paidDate: DateTime.now(),
-        method: 'UPI');
-    final pgId = _pgIdForTenant(paid.tenantId);
-    _notify(
-        settled ? 'Rent received' : 'Part payment received',
-        settled
-            ? '${inr(s.amount)} received from ${tenantName(paid.tenantId)}.'
-            : '${inr(s.amount)} from ${tenantName(paid.tenantId)} · ${inr(paid.balance)} balance remaining.',
-        NotificationType.payment,
-        scope: NotificationScope.managers,
-        pgId: pgId,
-        tenantId: paid.tenantId,
-        relatedEntityId: paid.id);
-    _notify(
-        'Payment confirmed',
-        settled
-            ? 'Your ${formatMonthName(paid.period)} rent of ${inr(paid.amount)} is confirmed.'
-            : 'Your payment of ${inr(s.amount)} is confirmed · ${inr(paid.balance)} still due.',
-        NotificationType.payment,
-        scope: NotificationScope.tenant,
-        tenantId: paid.tenantId,
-        pgId: pgId,
-        relatedEntityId: paid.id);
-    _persist({'payments', 'notifications'});
-  }
-
-  /// Records money received from a tenant. When an unsettled due exists for
-  /// the current month it is settled in place (fully -> paid, otherwise
-  /// -> partial), so no duplicate row is created. Only advance payments,
-  /// adjustments, or payments with no matching due create a new row.
-  void recordPayment(
-      {required String tenantId, required int amount, required String method}) {
-    if (amount <= 0) return;
+  /// Applies money received from a tenant to their unsettled dues: [dueId]
+  /// first when given, then the oldest month first. Whatever is left after
+  /// every due is settled becomes a standalone paid row (an advance) for the
+  /// current month, so no rupee is dropped. Returns the rows it touched, in
+  /// order.
+  List<Payment> _applyReceipt(
+      {required String tenantId,
+      required int amount,
+      required String method,
+      String? dueId}) {
     final now = DateTime.now();
-    final period = DateTime(now.year, now.month);
-    final i = payments.indexWhere((p) =>
-        p.tenantId == tenantId &&
-        p.status != PaymentStatus.paid &&
-        p.period.year == period.year &&
-        p.period.month == period.month);
-
-    final Payment payment;
-    final bool settled;
-    if (i != -1) {
-      final existing = payments[i];
-      final collected = existing.collected + amount;
-      settled = collected >= existing.amount;
-      payment = payments[i] = existing.copyWith(
-        status: settled ? PaymentStatus.paid : PaymentStatus.partial,
-        paidAmount: settled ? existing.amount : collected,
-        paidDate: now,
-        method: method,
-      );
-    } else {
-      // Advance / adjustment / no matching due -> a new standalone paid row.
-      settled = true;
-      payment = Payment(
+    final open = [
+      for (var i = 0; i < payments.length; i++)
+        if (payments[i].tenantId == tenantId &&
+            payments[i].status != PaymentStatus.paid)
+          i
+    ]..sort((a, b) {
+        if (payments[a].id == dueId) return -1;
+        if (payments[b].id == dueId) return 1;
+        return payments[a].period.compareTo(payments[b].period);
+      });
+    final touched = <Payment>[];
+    var left = amount;
+    for (final i in open) {
+      if (left <= 0) break;
+      final due = payments[i];
+      final take = left < due.balance ? left : due.balance;
+      left -= take;
+      final collected = due.collected + take;
+      final settled = collected >= due.amount;
+      touched.add(payments[i] = due.copyWith(
+          status: settled ? PaymentStatus.paid : PaymentStatus.partial,
+          paidAmount: settled ? due.amount : collected,
+          paidDate: now,
+          method: method));
+    }
+    if (left > 0) {
+      final advance = Payment(
         id: _id('pay'),
         tenantId: tenantId,
-        period: period,
-        amount: amount,
+        period: DateTime(now.year, now.month),
+        amount: left,
         status: PaymentStatus.paid,
-        paidAmount: amount,
+        paidAmount: left,
         dueDate: DateTime(now.year, now.month, 5),
         paidDate: now,
         method: method,
         customerId: customerId,
       );
-      payments.insert(0, payment);
+      payments.insert(0, advance);
+      touched.add(advance);
     }
+    return touched;
+  }
 
+  /// What a tenant still owes across all their dues.
+  int _tenantBalance(String tenantId) => payments
+      .where((p) => p.tenantId == tenantId)
+      .fold(0, (sum, p) => sum + p.balance);
+
+  /// Tells the managers and the tenant about money applied by
+  /// [_applyReceipt].
+  void _notifyReceipt(String tenantId, int amount, List<Payment> touched,
+      {required String managerSettled,
+      required String managerPartial,
+      required String tenantSettled,
+      required String tenantPartial}) {
+    final settled = touched.every((p) => p.status == PaymentStatus.paid);
+    final remaining = _tenantBalance(tenantId);
+    final first = touched.first;
     final pgId = _pgIdForTenant(tenantId);
     final name = tenantName(tenantId);
     _notify(
-      settled ? 'Payment recorded' : 'Part payment recorded',
+      settled ? managerSettled : managerPartial,
       settled
           ? '${inr(amount)} from $name marked as received.'
-          : '${inr(amount)} from $name · ${inr(payment.balance)} balance remaining.',
+          : '${inr(amount)} from $name · ${inr(remaining)} balance remaining.',
       NotificationType.payment,
       scope: NotificationScope.managers,
       pgId: pgId,
       tenantId: tenantId,
-      relatedEntityId: payment.id,
+      relatedEntityId: first.id,
     );
     _notify(
-      settled ? 'Rent received' : 'Part payment received',
-      settled
-          ? 'Your ${formatMonthName(payment.period)} rent of ${inr(payment.amount)} is settled.'
-          : '${inr(amount)} received · ${inr(payment.balance)} still due.',
+      settled ? tenantSettled : tenantPartial,
+      !settled
+          ? '${inr(amount)} received · ${inr(remaining)} still due.'
+          : touched.length == 1
+              ? 'Your ${formatMonthName(first.period)} rent of ${inr(first.amount)} is settled.'
+              : '${inr(amount)} received · ${touched.length} months settled.',
       NotificationType.payment,
       scope: NotificationScope.tenant,
       tenantId: tenantId,
       pgId: pgId,
-      relatedEntityId: payment.id,
+      relatedEntityId: first.id,
     );
+  }
+
+  /// Records a confirmed UPI submission: its amount goes to the due it was
+  /// paid against, any extra to the tenant's other dues. Completes with
+  /// false when the books could not be saved.
+  Future<bool> _markConfirmedPaid(UpiSubmission s) {
+    final touched = _applyReceipt(
+        tenantId: s.tenantId,
+        amount: s.amount,
+        method: 'UPI',
+        dueId: s.paymentId);
+    _notifyReceipt(s.tenantId, s.amount, touched,
+        managerSettled: 'Rent received',
+        managerPartial: 'Part payment received',
+        tenantSettled: 'Payment confirmed',
+        tenantPartial: 'Payment confirmed');
+    return _persist({'payments', 'notifications'});
+  }
+
+  /// Records money received from a tenant against their unsettled dues,
+  /// oldest month first, so arrears are cleared before the current month.
+  /// Only money beyond every due creates a new (advance) row.
+  void recordPayment(
+      {required String tenantId, required int amount, required String method}) {
+    if (amount <= 0) return;
+    final touched =
+        _applyReceipt(tenantId: tenantId, amount: amount, method: method);
+    _notifyReceipt(tenantId, amount, touched,
+        managerSettled: 'Payment recorded',
+        managerPartial: 'Part payment recorded',
+        tenantSettled: 'Rent received',
+        tenantPartial: 'Part payment received');
     _persist({'payments', 'notifications'});
     _audit('payment_recorded',
         entityType: 'payment',
-        entityId: payment.id,
+        entityId: touched.first.id,
         after: {'tenant_id': tenantId, 'amount': amount, 'method': method});
   }
 

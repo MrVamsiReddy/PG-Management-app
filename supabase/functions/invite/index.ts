@@ -310,18 +310,17 @@ Deno.serve(async (req) => {
 
     // ---- Owner-side actions ------------------------------------------------
 
-    // Only PG owners may invite, resend or revoke.
+    // Only PG owners may invite, resend or revoke: an owner profile on an
+    // enabled, unexpired customer. An account without a profile (e.g. one
+    // created through open sign-up) is never an owner (016_review_fixes.sql).
     const { data: callerProfile } = await admin.from("profiles")
       .select("role, customer_id").eq("id", caller.id).maybeSingle();
-    if (callerProfile) {
-      if (callerProfile.role !== "owner") return json({ error: "code:not_owner" }, 403);
-    } else {
-      // Legacy owners have no profile row; a linked tenant is never an owner.
-      const { data: asMember } = await admin.from("members").select("owner_id")
-        .eq("member_email", (caller.email ?? "").toLowerCase()).limit(1).maybeSingle();
-      if (asMember) return json({ error: "code:not_owner" }, 403);
+    if (!callerProfile || callerProfile.role !== "owner") {
+      return json({ error: "code:not_owner" }, 403);
     }
-    const customerId: string | null = callerProfile?.customer_id ?? null;
+    const { data: active } = await admin.rpc("workspace_active", { p_owner: caller.id });
+    if (active !== true) return json({ error: "code:not_owner" }, 403);
+    const customerId: string | null = callerProfile.customer_id ?? null;
 
     const tenantId = String(body.tenantId ?? "");
     if (!tenantId) return json({ error: "code:missing_fields" }, 400);
@@ -408,6 +407,12 @@ Deno.serve(async (req) => {
       if ((prof && (prof.platform_admin || prof.role !== "tenant")) || (ownsData ?? 0) > 0) {
         return json({ error: "code:email_is_owner" }, 409);
       }
+      // Only re-link a login this workspace already invited or linked. A
+      // login nobody here created could belong to someone who registered the
+      // address first, and they would get this tenant's data.
+      const { data: ownInvite } = await admin.from("invites").select("id")
+        .eq("owner_id", caller.id).eq("user_id", existingId).limit(1).maybeSingle();
+      if (!sameWorkspace && !ownInvite) return json({ error: "code:email_taken" }, 409);
     }
 
     // A new invite supersedes any previous pending one for this tenant.

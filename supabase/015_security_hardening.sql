@@ -1,6 +1,6 @@
 -- PG Management — security hardening (review of 2026-10-07).
--- Run once in the Supabase dashboard AFTER schema.sql and 002–014.
--- Re-runnable.
+-- Run once in the Supabase dashboard AFTER schema.sql and 002–014, then
+-- run 016. Re-runnable: functions that 016 replaced are skipped.
 --
 -- 1. profiles: users may edit only their own name/phone (no self-promotion
 --    to platform admin, no switching role or customer).
@@ -117,6 +117,11 @@ create policy "temp password blocks deletes" on public.app_data
 
 -- True when the workspace's customer is enabled and unexpired. Workspaces
 -- with no customer (legacy owners without a profile) stay active.
+-- Skipped once 016 has replaced it.
+do $guard$
+begin
+  if to_regprocedure('public._migration_016()') is null then
+    execute $def$
 create or replace function public.workspace_active(p_owner uuid) returns boolean
 language sql stable security definer set search_path = public as
 $$
@@ -127,7 +132,10 @@ $$
     where p.id = p_owner
     limit 1
   ), true)
-$$;
+$$
+$def$;
+  end if;
+end $guard$;
 
 revoke all on function public.workspace_active(uuid) from public, anon;
 grant execute on function public.workspace_active(uuid) to authenticated;
@@ -394,6 +402,11 @@ grant execute on function public.tenant_save(uuid, text, jsonb) to authenticated
 --     overwrite each other. Runs as the caller: RLS still decides access.
 -- ---------------------------------------------------------------------------
 
+-- Skipped once 016 has replaced it.
+do $guard$
+begin
+  if to_regprocedure('public._migration_016()') is null then
+    execute $def$
 create or replace function public.owner_save(p_owner uuid, p_key text,
   p_base jsonb, p_items jsonb) returns jsonb
 language plpgsql volatile set search_path = public as
@@ -463,7 +476,10 @@ begin
   where owner_id = p_owner and key = p_key;
   return result;
 end
-$$;
+$$
+$def$;
+  end if;
+end $guard$;
 
 revoke all on function public.owner_save(uuid, text, jsonb, jsonb) from public, anon;
 grant execute on function public.owner_save(uuid, text, jsonb, jsonb) to authenticated;

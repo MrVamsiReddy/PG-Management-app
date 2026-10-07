@@ -276,8 +276,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   }
 
   void _receipt(BuildContext context, AppState state, Payment payment) {
-    final digits = payment.id.replaceFirst('pay', '').padLeft(4, '0');
-    final ref = digits.substring(digits.length - 4);
+    final ref = payment.receiptRef;
     showAppSheet(
         context,
         Column(mainAxisSize: MainAxisSize.min, children: [
