@@ -25,6 +25,7 @@ class TenantApp extends StatelessWidget {
         builder: (context, _) {
           applyThemeTokens(resolveDark(state.themeMode));
           return MaterialApp(
+            scaffoldMessengerKey: state.messengerKey,
             debugShowCheckedModeBanner: false,
             title: 'PG Management',
             theme: buildAppTheme(),

@@ -1,9 +1,20 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// Browsers may call this only from the web app (plus localhost for
+// development). Mobile apps send no Origin and are unaffected. Override with
+// the ALLOWED_ORIGINS secret (comma-separated) if the web app moves.
+const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ?? "https://mrvamsireddy.github.io")
+  .split(",").map((o) => o.trim()).filter(Boolean);
+
+function corsHeadersFor(req: Request): Record<string, string> {
+  const origin = req.headers.get("origin") ?? "";
+  const local = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+  return {
+    "Access-Control-Allow-Origin": allowedOrigins.includes(origin) || local ? origin : (allowedOrigins[0] ?? ""),
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Vary": "Origin",
+  };
+}
 
 function tempPassword(): string {
   const chars = "abcdefghjkmnpqrstuvwxyzACDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -14,6 +25,7 @@ function tempPassword(): string {
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = corsHeadersFor(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const json = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "content-type": "application/json" } });
@@ -58,6 +70,8 @@ Deno.serve(async (req) => {
       password,
       email_confirm: true,
       user_metadata: { full_name: ownerName ?? "", role: "owner", customer_id: customer.id, must_change_password: true },
+      // The database enforces the flag from app_metadata (015_security_hardening.sql).
+      app_metadata: { must_change_password: true },
     });
     if (createErr || !created?.user) {
       await admin.from("customers").delete().eq("id", customer.id);

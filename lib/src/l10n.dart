@@ -110,6 +110,8 @@ const Map<String, Map<String, String>> _strings = {
     // Common
     'common.save': 'Save',
     'common.cancel': 'Cancel',
+    'sync.failed':
+        "Couldn't save your last change. Showing the latest saved data.",
     'common.update': 'Update',
     'common.close': 'Close',
     'common.signOut': 'Sign out',
@@ -376,7 +378,7 @@ const Map<String, Map<String, String>> _strings = {
     // Remove tenant
     'rem.remove': 'Remove tenant',
     'rem.body':
-        'This permanently deletes the tenant, their login and all their data — payments and visitors included. They are emailed that they are no longer part of this PG. This cannot be undone.',
+        'This permanently deletes the tenant, their login, their visitors and their unpaid dues. Rent they already paid stays in your records. They are emailed that they are no longer part of this PG. This cannot be undone.',
     'rem.done': 'Tenant removed and their data permanently deleted.',
     'rem.emailSent':
         'They were emailed that they are no longer part of this PG.',
@@ -577,6 +579,8 @@ const Map<String, Map<String, String>> _strings = {
     'nav.operations': 'संचालन',
     'common.save': 'सहेजें',
     'common.cancel': 'रद्द करें',
+    'sync.failed':
+        'आपका पिछला बदलाव सहेजा नहीं जा सका। नवीनतम सहेजा गया डेटा दिखाया जा रहा है।',
     'common.update': 'अपडेट करें',
     'common.close': 'बंद करें',
     'common.signOut': 'साइन आउट',
@@ -830,7 +834,7 @@ const Map<String, Map<String, String>> _strings = {
         'लॉगिन विवरण वाला संदेश कॉपी किया गया — इसे WhatsApp या ईमेल में पेस्ट करें।',
     'rem.remove': 'किरायेदार हटाएँ',
     'rem.body':
-        'यह किरायेदार, उनका लॉगिन और उनका सारा डेटा — भुगतान और विज़िटर सहित — स्थायी रूप से हटा देता है। उन्हें ईमेल से सूचित किया जाता है कि वे अब इस पीजी का हिस्सा नहीं हैं। इसे पूर्ववत नहीं किया जा सकता।',
+        'यह किरायेदार, उनका लॉगिन, उनके विज़िटर और उनकी बकाया राशि स्थायी रूप से हटा देता है। उनके द्वारा चुकाया गया किराया आपके रिकॉर्ड में रहता है। उन्हें ईमेल से सूचित किया जाता है कि वे अब इस पीजी का हिस्सा नहीं हैं। इसे पूर्ववत नहीं किया जा सकता।',
     'rem.done':
         'किरायेदार हटा दिया गया और उनका डेटा स्थायी रूप से हटा दिया गया।',
     'rem.emailSent':
@@ -1031,6 +1035,8 @@ const Map<String, Map<String, String>> _strings = {
     'nav.operations': 'నిర్వహణలు',
     'common.save': 'సేవ్ చేయి',
     'common.cancel': 'రద్దు చేయి',
+    'sync.failed':
+        'మీ చివరి మార్పును సేవ్ చేయలేకపోయాము. తాజాగా సేవ్ చేసిన డేటా చూపిస్తున్నాం.',
     'common.update': 'నవీకరించు',
     'common.close': 'మూసివేయి',
     'common.signOut': 'సైన్ అవుట్',
@@ -1288,7 +1294,7 @@ const Map<String, Map<String, String>> _strings = {
         'లాగిన్ వివరాలతో కూడిన సందేశం కాపీ చేయబడింది — దాన్ని WhatsApp లేదా ఇమెయిల్‌లో పేస్ట్ చేయండి.',
     'rem.remove': 'అద్దెదారుని తొలగించండి',
     'rem.body':
-        'ఇది అద్దెదారుని, వారి లాగిన్ మరియు వారి మొత్తం డేటాను — చెల్లింపులు మరియు సందర్శకులతో సహా — శాశ్వతంగా తొలగిస్తుంది. వారు ఇకపై ఈ పీజీలో భాగం కాదని వారికి ఇమెయిల్ పంపబడుతుంది. దీన్ని రద్దు చేయలేరు.',
+        'ఇది అద్దెదారుని, వారి లాగిన్, వారి సందర్శకులు మరియు చెల్లించని బకాయిలను శాశ్వతంగా తొలగిస్తుంది. వారు ఇప్పటికే చెల్లించిన అద్దె మీ రికార్డుల్లో ఉంటుంది. వారు ఇకపై ఈ పీజీలో భాగం కాదని వారికి ఇమెయిల్ పంపబడుతుంది. దీన్ని రద్దు చేయలేరు.',
     'rem.done':
         'అద్దెదారు తొలగించబడ్డారు మరియు వారి డేటా శాశ్వతంగా తొలగించబడింది.',
     'rem.emailSent':

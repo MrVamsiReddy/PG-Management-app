@@ -11,6 +11,7 @@ import 'package:supabase_flutter/supabase_flutter.dart'
         PostgresChangeEvent,
         PostgresChangeFilter,
         PostgresChangeFilterType,
+        PostgrestException,
         RealtimeChannel,
         SupabaseClient,
         User,
@@ -94,6 +95,16 @@ class AppState extends ChangeNotifier {
 
   bool isLoggedIn = false;
   UserRole role = UserRole.owner;
+
+  /// Lets the state show a snackbar (e.g. a failed save) without a context.
+  /// Each app passes it to its MaterialApp.
+  final messengerKey = GlobalKey<ScaffoldMessengerState>();
+
+  /// Saves still on their way to the server.
+  final Set<Future<void>> _inFlightSaves = {};
+
+  /// Completes once every save started so far has finished.
+  Future<void> flushSaves() => Future.wait(_inFlightSaves.toList());
 
   String? accountEmail;
   String? _cloudName;
@@ -192,10 +203,17 @@ class AppState extends ChangeNotifier {
     notifications = await _notificationRepo?.loadAll() ?? [];
   }
 
-  /// Saves only the collections that changed. Persistence is best-effort: a
-  /// transient cloud error surfaces the in-memory change without corrupting
-  /// state, and there is no local fallback store to write to.
-  Future<void> _persist(Set<String> keys) async {
+  /// Saves only the collections that changed. A failed save is never silent:
+  /// the user is told, and the collections are reloaded so the screen shows
+  /// what the server actually holds.
+  Future<void> _persist(Set<String> keys) {
+    final run = _persistNow(keys);
+    _inFlightSaves.add(run);
+    run.whenComplete(() => _inFlightSaves.remove(run));
+    return run;
+  }
+
+  Future<void> _persistNow(Set<String> keys) async {
     final saves = <Future<void>>[];
     void save(String key, Repository? repo, List items) {
       if (keys.contains(key) && repo != null) saves.add(repo.saveAll(items));
@@ -213,8 +231,20 @@ class AppState extends ChangeNotifier {
     save('notifications', _notificationRepo, notifications);
     try {
       await Future.wait(saves);
-    } catch (_) {}
+    } catch (_) {
+      _showSaveFailed();
+      try {
+        await _loadAll();
+      } catch (_) {}
+    }
     notifyListeners();
+  }
+
+  void _showSaveFailed() {
+    final messenger = messengerKey.currentState;
+    if (messenger == null) return;
+    final l = AppLocalizations.of(messenger.context);
+    messenger.showSnackBar(SnackBar(content: Text(l.t('sync.failed'))));
   }
 
   Future<void> refresh() async {
@@ -625,20 +655,22 @@ class AppState extends ChangeNotifier {
         return 'code:network';
       }
     }
-    try {
-      await client.auth.updateUser(UserAttributes(
-          password: password, data: {'must_change_password': false}));
-    } on AuthException catch (e) {
-      // Projects with "secure password change" enabled reject client-side
-      // updates ("current password required"). The first-login flow already
-      // holds the temporary password, so the invite function re-verifies it
-      // and performs the change with the service role instead.
-      if (currentPassword == null) return e.message;
+    if (mustChangePassword) {
+      // Through the invite function: it re-verifies the temporary password
+      // (or the fresh reset-link sign-in) and clears the temporary-password
+      // flag in app_metadata, which the app itself cannot write and the
+      // database enforces.
       final serverError = await _serverSetPassword(client,
-          tempPassword: currentPassword, newPassword: password);
+          tempPassword: currentPassword ?? '', newPassword: password);
       if (serverError != null) return serverError;
-    } catch (_) {
-      return 'Could not update the password. Check your connection.';
+    } else {
+      try {
+        await client.auth.updateUser(UserAttributes(password: password));
+      } on AuthException catch (e) {
+        return e.message;
+      } catch (_) {
+        return 'Could not update the password. Check your connection.';
+      }
     }
     // Fresh JWT so backend policies (which block writes while the
     // temporary-password claim is set) see the cleared flag immediately.
@@ -695,6 +727,12 @@ class AppState extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// The server enforces the flag from app_metadata (only the service role
+  /// can write it); user_metadata covers accounts invited before that.
+  static bool _hasTempPassword(User user) =>
+      user.appMetadata['must_change_password'] == true ||
+      user.userMetadata?['must_change_password'] == true;
+
   Future<AccessGate> _fetchAccessGate(User user) async {
     final client = supabaseOrNull;
     if (client == null) return (role: null, customerId: null, error: null);
@@ -728,18 +766,26 @@ class AppState extends ChangeNotifier {
 
     String workspaceOwnerId = user.id;
     String? linkedTenantId;
-    try {
-      final membership = await client
-          .from('members')
-          .select('owner_id, tenant_id')
-          .eq('member_email', (user.email ?? '').toLowerCase())
-          .limit(1)
-          .maybeSingle();
-      if (membership != null) {
-        workspaceOwnerId = membership['owner_id'] as String;
-        linkedTenantId = membership['tenant_id'] as String;
-      }
-    } catch (_) {}
+    // Owners and admins always work in their own account; a membership row
+    // naming their email (which someone else could have created) is ignored.
+    final managerAccount =
+        gate.role == UserRole.owner || gate.role == UserRole.admin;
+    if (!managerAccount) {
+      try {
+        // Oldest link wins, so a later row can't redirect an existing tenant.
+        final membership = await client
+            .from('members')
+            .select('owner_id, tenant_id')
+            .eq('member_email', (user.email ?? '').toLowerCase())
+            .order('created_at', ascending: true)
+            .limit(1)
+            .maybeSingle();
+        if (membership != null) {
+          workspaceOwnerId = membership['owner_id'] as String;
+          linkedTenantId = membership['tenant_id'] as String;
+        }
+      } catch (_) {}
+    }
 
     UserRole resolvedRole;
     if (linkedTenantId != null) {
@@ -759,8 +805,7 @@ class AppState extends ChangeNotifier {
     // A tenant still on their temporary password is mid-invite: an expired
     // or revoked invite blocks the sign-in (enforced server-side too — the
     // Edge Function owns all lifecycle transitions).
-    if (resolvedRole == UserRole.tenant &&
-        user.userMetadata?['must_change_password'] == true) {
+    if (resolvedRole == UserRole.tenant && _hasTempPassword(user)) {
       final inviteError = await _inviteLoginError(client);
       if (inviteError != null) return inviteError;
     }
@@ -769,7 +814,7 @@ class AppState extends ChangeNotifier {
     currentTenantId = linkedTenantId ?? '';
     _cloudName = user.userMetadata?['full_name'] as String?;
     accountEmail = user.email;
-    mustChangePassword = user.userMetadata?['must_change_password'] == true;
+    mustChangePassword = _hasTempPassword(user);
     authNotice = null;
     _workspaceOwnerId = workspaceOwnerId;
     _resolvedCustomerId = gate.customerId;
@@ -899,6 +944,9 @@ class AppState extends ChangeNotifier {
     final address = email?.trim().toLowerCase();
     final tenant = tenantById(tenantId);
     final room = roomById(tenant?.roomId ?? '');
+    // The server reads the tenant from the stored workspace, so a just-added
+    // tenant must be saved first.
+    await flushSaves();
     try {
       final result = await client.functions.invoke('invite', body: {
         'action': action,
@@ -1278,12 +1326,26 @@ class AppState extends ChangeNotifier {
     }).toList();
   }
 
-  bool get hasUnread => visibleNotifications.any((n) => !n.read);
+  /// Read state is per reader for shared notifications: a tenant's id, or
+  /// `managers` for the owner side.
+  String get _readerKey =>
+      role == UserRole.tenant ? currentTenantId : 'managers';
+
+  bool isRead(AppNotification n) => n.isReadBy(_readerKey);
+
+  bool get hasUnread => visibleNotifications.any((n) => !isRead(n));
+
+  AppNotification _markedRead(AppNotification n) => n.copyWith(
+      read: true,
+      readBy: n.roleScope == NotificationScope.everyone &&
+              !n.readBy.contains(_readerKey)
+          ? [...n.readBy, _readerKey]
+          : null);
 
   void markNotificationRead(String id) {
     final i = notifications.indexWhere((n) => n.id == id);
     if (i == -1) return;
-    notifications[i] = notifications[i].copyWith(read: true);
+    notifications[i] = _markedRead(notifications[i]);
     _persist({'notifications'});
   }
 
@@ -1291,7 +1353,7 @@ class AppState extends ChangeNotifier {
     // Only clear the ones this session can actually see.
     final visibleIds = visibleNotifications.map((n) => n.id).toSet();
     notifications = notifications
-        .map((n) => visibleIds.contains(n.id) ? n.copyWith(read: true) : n)
+        .map((n) => visibleIds.contains(n.id) ? _markedRead(n) : n)
         .toList();
     _persist({'notifications'});
   }
@@ -1601,6 +1663,11 @@ class AppState extends ChangeNotifier {
       return 'Enter a valid email address.';
     }
     if (cleanBed.isEmpty) return 'Enter a bed label.';
+    // The email becomes the tenant's login, so it must be theirs alone.
+    if (tenants
+        .any((t) => (t.email ?? '').trim().toLowerCase() == cleanEmail)) {
+      return 'Another tenant already uses this email.';
+    }
 
     final i = rooms.indexWhere((r) => r.id == roomId);
     if (i == -1) return 'Select a room.';
@@ -1641,10 +1708,11 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
-  /// Permanently removes a tenant: their record, payments, visitors and
-  /// notifications are deleted, their bed is freed, and the
+  /// Permanently removes a tenant: their record, visitors, notifications
+  /// and untouched dues are deleted, their bed is freed, and the
   /// `remove-tenant` Edge Function deletes their login and emails them that
-  /// they are no longer part of this PG.
+  /// they are no longer part of this PG. Money already received (paid and
+  /// part-paid rows) stays in the books.
   Future<({String? error, String? email, bool emailSent})> removeTenant(
       String tenantId) async {
     final i = tenants.indexWhere((t) => t.id == tenantId);
@@ -1654,7 +1722,10 @@ class AppState extends ChangeNotifier {
     final tenant = tenants[i];
     final pgName = pgNameForTenant(tenantId);
     tenants.removeAt(i);
-    payments.removeWhere((p) => p.tenantId == tenantId);
+    payments.removeWhere((p) =>
+        p.tenantId == tenantId &&
+        p.status == PaymentStatus.due &&
+        p.collected == 0);
     visitors.removeWhere((v) => v.tenantId == tenantId);
     attendance.removeWhere((a) => a.tenantId == tenantId);
     notifications.removeWhere((n) => n.tenantId == tenantId);
@@ -1700,7 +1771,14 @@ class AppState extends ChangeNotifier {
         );
       }
     } catch (_) {}
-    return (error: null, email: null, emailSent: false);
+    // The tenant is gone from the PG, but their login may still work: say so
+    // instead of reporting a clean removal.
+    return (
+      error: 'Tenant removed, but their app login could not be deleted, so '
+          'they may still be able to sign in. Contact support to remove it.',
+      email: null,
+      emailSent: false
+    );
   }
 
   /// The current tenant's next unsettled payment (due or partially paid).
@@ -1734,40 +1812,54 @@ class AppState extends ChangeNotifier {
     return rows.join('\n');
   }
 
-  /// Creates this month's Due payment for tenants who don't already have a
-  /// payment row for the month (any status counts, so a partial or paid entry
-  /// blocks a duplicate). Deterministic ids keep it idempotent across devices.
-  /// Pass [onlyTenantId] to generate a single tenant's due (used for tenant
+  /// Creates the Due payment for every month a tenant has no payment row
+  /// for, from the month after their most recent row up to the current
+  /// month (any status counts, so a partial or paid entry blocks a
+  /// duplicate). A month nobody opened the app in is therefore still billed.
+  /// A tenant with no rows at all gets only the current month, so history
+  /// is never invented. Deterministic ids keep it idempotent across devices.
+  /// Pass [onlyTenantId] to generate a single tenant's dues (used for tenant
   /// sessions, which display but don't persist owner-wide data).
   /// Returns true if anything was added.
   bool generateMonthlyDues({String? onlyTenantId}) {
     final now = DateTime.now();
-    final period = DateTime(now.year, now.month);
+    final current = DateTime(now.year, now.month);
     final fifth = DateTime(now.year, now.month, 5);
-    final dueDate =
+    final currentDueDate =
         now.isBefore(fifth) ? fifth : now.add(const Duration(days: 3));
     var added = false;
     for (final tenant in tenants) {
       if (onlyTenantId != null && tenant.id != onlyTenantId) continue;
-      final exists = payments.any((p) =>
-          p.tenantId == tenant.id &&
-          p.period.year == period.year &&
-          p.period.month == period.month);
-      if (exists) continue;
       final rent = roomById(tenant.roomId)?.rent ?? 0;
       if (rent <= 0) continue;
-      payments.insert(
-          0,
-          Payment(
-            id: 'pay-${period.year}-${period.month}-${tenant.id}',
-            tenantId: tenant.id,
-            period: period,
-            amount: rent,
-            status: PaymentStatus.due,
-            dueDate: dueDate,
-            customerId: customerId,
-          ));
-      added = true;
+      DateTime? latest;
+      for (final p in payments) {
+        if (p.tenantId != tenant.id) continue;
+        final m = DateTime(p.period.year, p.period.month);
+        if (latest == null || m.isAfter(latest)) latest = m;
+      }
+      var month =
+          latest == null ? current : DateTime(latest.year, latest.month + 1);
+      final joined = DateTime(tenant.joinDate.year, tenant.joinDate.month);
+      if (month.isBefore(joined)) month = joined;
+      for (;
+          !month.isAfter(current);
+          month = DateTime(month.year, month.month + 1)) {
+        payments.insert(
+            0,
+            Payment(
+              id: 'pay-${month.year}-${month.month}-${tenant.id}',
+              tenantId: tenant.id,
+              period: month,
+              amount: rent,
+              status: PaymentStatus.due,
+              dueDate: month == current
+                  ? currentDueDate
+                  : DateTime(month.year, month.month, 5),
+              customerId: customerId,
+            ));
+        added = true;
+      }
     }
     return added;
   }
@@ -1823,7 +1915,8 @@ class AppState extends ChangeNotifier {
         case UpiStatus.pendingConfirmation:
           return 'pending';
         case UpiStatus.confirmed:
-          return 'paid';
+          // A confirmed short payment leaves the due part-paid.
+          return p.status == PaymentStatus.partial ? 'due' : 'paid';
         case UpiStatus.rejected:
           return 'rejected';
       }
@@ -1832,11 +1925,15 @@ class AppState extends ChangeNotifier {
   }
 
   /// A tenant may submit when the due is unpaid and not already awaiting
-  /// confirmation (a rejected submission can be resubmitted).
+  /// confirmation (a rejected submission can be resubmitted, and the rest of
+  /// a confirmed short payment can be paid).
   bool canSubmit(Payment p) {
     if (p.status == PaymentStatus.paid) return false;
     final sub = latestSubmissionFor(p.id);
-    return sub == null || sub.status == UpiStatus.rejected;
+    return sub == null ||
+        sub.status == UpiStatus.rejected ||
+        (sub.status == UpiStatus.confirmed &&
+            p.status == PaymentStatus.partial);
   }
 
   Future<UpiSettings?> loadUpiSettings(String pgId) async {
@@ -1891,8 +1988,7 @@ class AppState extends ChangeNotifier {
     if (ref.length < 6) return 'Enter the 12-digit UPI reference (UTR).';
     if (paidAmount <= 0) return 'Enter the amount you paid.';
     // One live submission per due: wait for the owner's decision first.
-    final latest = latestSubmissionFor(payment.id);
-    if (latest != null && latest.status != UpiStatus.rejected) {
+    if (!canSubmit(payment)) {
       return 'This payment is already submitted and awaiting review.';
     }
     // A UTR is unique per transaction — a repeat is a mistake or a re-use.
@@ -1913,7 +2009,8 @@ class AppState extends ChangeNotifier {
               path, screenshot,
               fileOptions: const FileOptions(contentType: 'image/jpeg'));
         } catch (_) {
-          path = null;
+          // Never file a submission without the proof the tenant attached.
+          return 'Could not upload the screenshot. Check your connection and try again.';
         }
       }
       await client.from('upi_submissions').insert({
@@ -1936,6 +2033,12 @@ class AppState extends ChangeNotifier {
       await loadSubmissions();
       notifyListeners();
       return null;
+    } on PostgrestException catch (e) {
+      // upi_submissions_utr_idx: the UTR is already used in this workspace.
+      if (e.code == '23505') {
+        return 'This UTR was already submitted. Check the reference number.';
+      }
+      return 'Could not submit the payment. Check your connection.';
     } catch (_) {
       return 'Could not submit the payment. Check your connection.';
     }
@@ -1954,11 +2057,23 @@ class AppState extends ChangeNotifier {
     final client = supabaseOrNull;
     if (client == null || !isLoggedIn) return 'Sign in to confirm payments.';
     try {
-      await client.from('upi_submissions').update({
-        'status': 'confirmed',
-        'confirmed_by': client.auth.currentUser?.id,
-        'confirmed_at': DateTime.now().toIso8601String(),
-      }).eq('id', s.id);
+      // Only a pending submission can be confirmed (not one rejected from
+      // another screen in the meantime).
+      final updated = await client
+          .from('upi_submissions')
+          .update({
+            'status': 'confirmed',
+            'confirmed_by': client.auth.currentUser?.id,
+            'confirmed_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', s.id)
+          .eq('status', 'pending_confirmation')
+          .select('id');
+      if ((updated as List).isEmpty) {
+        await loadSubmissions();
+        notifyListeners();
+        return 'This payment was already reviewed.';
+      }
       _markConfirmedPaid(s);
       _audit('payment_confirmed',
           entityType: 'payment',
@@ -1977,10 +2092,20 @@ class AppState extends ChangeNotifier {
     if (client == null || !isLoggedIn) return 'Sign in to reject payments.';
     if (reason.trim().isEmpty) return 'Enter a reason for rejecting.';
     try {
-      await client.from('upi_submissions').update({
-        'status': 'rejected',
-        'rejection_reason': reason.trim(),
-      }).eq('id', s.id);
+      final updated = await client
+          .from('upi_submissions')
+          .update({
+            'status': 'rejected',
+            'rejection_reason': reason.trim(),
+          })
+          .eq('id', s.id)
+          .eq('status', 'pending_confirmation')
+          .select('id');
+      if ((updated as List).isEmpty) {
+        await loadSubmissions();
+        notifyListeners();
+        return 'This payment was already reviewed.';
+      }
       // The due stays unpaid; tell the tenant why so they can resubmit.
       _notify(
           'Payment rejected',
@@ -2003,18 +2128,26 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Records the confirmed amount against the due: the amount the tenant
+  /// actually submitted, so a short payment leaves the due part-paid.
   void _markConfirmedPaid(UpiSubmission s) {
-    final i = payments.indexWhere((p) => p.id == s.paymentId);
+    final i = payments
+        .indexWhere((p) => p.id == s.paymentId && p.tenantId == s.tenantId);
     if (i == -1) return;
-    final paid = payments[i] = payments[i].copyWith(
-        status: PaymentStatus.paid,
-        paidAmount: payments[i].amount,
+    final due = payments[i];
+    final collected = due.collected + s.amount;
+    final settled = collected >= due.amount;
+    final paid = payments[i] = due.copyWith(
+        status: settled ? PaymentStatus.paid : PaymentStatus.partial,
+        paidAmount: settled ? due.amount : collected,
         paidDate: DateTime.now(),
         method: 'UPI');
     final pgId = _pgIdForTenant(paid.tenantId);
     _notify(
-        'Rent received',
-        '${inr(paid.amount)} received from ${tenantName(paid.tenantId)}.',
+        settled ? 'Rent received' : 'Part payment received',
+        settled
+            ? '${inr(s.amount)} received from ${tenantName(paid.tenantId)}.'
+            : '${inr(s.amount)} from ${tenantName(paid.tenantId)} · ${inr(paid.balance)} balance remaining.',
         NotificationType.payment,
         scope: NotificationScope.managers,
         pgId: pgId,
@@ -2022,7 +2155,9 @@ class AppState extends ChangeNotifier {
         relatedEntityId: paid.id);
     _notify(
         'Payment confirmed',
-        'Your ${formatMonthName(paid.period)} rent of ${inr(paid.amount)} is confirmed.',
+        settled
+            ? 'Your ${formatMonthName(paid.period)} rent of ${inr(paid.amount)} is confirmed.'
+            : 'Your payment of ${inr(s.amount)} is confirmed · ${inr(paid.balance)} still due.',
         NotificationType.payment,
         scope: NotificationScope.tenant,
         tenantId: paid.tenantId,

@@ -1,12 +1,26 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// Browsers may call this only from the web app (plus localhost for
+// development). Mobile apps send no Origin and are unaffected. Override with
+// the ALLOWED_ORIGINS secret (comma-separated) if the web app moves.
+const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ?? "https://mrvamsireddy.github.io")
+  .split(",").map((o) => o.trim()).filter(Boolean);
+
+function corsHeadersFor(req: Request): Record<string, string> {
+  const origin = req.headers.get("origin") ?? "";
+  const local = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+  return {
+    "Access-Control-Allow-Origin": allowedOrigins.includes(origin) || local ? origin : (allowedOrigins[0] ?? ""),
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Vary": "Origin",
+  };
+}
 
 const WINDOW_MS = 15 * 60 * 1000;
 const MAX_FAILURES = 5;
+// x-forwarded-for can be set by the caller, so the per-IP limit alone is
+// easy to dodge. This cap counts failures from every IP together.
+const MAX_FAILURES_GLOBAL = 20;
 
 function timingSafeEqual(a: string, b: string): boolean {
   const enc = new TextEncoder();
@@ -19,6 +33,7 @@ function timingSafeEqual(a: string, b: string): boolean {
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = corsHeadersFor(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const json = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "content-type": "application/json" } });
@@ -32,6 +47,10 @@ Deno.serve(async (req) => {
       .select("id", { count: "exact", head: true })
       .eq("ip", ip).eq("success", false).gte("created_at", since);
     if ((count ?? 0) >= MAX_FAILURES) return json({ error: "code:rate_limited" }, 429);
+    const { count: globalCount } = await admin.from("admin_setup_attempts")
+      .select("id", { count: "exact", head: true })
+      .eq("success", false).gte("created_at", since);
+    if ((globalCount ?? 0) >= MAX_FAILURES_GLOBAL) return json({ error: "code:rate_limited" }, 429);
 
     const { fullName, email, password, setupKey } = await req.json().catch(() => ({}));
     const fail = async (code: string, status = 400) => {

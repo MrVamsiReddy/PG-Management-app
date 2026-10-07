@@ -90,6 +90,19 @@ String inviteActionMessage(String? code) => switch (code) {
       'code:invite_used' =>
         'This invite was already used. Sign in with the password you set.',
       'code:invite_not_found' => 'No pending invite found for this tenant.',
+      'code:not_owner' => 'Only the PG owner can invite tenants.',
+      'code:tenant_not_found' =>
+        'This tenant is not saved yet. Wait a moment and try again.',
+      'code:email_mismatch' =>
+        "This email doesn't match the tenant's saved email.",
+      'code:email_in_other_pg' =>
+        'This email is already linked to another PG. They must be removed there first.',
+      'code:email_is_owner' =>
+        'This email belongs to a PG owner or admin account and cannot be a tenant login.',
+      'code:email_in_use_tenant' =>
+        'Another tenant in your PG already uses this email.',
+      'code:rate_limited' =>
+        'Too many invites in the last hour. Please try again later.',
       'code:missing_fields' => 'Please fill in all fields.',
       'code:unauthorized' => 'Please sign in again.',
       _ => 'Something went wrong. Please try again.',

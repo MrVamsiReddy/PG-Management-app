@@ -15,10 +15,21 @@ const sa = JSON.parse(Deno.env.get("FIREBASE_SERVICE_ACCOUNT") ?? "{}");
 
 // Browsers (the web app) preflight cross-origin calls; every response must
 // carry CORS headers or the invoke fails silently on web.
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// Browsers may call this only from the web app (plus localhost for
+// development). Mobile apps send no Origin and are unaffected. Override with
+// the ALLOWED_ORIGINS secret (comma-separated) if the web app moves.
+const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ?? "https://mrvamsireddy.github.io")
+  .split(",").map((o) => o.trim()).filter(Boolean);
+
+function corsHeadersFor(req: Request): Record<string, string> {
+  const origin = req.headers.get("origin") ?? "";
+  const local = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+  return {
+    "Access-Control-Allow-Origin": allowedOrigins.includes(origin) || local ? origin : (allowedOrigins[0] ?? ""),
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Vary": "Origin",
+  };
+}
 
 function pemToDer(pem: string): ArrayBuffer {
   const b64 = pem.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "");
@@ -64,6 +75,7 @@ async function fcmAccessToken(): Promise<string> {
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = corsHeadersFor(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const { workspaceOwnerId, title, body, scope, tenantId } = await req.json();
@@ -86,7 +98,8 @@ Deno.serve(async (req) => {
 
     // The caller must belong to the workspace: owner or invited member.
     const callerEmail = (caller.email ?? "").toLowerCase();
-    if (caller.id !== workspaceOwnerId) {
+    const isOwner = caller.id === workspaceOwnerId;
+    if (!isOwner) {
       const { data: membership } = await admin.from("members").select("tenant_id")
         .eq("owner_id", workspaceOwnerId).eq("member_email", callerEmail).maybeSingle();
       if (!membership) return new Response("forbidden", { status: 403, headers: corsHeaders });
@@ -97,15 +110,18 @@ Deno.serve(async (req) => {
     //   managers -> the owner's devices only
     //   tenant   -> the invited member whose tenant_id matches
     //   everyone -> the owner + every invited member
+    // Tenants may only alert the managers; addressing other residents is an
+    // owner action.
+    const effectiveScope = isOwner ? scope : "managers";
     const { data: members } = await admin.from("members")
       .select("member_email, tenant_id").eq("owner_id", workspaceOwnerId);
     const allMembers = members ?? [];
 
     let ownerIds: string[] = [];
     let emails: string[] = [];
-    if (scope === "managers") {
+    if (effectiveScope === "managers") {
       ownerIds = [workspaceOwnerId];
-    } else if (scope === "tenant") {
+    } else if (effectiveScope === "tenant") {
       emails = allMembers
         .filter((m: { tenant_id: string }) => m.tenant_id === tenantId)
         .map((m: { member_email: string }) => m.member_email);
@@ -114,23 +130,31 @@ Deno.serve(async (req) => {
       emails = allMembers.map((m: { member_email: string }) => m.member_email);
     }
 
-    const clauses: string[] = [];
-    for (const id of ownerIds) clauses.push(`user_id.eq.${id}`);
-    if (emails.length) clauses.push(`email.in.(${emails.join(",")})`);
-    if (clauses.length === 0) return Response.json({ sent: 0 }, { headers: corsHeaders });
-
-    const { data: tokens } = await admin.from("push_tokens")
-      .select("token, user_id").or(clauses.join(","));
-    const targets = (tokens ?? []).filter((t: { user_id: string }) => t.user_id !== caller.id);
+    // Two plain filters, never a hand-built filter string: member emails are
+    // data and must not be able to widen the query.
+    type TokenRow = { token: string; user_id: string };
+    const tokens: TokenRow[] = [];
+    if (ownerIds.length) {
+      const { data } = await admin.from("push_tokens").select("token, user_id").in("user_id", ownerIds);
+      tokens.push(...(data ?? []));
+    }
+    if (emails.length) {
+      const { data } = await admin.from("push_tokens").select("token, user_id").in("email", emails);
+      tokens.push(...(data ?? []));
+    }
+    const seen = new Set<string>();
+    const targets = tokens.filter((t) => t.user_id !== caller.id && !seen.has(t.token) && seen.add(t.token));
     if (targets.length === 0) return Response.json({ sent: 0 }, { headers: corsHeaders });
 
+    const pushTitle = String(title).slice(0, 200);
+    const pushBody = String(body ?? "").slice(0, 1000);
     const accessToken = await fcmAccessToken();
     let sent = 0;
     for (const t of targets) {
       const res = await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
         method: "POST",
         headers: { Authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
-        body: JSON.stringify({ message: { token: t.token, notification: { title, body: body ?? "" } } }),
+        body: JSON.stringify({ message: { token: t.token, notification: { title: pushTitle, body: pushBody } } }),
       });
       if (res.ok) {
         sent++;
@@ -140,6 +164,7 @@ Deno.serve(async (req) => {
     }
     return Response.json({ sent }, { headers: corsHeaders });
   } catch (e) {
-    return new Response(`error: ${e}`, { status: 500, headers: corsHeaders });
+    console.error("push failed", e);
+    return new Response("error", { status: 500, headers: corsHeaders });
   }
 });
