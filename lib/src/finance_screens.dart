@@ -221,7 +221,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     var tenantId = scoped.first.id;
     var method = 'UPI';
     final amount = TextEditingController(
-        text: '${state.roomById(scoped.first.roomId)?.rent ?? 9000}');
+        text: '${state.roomById(scoped.first.roomId)?.rent ?? ''}');
     showAppSheet(
         context,
         StatefulBuilder(
@@ -242,7 +242,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                         onChanged: (v) => setModalState(() {
                           tenantId = v!;
                           amount.text =
-                              '${state.roomById(state.tenantById(v)!.roomId)?.rent ?? 9000}';
+                              '${state.roomById(state.tenantById(v)!.roomId)?.rent ?? ''}';
                         }),
                       ),
                       FormLabel(

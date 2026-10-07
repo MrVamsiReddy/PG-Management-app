@@ -7,6 +7,9 @@ import 'package:flutter/foundation.dart';
 import 'supabase_config.dart';
 
 bool _firebaseReady = false;
+
+/// Whether this device should receive pushes (the Settings switch).
+bool pushWanted = true;
 StreamSubscription<String>? _tokenRefreshSub;
 
 /// Best-effort Firebase init: if it fails (or on web, where push needs a
@@ -25,7 +28,7 @@ Future<void> initPush() async {
 /// Asks notification permission and stores this device's FCM token for the
 /// signed-in account, so the push Edge Function can reach it.
 Future<void> registerPushToken() async {
-  if (!_firebaseReady) return;
+  if (!_firebaseReady || !pushWanted) return;
   try {
     final messaging = FirebaseMessaging.instance;
     await messaging.requestPermission();
@@ -36,6 +39,7 @@ Future<void> registerPushToken() async {
 }
 
 Future<void> _saveToken(String token) async {
+  if (!pushWanted) return;
   final client = supabaseOrNull;
   final user = client?.auth.currentUser;
   if (client == null || user == null) return;
@@ -45,6 +49,21 @@ Future<void> _saveToken(String token) async {
       'email': (user.email ?? '').toLowerCase(),
       'token': token,
     }, onConflict: 'token');
+  } catch (_) {}
+}
+
+/// Stops this device receiving pushes for the signed-in account: its token
+/// is removed from the server. Call before signing out (the delete needs the
+/// session).
+Future<void> unregisterPushToken() async {
+  if (!_firebaseReady) return;
+  final client = supabaseOrNull;
+  if (client == null || client.auth.currentUser == null) return;
+  try {
+    final token = await FirebaseMessaging.instance.getToken();
+    if (token != null) {
+      await client.from('push_tokens').delete().eq('token', token);
+    }
   } catch (_) {}
 }
 

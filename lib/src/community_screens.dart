@@ -67,8 +67,11 @@ class VisitorsScreen extends StatelessWidget {
                           Text(formatWhen(visitor.expectedAt),
                               style: const TextStyle(fontSize: 11)),
                           const Spacer(),
-                          if (visitor.status ==
-                              VisitorStatus.awaitingApproval) ...[
+                          // Approving and checking visitors out is the
+                          // managers' job; tenants only see the status.
+                          if (!tenant &&
+                              visitor.status ==
+                                  VisitorStatus.awaitingApproval) ...[
                             TextButton(
                                 onPressed: () => state.setVisitorStatus(
                                     visitor.id, VisitorStatus.declined),
@@ -82,7 +85,8 @@ class VisitorsScreen extends StatelessWidget {
                                         horizontal: 13, vertical: 9)),
                                 child: Text(AppLocalizations.of(context)
                                     .t('vis.approve'))),
-                          ] else if (visitor.status == VisitorStatus.inside)
+                          ] else if (!tenant &&
+                              visitor.status == VisitorStatus.inside)
                             OutlinedButton(
                                 onPressed: () => state.setVisitorStatus(
                                     visitor.id, VisitorStatus.checkedOut),

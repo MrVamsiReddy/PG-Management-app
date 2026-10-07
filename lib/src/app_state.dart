@@ -21,6 +21,7 @@ import 'access.dart';
 import 'format.dart';
 import 'l10n.dart';
 import 'models.dart';
+import 'push.dart';
 import 'repositories.dart';
 import 'saas_models.dart';
 import 'supabase_config.dart';
@@ -356,6 +357,9 @@ class AppState extends ChangeNotifier {
 
   Future<void> logout() async {
     _unsubscribeRealtime();
+    // A signed-out device must stop getting this account's notifications
+    // (e.g. a shared phone).
+    await unregisterPushToken();
     try {
       await supabaseOrNull?.auth.signOut();
     } catch (_) {}
@@ -1121,6 +1125,7 @@ class AppState extends ChangeNotifier {
 
   static const _langKey = 'app_language';
   static const _themeKey = 'app_theme';
+  static const _pushKey = 'push_enabled';
 
   ThemeMode themeMode = ThemeMode.system;
 
@@ -1131,6 +1136,8 @@ class AppState extends ChangeNotifier {
       if (code != null) {
         language = AppLanguage.fromCode(code);
       }
+      pushEnabled = prefs.getBool(_pushKey) ?? true;
+      pushWanted = pushEnabled;
       final theme = prefs.getString(_themeKey);
       if (theme != null) {
         themeMode = ThemeMode.values
@@ -1164,9 +1171,19 @@ class AppState extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// Whether this device receives push notifications. Off removes the
+  /// device's token from the server; it never stops this device's actions
+  /// from notifying other people.
   void setPushEnabled(bool value) {
     pushEnabled = value;
+    pushWanted = value;
     notifyListeners();
+    unawaited(value ? registerPushToken() : unregisterPushToken());
+    try {
+      SharedPreferences.getInstance()
+          .then((p) => p.setBool(_pushKey, value))
+          .catchError((_) => false);
+    } catch (_) {}
   }
 
   List<Room> get pgRooms {
@@ -1365,7 +1382,7 @@ class AppState extends ChangeNotifier {
       {required NotificationScope scope, String? tenantId, String? pgId}) {
     final client = supabaseOrNull;
     final owner = _workspaceOwnerId;
-    if (client == null || owner == null || !pushEnabled) return;
+    if (client == null || owner == null) return;
     client.functions.invoke('push', body: {
       'workspaceOwnerId': owner,
       'title': title,
@@ -1451,13 +1468,23 @@ class AppState extends ChangeNotifier {
     _persist({'pgs'});
   }
 
-  void addRoom(Room room) {
+  /// Adds a room to its PG. Returns an error when the PG already has a room
+  /// with that number.
+  String? addRoom(Room room) {
+    final number = room.number.trim().toLowerCase();
+    if (rooms.any((r) =>
+        r.pgId == room.pgId && r.number.trim().toLowerCase() == number)) {
+      return 'Room ${room.number.trim()} already exists in this PG.';
+    }
     rooms.add(room.copyWith(customerId: room.customerId ?? customerId));
-    _persist({'rooms'});
+    final p = pgs.indexWhere((e) => e.id == room.pgId);
+    if (p != -1) pgs[p] = pgs[p].copyWith(beds: pgs[p].beds + room.beds);
+    _persist({'rooms', 'pgs'});
     _audit('room_created',
         entityType: 'room',
         entityId: room.id,
         after: {'number': room.number, 'beds': room.beds});
+    return null;
   }
 
   /// Creates a PG. Rooms/beds/rent are configured later (during onboarding or
@@ -2125,10 +2152,8 @@ class AppState extends ChangeNotifier {
         'note': note.trim().isEmpty ? null : note.trim(),
         'screenshot_path': path,
       });
-      _audit('payment_submitted',
-          entityType: 'payment',
-          entityId: payment.id,
-          after: {'utr': ref, 'amount': paidAmount});
+      // Audited by the database (017_review_fixes_2.sql): tenants can't
+      // write audit_logs themselves.
       await loadSubmissions();
       notifyListeners();
       return null;
@@ -2470,8 +2495,8 @@ class AppState extends ChangeNotifier {
   }
 
   /// Publishes an announcement. [pgId] null targets every property (all
-  /// tenants); a value targets that property only. [sendPush] and the global
-  /// [pushEnabled] preference together decide whether a push is attempted.
+  /// tenants); a value targets that property only. [sendPush] decides
+  /// whether a push is attempted.
   void publishAnnouncement(String title, String body,
       {String? pgId, bool sendPush = true}) {
     final announcement = Announcement(

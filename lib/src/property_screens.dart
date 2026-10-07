@@ -59,24 +59,26 @@ class PgListingsScreen extends StatelessWidget {
                               bottom: -18,
                               child: Icon(Icons.apartment_rounded,
                                   size: 150, color: Colors.white10)),
-                        Positioned(
-                            left: 17,
-                            top: 17,
-                            child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 6),
-                                decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(15)),
-                                child: Row(children: [
-                                  const Icon(Icons.star,
-                                      color: warning, size: 15),
-                                  const SizedBox(width: 3),
-                                  Text('${pg.rating}',
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 12))
-                                ]))),
+                        // Ratings aren't collected yet: no made-up stars.
+                        if (pg.rating > 0)
+                          Positioned(
+                              left: 17,
+                              top: 17,
+                              child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(15)),
+                                  child: Row(children: [
+                                    const Icon(Icons.star,
+                                        color: warning, size: 15),
+                                    const SizedBox(width: 3),
+                                    Text('${pg.rating}',
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 12))
+                                  ]))),
                         Positioned(
                             right: 10,
                             top: 9,
@@ -193,7 +195,7 @@ class PgListingsScreen extends StatelessWidget {
   void _editPg(BuildContext context, AppState state, {Pg? existing}) {
     final name = TextEditingController(text: existing?.name);
     final address = TextEditingController(text: existing?.address);
-    final beds = TextEditingController(text: '${existing?.beds ?? 24}');
+    final beds = TextEditingController(text: '${existing?.beds ?? 0}');
     final amenities = TextEditingController(
         text: existing?.amenities ?? 'Wi-Fi • Food • Laundry');
     String? photo = existing?.photo;
@@ -265,11 +267,11 @@ class PgListingsScreen extends StatelessWidget {
                                     beds: 0,
                                     occupied: 0,
                                     amenities: '',
-                                    rating: 4.5);
+                                    rating: 0);
                             state.savePg(base.copyWith(
                               name: name.text.trim(),
                               address: address.text.trim(),
-                              beds: int.tryParse(beds.text) ?? 24,
+                              beds: int.tryParse(beds.text) ?? 0,
                               amenities: amenities.text.trim(),
                               photo: photo,
                             ));
@@ -379,7 +381,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
     final pg = state.activePg;
     if (pg == null) return;
     final number = TextEditingController();
-    final rent = TextEditingController(text: '9000');
+    final rent = TextEditingController();
     final pgId = pg.id;
     var roomFloor = floor;
     var beds = 2;
@@ -440,15 +442,30 @@ class _RoomsScreenState extends State<RoomsScreen> {
                       FilledButton(
                           onPressed: () {
                             if (number.text.trim().isEmpty) return;
-                            state.addRoom(Room(
+                            // Rent is entered, never assumed.
+                            final perBed = int.tryParse(
+                                rent.text.replaceAll(RegExp(r'[^0-9]'), ''));
+                            final messenger = ScaffoldMessenger.of(context);
+                            if (perBed == null || perBed <= 0) {
+                              messenger.showSnackBar(SnackBar(
+                                  content: Text(AppLocalizations.of(context)
+                                      .t('room.rentRequired'))));
+                              return;
+                            }
+                            final error = state.addRoom(Room(
                               id: 'r${DateTime.now().microsecondsSinceEpoch}',
                               pgId: pgId,
                               number: number.text.trim(),
                               floor: roomFloor,
                               beds: beds,
                               occupied: 0,
-                              rent: int.tryParse(rent.text) ?? 9000,
+                              rent: perBed,
                             ));
+                            if (error != null) {
+                              messenger
+                                  .showSnackBar(SnackBar(content: Text(error)));
+                              return;
+                            }
                             setState(() => floor = roomFloor);
                             Navigator.pop(context);
                           },
