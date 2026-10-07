@@ -23,7 +23,7 @@ Always finish with the highest-numbered file. 014 and 015 skip the functions a l
 Auth settings:
 - **Authentication → Sign In / Providers → turn OFF "Allow new users to sign up".** Required: the publishable key ships in the app, so with sign-ups on anyone can create an account. All accounts are created by the Edge Functions (admin API), which keep working with sign-ups off. Check with `curl "$SUPABASE_URL/auth/v1/settings" -H "apikey: $PUBLISHABLE_KEY"` → `"disable_signup": true`.
 - **Authentication → Providers → Email → turn OFF "Confirm email"** (invited/admin accounts sign in immediately).
-- Optionally set **URL Configuration → Site URL** to the tenant/owner web URL.
+- **URL Configuration:** Site URL `https://mrvamsireddy.github.io/PG-Management-app/`; Redirect URLs must include both web apps — `https://mrvamsireddy.github.io/PG-Management-app/` (tenants) and `https://mrvamsireddy.github.io/PG-Management-app/owner/` (owners + admins). Password-reset links open the app the account signs in to.
 
 ## Edge Functions (Dashboard → Edge Functions → Deploy; name must match exactly)
 - `push` — `functions/push/index.ts`. Secret: `FIREBASE_SERVICE_ACCOUNT` = full Firebase service-account JSON.
@@ -40,6 +40,11 @@ Auto-injected into every function: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABAS
 
 ## Firebase (push)
 Android app registered (package `com.example.nestora_pg`); `android/app/google-services.json` present. Service-account JSON goes into the `push` function secret, never the app.
+
+## Web hosting (GitHub Pages, `deploy-web.yml`)
+- `/PG-Management-app/` — tenant app (`main_tenant.dart`). Invite emails and links point here. Its login has a "PG owner or admin? Sign in here" link.
+- `/PG-Management-app/owner/` — owner + admin app (`main_owner.dart`).
+- The combined `main.dart` is a dev/test build only and is never deployed.
 
 ## Build commands
 ```bash
@@ -59,7 +64,7 @@ Deploy `create-admin` + set `ADMIN_SETUP_KEY` → in the app: **Admin login → 
 
 ## Release checklist
 - [ ] Migrations 1–16 run; **sign-ups off**; email confirmation off; `payment-proofs` bucket present.
-- [ ] Auth → URL Configuration: Site URL + Redirect URLs set to the `/PG-Management-app/` path (reset links).
+- [ ] Auth → URL Configuration: Site URL set; Redirect URLs include both `/PG-Management-app/` and `/PG-Management-app/owner/` (reset links).
 - [ ] All 6 functions deployed (`push`, `invite`, `remove-tenant`, `create-admin`, `create-customer`, `delete-customer`); `ADMIN_SETUP_KEY` (24+ chars) + `FIREBASE_SERVICE_ACCOUNT` set.
 - [ ] Release signing secrets set (`ANDROID_KEYSTORE_BASE64`, …) — the release workflow now fails without them.
 - [x] `flutter analyze` clean; `flutter test` green (101); `dart format` applied. (P11)

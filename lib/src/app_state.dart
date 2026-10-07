@@ -692,13 +692,16 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<String?> sendPasswordReset(String email) async {
+  /// [redirectTo] is the web app the reset link opens: the tenant app by
+  /// default, the owner app for owner and admin accounts.
+  Future<String?> sendPasswordReset(String email,
+      {String redirectTo = appWebUrl}) async {
     final client = supabaseOrNull;
     if (client == null) return 'code:network';
     try {
       // redirectTo returns the reset link to the app, which then fires a
       // passwordRecovery event and shows the set-password screen.
-      await client.auth.resetPasswordForEmail(email, redirectTo: appWebUrl);
+      await client.auth.resetPasswordForEmail(email, redirectTo: redirectTo);
       return null;
     } on AuthException catch (e) {
       return e.message;
@@ -1883,11 +1886,11 @@ class AppState extends ChangeNotifier {
     // Spreadsheets run a cell starting with = + - @ (or tab/CR) as a
     // formula, and tenants choose their own names: prefix those with '.
     String cell(String value) {
-      final safe = value.isNotEmpty && '=+-@\t\r'.contains(value[0])
-          ? "'$value"
-          : value;
+      final safe =
+          value.isNotEmpty && '=+-@\t\r'.contains(value[0]) ? "'$value" : value;
       return '"${safe.replaceAll('"', '""')}"';
     }
+
     final rows = <String>[
       'Receipt,Tenant,Month,Amount,Collected,Balance,Status,Due date,Paid date,Method'
     ];
@@ -2154,8 +2157,7 @@ class AppState extends ChangeNotifier {
     if (client == null || !isLoggedIn) return 'Sign in to confirm payments.';
     // The due has to be in the books before the submission is confirmed, or
     // the money would be confirmed but never recorded.
-    if (!payments
-        .any((p) => p.id == s.paymentId && p.tenantId == s.tenantId)) {
+    if (!payments.any((p) => p.id == s.paymentId && p.tenantId == s.tenantId)) {
       return 'This rent due is no longer in the books. Refresh and try again.';
     }
     try {

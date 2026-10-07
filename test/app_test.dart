@@ -2829,7 +2829,8 @@ void main() {
     final repo = File('lib/src/repositories.dart').readAsStringSync();
     expect(repo, contains('_base = items.map(toMap).toList()'));
 
-    final invite = File('supabase/functions/invite/index.ts').readAsStringSync();
+    final invite =
+        File('supabase/functions/invite/index.ts').readAsStringSync();
     expect(invite, isNot(contains('Legacy owners have no profile')));
     expect(invite, contains('"code:email_taken"'));
     final push = File('supabase/functions/push/index.ts').readAsStringSync();
@@ -2838,5 +2839,25 @@ void main() {
         File('supabase/functions/remove-tenant/index.ts').readAsStringSync();
     expect(remove, contains('"code:not_owner"'));
     expect(remove, contains('cleanText(body.tenantName'));
+  });
+
+  test('the website serves the split builds, owners under /owner/', () {
+    final deploy = File('.github/workflows/deploy-web.yml').readAsStringSync();
+    expect(deploy,
+        contains('-t lib/main_tenant.dart --base-href "/PG-Management-app/"'));
+    expect(
+        deploy,
+        contains(
+            '-t lib/main_owner.dart --base-href "/PG-Management-app/owner/"'));
+    expect(ownerWebUrl, '${appWebUrl}owner/');
+    // Reset links open the app the account signs in to.
+    final auth = File('lib/src/auth_screen.dart').readAsStringSync();
+    expect(auth, contains('? appWebUrl'));
+    expect(auth, contains(': ownerWebUrl'));
+    for (final code in ['en', 'hi', 'te']) {
+      final l = AppLocalizations(Locale(code));
+      expect(l.t('auth.ownerHere'), isNot('auth.ownerHere'));
+      expect(l.t('com.openOwnerApp'), isNot('com.openOwnerApp'));
+    }
   });
 }

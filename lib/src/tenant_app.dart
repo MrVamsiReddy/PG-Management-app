@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
@@ -47,7 +48,9 @@ class TenantApp extends StatelessWidget {
   }
 
   Widget _home() {
-    if (!state.isLoggedIn) return const LoginScreen(portal: LoginPortal.tenant);
+    if (!state.isLoggedIn) {
+      return const LoginScreen(portal: LoginPortal.tenant, showOwnerLink: true);
+    }
     if (state.needsPasswordSet) return const SetPasswordScreen();
     if (state.role != UserRole.tenant) return const _WrongApp();
     return const TenantShell();
@@ -70,6 +73,17 @@ class _WrongApp extends StatelessWidget {
               Text(AppLocalizations.of(context).t('com.wrongAppTenant'),
                   textAlign: TextAlign.center),
               const SizedBox(height: 16),
+              // On the web, owners who land here go straight to their app.
+              if (kIsWeb) ...[
+                FilledButton(
+                    onPressed: () async {
+                      await state.logout();
+                      await openOwnerWebApp();
+                    },
+                    child: Text(
+                        AppLocalizations.of(context).t('com.openOwnerApp'))),
+                const SizedBox(height: 8),
+              ],
               FilledButton(
                   onPressed: state.logout,
                   child:
