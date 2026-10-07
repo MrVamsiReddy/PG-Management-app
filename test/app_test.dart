@@ -16,6 +16,7 @@ import 'package:pg_management/src/l10n.dart';
 import 'package:pg_management/src/module_screens.dart';
 import 'package:pg_management/src/owner_app.dart';
 import 'package:pg_management/src/pg_wizard.dart';
+import 'package:pg_management/src/repositories.dart';
 import 'package:pg_management/src/supabase_config.dart';
 import 'package:pg_management/src/tenant_app.dart';
 import 'package:pg_management/src/theme.dart';
@@ -1164,6 +1165,38 @@ void main() {
     expect(src, contains('onPostgresChanges'));
     expect(src, contains('_subscribeRealtime'));
     expect(src, contains('_unsubscribeRealtime'));
+  });
+
+  test('tenants only reach app_data through filtered server functions', () {
+    final sql = File('supabase/014_tenant_isolation.sql').readAsStringSync();
+    // The workspace-wide tenant read/write policies are gone…
+    for (final policy in [
+      'member reads workspace',
+      'member inserts tenant collections',
+      'member updates tenant collections',
+    ]) {
+      expect(
+          sql, contains('drop policy if exists "$policy" on public.app_data'));
+      expect(sql, isNot(contains('create policy "$policy"')));
+    }
+    // …replaced by server-side filtering and merging.
+    expect(sql, contains('function public.tenant_collection'));
+    expect(sql, contains('function public.tenant_save'));
+    expect(sql, contains('for update'));
+    expect(sql, contains("when 'tenants'       then e ->> 'id' = p_tenant"));
+    expect(sql, contains('must_change_password'));
+    // Proof screenshots: a tenant's own folder only.
+    expect(sql, contains('m.tenant_id = tenant'));
+    expect(sql, contains('public.workspace_changes'));
+
+    final src = File('lib/src/app_state.dart').readAsStringSync();
+    expect(src, contains('TenantRepository<T>'));
+    expect(src, contains("'workspace_changes'"));
+    final repo = File('lib/src/repositories.dart').readAsStringSync();
+    expect(repo, contains("rpc('tenant_collection'"));
+    expect(repo, contains("rpc('tenant_save'"));
+    expect(TenantRepository.writableKeys, isNot(contains('payments')));
+    expect(TenantRepository.writableKeys, isNot(contains('rooms')));
   });
 
   test('the note migration adds the optional submission note', () {

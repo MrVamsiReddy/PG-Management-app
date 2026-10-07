@@ -132,49 +132,40 @@ class AppState extends ChangeNotifier {
 
   void _useSupabaseRepos(String workspaceOwnerId) {
     final client = supabaseOrNull!;
-    _pgRepo = SupabaseRepository<Pg>(client, 'pgs',
-        workspaceOwnerId: workspaceOwnerId,
-        fromMap: Pg.fromMap,
-        toMap: (e) => e.toMap());
-    _roomRepo = SupabaseRepository<Room>(client, 'rooms',
-        workspaceOwnerId: workspaceOwnerId,
-        fromMap: Room.fromMap,
-        toMap: (e) => e.toMap());
-    _tenantRepo = SupabaseRepository<Tenant>(client, 'tenants',
-        workspaceOwnerId: workspaceOwnerId,
-        fromMap: Tenant.fromMap,
-        toMap: (e) => e.toMap());
-    _paymentRepo = SupabaseRepository<Payment>(client, 'payments',
-        workspaceOwnerId: workspaceOwnerId,
-        fromMap: Payment.fromMap,
-        toMap: (e) => e.toMap());
-    _maintenanceRepo = SupabaseRepository<MaintenanceRequest>(
-        client, 'maintenance',
-        workspaceOwnerId: workspaceOwnerId,
-        fromMap: MaintenanceRequest.fromMap,
-        toMap: (e) => e.toMap());
-    _visitorRepo = SupabaseRepository<Visitor>(client, 'visitors',
-        workspaceOwnerId: workspaceOwnerId,
-        fromMap: Visitor.fromMap,
-        toMap: (e) => e.toMap());
-    _announcementRepo = SupabaseRepository<Announcement>(
-        client, 'announcements',
-        workspaceOwnerId: workspaceOwnerId,
-        fromMap: Announcement.fromMap,
-        toMap: (e) => e.toMap());
-    _attendanceRepo = SupabaseRepository<AttendanceRecord>(client, 'attendance',
-        workspaceOwnerId: workspaceOwnerId,
-        fromMap: AttendanceRecord.fromMap,
-        toMap: (e) => e.toMap());
-    _utilityRepo = SupabaseRepository<UtilityBill>(client, 'utilities',
-        workspaceOwnerId: workspaceOwnerId,
-        fromMap: UtilityBill.fromMap,
-        toMap: (e) => e.toMap());
-    _notificationRepo = SupabaseRepository<AppNotification>(
-        client, 'notifications',
-        workspaceOwnerId: workspaceOwnerId,
-        fromMap: AppNotification.fromMap,
-        toMap: (e) => e.toMap());
+    // Tenants never touch app_data directly: they get a server-filtered view
+    // of the workspace and server-merged writes (014_tenant_isolation.sql).
+    final tenant = role == UserRole.tenant;
+    Repository<T> repo<T>(String key,
+            {required T Function(Map<String, dynamic>) fromMap,
+            required Map<String, dynamic> Function(T) toMap}) =>
+        tenant
+            ? TenantRepository<T>(client, key,
+                workspaceOwnerId: workspaceOwnerId,
+                fromMap: fromMap,
+                toMap: toMap)
+            : SupabaseRepository<T>(client, key,
+                workspaceOwnerId: workspaceOwnerId,
+                fromMap: fromMap,
+                toMap: toMap);
+    _pgRepo = repo<Pg>('pgs', fromMap: Pg.fromMap, toMap: (e) => e.toMap());
+    _roomRepo =
+        repo<Room>('rooms', fromMap: Room.fromMap, toMap: (e) => e.toMap());
+    _tenantRepo = repo<Tenant>('tenants',
+        fromMap: Tenant.fromMap, toMap: (e) => e.toMap());
+    _paymentRepo = repo<Payment>('payments',
+        fromMap: Payment.fromMap, toMap: (e) => e.toMap());
+    _maintenanceRepo = repo<MaintenanceRequest>('maintenance',
+        fromMap: MaintenanceRequest.fromMap, toMap: (e) => e.toMap());
+    _visitorRepo = repo<Visitor>('visitors',
+        fromMap: Visitor.fromMap, toMap: (e) => e.toMap());
+    _announcementRepo = repo<Announcement>('announcements',
+        fromMap: Announcement.fromMap, toMap: (e) => e.toMap());
+    _attendanceRepo = repo<AttendanceRecord>('attendance',
+        fromMap: AttendanceRecord.fromMap, toMap: (e) => e.toMap());
+    _utilityRepo = repo<UtilityBill>('utilities',
+        fromMap: UtilityBill.fromMap, toMap: (e) => e.toMap());
+    _notificationRepo = repo<AppNotification>('notifications',
+        fromMap: AppNotification.fromMap, toMap: (e) => e.toMap());
   }
 
   List<Pg> pgs = [];
@@ -818,7 +809,9 @@ class AppState extends ChangeNotifier {
         ..onPostgresChanges(
             event: PostgresChangeEvent.all,
             schema: 'public',
-            table: 'app_data',
+            // Tenants cannot read app_data rows, so they listen for the
+            // workspace's change ping and re-fetch their filtered view.
+            table: role == UserRole.tenant ? 'workspace_changes' : 'app_data',
             filter: PostgresChangeFilter(
                 type: PostgresChangeFilterType.eq,
                 column: 'owner_id',
