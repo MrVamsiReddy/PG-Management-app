@@ -114,7 +114,7 @@ The app is cloud-only — every session signs in through Supabase Auth and all d
 Setup for a fresh Supabase project (free tier, no card):
 
 1. Create a project at supabase.com and put its URL and publishable key in `lib/src/supabase_config.dart`. The publishable key is safe to commit — access control lives server-side.
-2. Run `supabase/schema.sql` in the dashboard's SQL Editor. It creates the `app_data` table and RLS policies restricting every row to its owner.
+2. Run `supabase/schema.sql` in the dashboard's SQL Editor. It creates the `app_data` table and RLS policies restricting every row to its owner. Then run the numbered migrations `002`…`014` in order; `014_tenant_isolation.sql` keeps each tenant to their own data (tenants read and write only through the `tenant_collection`/`tenant_save` functions).
 3. For frictionless testing, disable email confirmation: Authentication → Sign In / Providers → Email → turn off "Confirm email". Leave it on for production.
 
 The role picked at sign-up (Owner / Tenant / Admin) is stored in user metadata and drives the role-based UI. Data is stored per account as JSONB collections mirroring the local layout; moving to fully relational tables is planned for when cross-account access (owner ↔ tenant linking) lands.
