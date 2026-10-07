@@ -677,7 +677,13 @@ void main() {
     expect(result.error, isNull);
     expect(result.emailSent, isFalse);
     expect(state.tenants.where((t) => t.id == tenant.id), isEmpty);
-    expect(state.payments.where((p) => p.tenantId == tenant.id), isEmpty);
+    // Unpaid dues go; money already received stays in the books.
+    expect(
+        state.payments.where((p) =>
+            p.tenantId == tenant.id &&
+            p.status == PaymentStatus.due &&
+            p.collected == 0),
+        isEmpty);
     expect(state.visitors.where((v) => v.tenantId == tenant.id), isEmpty);
     expect(state.attendance.where((a) => a.tenantId == tenant.id), isEmpty);
     expect(state.notifications.where((n) => n.tenantId == tenant.id), isEmpty);
@@ -740,8 +746,9 @@ void main() {
     expect(fn, contains('code:unauthorized'));
     expect(fn, contains('deleteUser'));
     expect(fn, contains('userId !== caller.id'));
-    expect(fn, contains('upi_submissions'));
-    expect(fn, contains('payment-proofs'));
+    // Rent records are the PG's books: submissions and proofs are kept.
+    expect(fn, isNot(contains('from("upi_submissions")')));
+    expect(fn, isNot(contains('from("payment-proofs")')));
     expect(fn, contains('"members"'));
     expect(fn, contains('"invites"'));
     expect(fn, contains('"profiles"'));
@@ -2552,7 +2559,7 @@ void main() {
     state.onboardTenant(
         name: 'Second In',
         phone: '9000000002',
-        email: 'tenant@example.com',
+        email: 'second@example.com',
         roomId: roomId,
         bed: 'B');
     final second = state.tenants.firstWhere((t) => t.name == 'Second In');
@@ -2613,5 +2620,122 @@ void main() {
     expect(state.setRoomBeds(empty.id, 1), isNull);
     expect(state.removeRoom(empty.id), isNull);
     expect(state.rooms.any((r) => r.id == empty.id), isFalse);
+  });
+
+  // ---- Security hardening (015) ----
+
+  test('015 locks down profiles, members, anon RPCs and owner saves', () {
+    final sql = File('supabase/015_security_hardening.sql').readAsStringSync();
+    // No self-promotion to platform admin.
+    expect(sql,
+        contains('revoke update on public.profiles from anon, authenticated'));
+    expect(sql, contains('grant update (full_name, phone) on public.profiles'));
+    // Anonymous callers can't reach security-definer functions.
+    expect(sql, contains('from public, anon, authenticated'));
+    expect(sql,
+        contains("execute format('revoke execute on function %s from anon'"));
+    // Only the invite function writes members.
+    expect(sql, contains('drop policy if exists "owner manages own members"'));
+    // The temporary-password flag is read from app_metadata.
+    expect(sql, contains("-> 'app_metadata' ->> 'must_change_password'"));
+    // Disabled/expired customers are cut off on the server.
+    expect(sql, contains('function public.workspace_active'));
+    // Owner saves merge instead of replacing.
+    expect(sql, contains('function public.owner_save'));
+    final repo = File('lib/src/repositories.dart').readAsStringSync();
+    expect(repo, contains("rpc('owner_save'"));
+    expect(repo, isNot(contains('.upsert(')));
+  });
+
+  test('the push function never builds a filter string from emails', () {
+    final fn = File('supabase/functions/push/index.ts').readAsStringSync();
+    expect(fn, isNot(contains('.or(')));
+    expect(fn, contains('.in("email", emails)'));
+    expect(fn, contains('isOwner ? scope : "managers"'));
+  });
+
+  test('the invite function is owner-only and reads names from stored data',
+      () {
+    final fn = File('supabase/functions/invite/index.ts').readAsStringSync();
+    expect(fn, contains('"code:not_owner"'));
+    expect(fn, contains('"code:email_in_other_pg"'));
+    expect(fn, contains('"code:email_is_owner"'));
+    expect(fn, isNot(contains('body.pgName')));
+    expect(fn, isNot(contains('body.tenantName')));
+    expect(fn, contains('app_metadata: { must_change_password: true }'));
+  });
+
+  test('a malformed stored item is skipped, not fatal', () {
+    final items = parseItems<MaintenanceRequest>([
+      {'id': 'bad', 'roomId': 'r1', 'status': 'open'},
+      {
+        'id': 'ok',
+        'roomId': 'r1',
+        'title': 'Fan',
+        'category': 'Electrical',
+        'status': 'open',
+        'priority': 'high',
+        'createdAt': '2026-10-07T10:00:00.000000Z',
+      },
+    ], MaintenanceRequest.fromMap);
+    expect(items.map((m) => m.id), ['ok']);
+  });
+
+  test('reading a shared notification marks it read for that reader only', () {
+    state.notifications.insert(
+        0,
+        AppNotification(
+            id: 'shared',
+            title: 'Water cut',
+            body: 'Tomorrow 10-12',
+            type: NotificationType.announcement,
+            createdAt: DateTime.now(),
+            roleScope: NotificationScope.everyone));
+    state.debugSignIn(UserRole.tenant, tenantId: 't1');
+    state.markNotificationRead('shared');
+    final n = state.notifications.firstWhere((n) => n.id == 'shared');
+    expect(state.isRead(n), isTrue);
+    expect(n.isReadBy('t2'), isFalse);
+    expect(n.isReadBy('managers'), isFalse);
+    final restored = AppNotification.fromMap(n.toMap());
+    expect(restored.readBy, ['t1']);
+  });
+
+  test('a month nobody opened the app in still gets a due', () {
+    final now = DateTime.now();
+    // t1 last has a row two months ago: last month and this month are due.
+    state.payments.removeWhere((p) =>
+        p.tenantId == 't1' &&
+        DateTime(p.period.year, p.period.month)
+            .isAfter(DateTime(now.year, now.month - 2)));
+    expect(state.generateMonthlyDues(), isTrue);
+    final last = DateTime(now.year, now.month - 1);
+    expect(
+        state.payments.any((p) => p.id == 'pay-${last.year}-${last.month}-t1'),
+        isTrue);
+    expect(state.payments.any((p) => p.id == 'pay-${now.year}-${now.month}-t1'),
+        isTrue);
+    expect(state.generateMonthlyDues(), isFalse);
+  });
+
+  test('two tenants cannot share a login email', () {
+    final room = state.rooms.firstWhere((r) => r.occupied < r.beds);
+    expect(
+        state.onboardTenant(
+            name: 'One',
+            phone: '9000000101',
+            email: 'same@example.com',
+            roomId: room.id,
+            bed: state.suggestBed(room.id)),
+        isNull);
+    final other = state.rooms.firstWhere((r) => r.occupied < r.beds);
+    expect(
+        state.onboardTenant(
+            name: 'Two',
+            phone: '9000000102',
+            email: 'Same@Example.com',
+            roomId: other.id,
+            bed: state.suggestBed(other.id)),
+        contains('email'));
   });
 }

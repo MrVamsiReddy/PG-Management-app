@@ -123,16 +123,22 @@ async function sendMail(to: string, subject: string, text: string): Promise<bool
   }
 }
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// Browsers may call this only from the web app (plus localhost for
+// development). Mobile apps send no Origin and are unaffected. Override with
+// the ALLOWED_ORIGINS secret (comma-separated) if the web app moves.
+const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ?? "https://mrvamsireddy.github.io")
+  .split(",").map((o) => o.trim()).filter(Boolean);
 
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "content-type": "application/json" },
-  });
+function corsHeadersFor(req: Request): Record<string, string> {
+  const origin = req.headers.get("origin") ?? "";
+  const local = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+  return {
+    "Access-Control-Allow-Origin": allowedOrigins.includes(origin) || local ? origin : (allowedOrigins[0] ?? ""),
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Vary": "Origin",
+  };
+}
+
 
 function tempPassword(length = 10): string {
   // Unambiguous characters only — this gets retyped from a phone screen.
@@ -141,6 +147,38 @@ function tempPassword(length = 10): string {
   let out = "";
   for (const byte of random) out += chars[byte % chars.length];
   return out;
+}
+
+const MAX_INVITES_PER_HOUR = 30;
+
+// Control characters out, length capped: names end up in an email.
+function cleanText(value: unknown, max: number): string {
+  return String(value ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, max);
+}
+
+// deno-lint-ignore no-explicit-any
+function hasTempPassword(user: any): boolean {
+  return user?.app_metadata?.must_change_password === true ||
+    user?.user_metadata?.must_change_password === true;
+}
+
+// True when the caller's session came from a password-reset (or OTP/magic)
+// link in the last 15 minutes. The JWT was already verified by getUser().
+function recentResetSignIn(req: Request): boolean {
+  try {
+    const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+    const part = token.split(".")[1] ?? "";
+    const b64 = part.replace(/-/g, "+").replace(/_/g, "/");
+    const payload = JSON.parse(atob(b64.padEnd(Math.ceil(b64.length / 4) * 4, "=")));
+    const amr: { method?: string; timestamp?: number }[] = Array.isArray(payload.amr) ? payload.amr : [];
+    const now = Date.now() / 1000;
+    return amr.some((m) =>
+      ["recovery", "otp", "magiclink"].includes(m.method ?? "") &&
+      typeof m.timestamp === "number" && now - m.timestamp < 15 * 60
+    );
+  } catch (_e) {
+    return false;
+  }
 }
 
 type InviteRow = {
@@ -152,6 +190,12 @@ type InviteRow = {
 };
 
 Deno.serve(async (req) => {
+  const corsHeaders = corsHeadersFor(req);
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { ...corsHeaders, "content-type": "application/json" },
+    });
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const admin = createClient(
@@ -180,26 +224,36 @@ Deno.serve(async (req) => {
 
     // ---- Tenant-side actions -----------------------------------------------
 
-    // First-login password change, done with the service role so it works
-    // even when the project's "secure password change" auth setting is on.
-    // The temporary password is verified first; it is never logged.
+    // Password change that clears the temporary-password flag, done with the
+    // service role so it works even when the project's "secure password
+    // change" auth setting is on. The caller proves it is them with either
+    // the temporary password (first sign-in) or a fresh password-reset
+    // sign-in (the reset-link flow). The password is never logged.
     if (action === "set-password") {
       const tempPassword = String(body.tempPassword ?? "");
       const newPassword = String(body.newPassword ?? "");
       if (newPassword.length < 6) return json({ error: "code:weak_password" }, 400);
-      if (!tempPassword || !caller.email) return json({ error: "code:temp_wrong" }, 403);
-      const verifier = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_ANON_KEY")!,
-      );
-      const { error: pwError } = await verifier.auth.signInWithPassword({
-        email: caller.email,
-        password: tempPassword,
-      });
-      if (pwError) return json({ error: "code:temp_wrong" }, 403);
+      if (!caller.email) return json({ error: "code:temp_wrong" }, 403);
+      if (tempPassword) {
+        const verifier = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_ANON_KEY")!,
+        );
+        const { error: pwError } = await verifier.auth.signInWithPassword({
+          email: caller.email,
+          password: tempPassword,
+        });
+        if (pwError) return json({ error: "code:temp_wrong" }, 403);
+      } else if (!recentResetSignIn(req)) {
+        return json({ error: "code:temp_wrong" }, 403);
+      }
+      // The flag that the database enforces lives in app_metadata, which only
+      // the service role can write; user_metadata is kept in step for older
+      // app versions.
       const { error: upError } = await admin.auth.admin.updateUserById(caller.id, {
         password: newPassword,
         user_metadata: { ...caller.user_metadata, must_change_password: false },
+        app_metadata: { ...caller.app_metadata, must_change_password: false },
       });
       if (upError) return json({ error: "code:server_error" }, 500);
       return json({ ok: true });
@@ -256,6 +310,19 @@ Deno.serve(async (req) => {
 
     // ---- Owner-side actions ------------------------------------------------
 
+    // Only PG owners may invite, resend or revoke.
+    const { data: callerProfile } = await admin.from("profiles")
+      .select("role, customer_id").eq("id", caller.id).maybeSingle();
+    if (callerProfile) {
+      if (callerProfile.role !== "owner") return json({ error: "code:not_owner" }, 403);
+    } else {
+      // Legacy owners have no profile row; a linked tenant is never an owner.
+      const { data: asMember } = await admin.from("members").select("owner_id")
+        .eq("member_email", (caller.email ?? "").toLowerCase()).limit(1).maybeSingle();
+      if (asMember) return json({ error: "code:not_owner" }, 403);
+    }
+    const customerId: string | null = callerProfile?.customer_id ?? null;
+
     const tenantId = String(body.tenantId ?? "");
     if (!tenantId) return json({ error: "code:missing_fields" }, 400);
 
@@ -270,12 +337,11 @@ Deno.serve(async (req) => {
       for (const row of revoked) {
         if (!row.user_id) continue;
         const { data: got } = await admin.auth.admin.getUserById(row.user_id);
-        if (got?.user?.user_metadata?.must_change_password === true) {
+        if (hasTempPassword(got?.user)) {
           await admin.auth.admin.updateUserById(row.user_id, { password: tempPassword(32) });
         }
       }
-      const { data: rp } = await admin.from("profiles").select("customer_id").eq("id", caller.id).maybeSingle();
-      await audit("tenant_invite_revoked", rp?.customer_id ?? null, tenantId);
+      await audit("tenant_invite_revoked", customerId, tenantId);
       return json({ ok: true, status: "revoked" });
     }
 
@@ -283,23 +349,71 @@ Deno.serve(async (req) => {
       return json({ error: "code:missing_fields" }, 400);
     }
 
-    const address = String(body.email ?? "").trim().toLowerCase();
-    if (!address.includes("@")) return json({ error: "code:missing_fields" }, 400);
-    const tenantName = String(body.tenantName ?? "");
-    const pgId = String(body.pgId ?? "");
-    const roomId = String(body.roomId ?? "");
-    const bedLabel = String(body.bedLabel ?? "");
+    // Each invite creates a login and sends an email, so cap the rate.
+    const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { count: recentInvites } = await admin.from("invites")
+      .select("id", { count: "exact", head: true })
+      .eq("owner_id", caller.id).gte("created_at", hourAgo);
+    if ((recentInvites ?? 0) >= MAX_INVITES_PER_HOUR) return json({ error: "code:rate_limited" }, 429);
 
-    // The inviting owner's resolved SaaS customer, when one exists.
-    const { data: prof } = await admin.from("profiles")
-      .select("customer_id").eq("id", caller.id).maybeSingle();
-    const customerId = prof?.customer_id ?? null;
+    // The tenant, room and PG come from the owner's own stored data, never
+    // from the request, so the email can't carry arbitrary text.
+    const blob = async (key: string): Promise<Record<string, unknown>[]> => {
+      const { data } = await admin.from("app_data").select("data")
+        .eq("owner_id", caller.id).eq("key", key).maybeSingle();
+      return Array.isArray(data?.data) ? data.data : [];
+    };
+    const tenant = (await blob("tenants")).find((t) => t.id === tenantId);
+    if (!tenant) return json({ error: "code:tenant_not_found" }, 404);
+
+    const address = String(body.email ?? "").trim().toLowerCase();
+    if (!/^[^\s,()"\\@]+@[^\s,()"\\@]+$/.test(address)) return json({ error: "code:missing_fields" }, 400);
+    const storedEmail = String(tenant.email ?? "").trim().toLowerCase();
+    if (storedEmail) {
+      if (storedEmail !== address) return json({ error: "code:email_mismatch" }, 400);
+    } else {
+      // Older tenant records have no email; only re-use one already invited.
+      const { data: prior } = await admin.from("invites").select("id")
+        .eq("owner_id", caller.id).eq("tenant_id", tenantId).eq("email", address)
+        .limit(1).maybeSingle();
+      if (!prior) return json({ error: "code:email_mismatch" }, 400);
+    }
+
+    const roomId = String(tenant.roomId ?? "");
+    const room = (await blob("rooms")).find((r) => r.id === roomId);
+    const pgId = String(room?.pgId ?? "");
+    const pg = (await blob("pgs")).find((r) => r.id === pgId);
+    const tenantName = cleanText(tenant.name, 100);
+    const bedLabel = cleanText(tenant.bed, 20);
+    const pgName = cleanText(pg?.name, 100) || "your PG";
+
+    // One workspace per login: never pull a resident out of another PG, and
+    // never turn another business's owner or a platform admin into a tenant.
+    const { data: elsewhere } = await admin.from("members").select("owner_id")
+      .eq("member_email", address).neq("owner_id", caller.id).limit(1).maybeSingle();
+    if (elsewhere) return json({ error: "code:email_in_other_pg" }, 409);
+    const { data: sameWorkspace } = await admin.from("members").select("tenant_id")
+      .eq("owner_id", caller.id).eq("member_email", address).maybeSingle();
+    if (sameWorkspace && sameWorkspace.tenant_id !== tenantId) {
+      return json({ error: "code:email_in_use_tenant" }, 409);
+    }
+    const { data: existingId } = await admin.rpc("auth_user_id_by_email", { p_email: address });
+    let existingProfile: { role: string; platform_admin: boolean } | null = null;
+    if (existingId) {
+      const { data: prof } = await admin.from("profiles")
+        .select("role, platform_admin").eq("id", existingId).maybeSingle();
+      existingProfile = prof;
+      const { count: ownsData } = await admin.from("app_data")
+        .select("key", { count: "exact", head: true }).eq("owner_id", existingId);
+      if ((prof && (prof.platform_admin || prof.role !== "tenant")) || (ownsData ?? 0) > 0) {
+        return json({ error: "code:email_is_owner" }, 409);
+      }
+    }
 
     // A new invite supersedes any previous pending one for this tenant.
-    const { data: superseded } = await admin.from("invites")
+    await admin.from("invites")
       .update({ status: "resent", resent_at: new Date().toISOString() })
-      .eq("owner_id", caller.id).eq("tenant_id", tenantId).eq("status", "pending")
-      .select("user_id");
+      .eq("owner_id", caller.id).eq("tenant_id", tenantId).eq("status", "pending");
 
     // Create the tenant's account with a one-time password. If the email is
     // already registered we regenerate the temporary password only while the
@@ -317,28 +431,29 @@ Deno.serve(async (req) => {
       room_id: roomId,
       bed_id: bedLabel,
     };
-    const { data: created, error: createError } = await admin.auth.admin.createUser({
-      email: address,
-      password,
-      email_confirm: true,
-      user_metadata: metadata,
-    });
-    if (createError || !created?.user) {
+    if (!existingId) {
+      const { data: created, error: createError } = await admin.auth.admin.createUser({
+        email: address,
+        password,
+        email_confirm: true,
+        user_metadata: metadata,
+        app_metadata: { must_change_password: true },
+      });
+      if (createError || !created?.user) return json({ error: "code:server_error" }, 500);
+      userId = created.user.id;
+    } else {
       existing = true;
       password = null;
-      userId = (superseded ?? []).find((r) => r.user_id)?.user_id ?? null;
-      if (userId) {
-        const { data: got } = await admin.auth.admin.getUserById(userId);
-        if (got?.user?.user_metadata?.must_change_password === true) {
-          password = tempPassword();
-          await admin.auth.admin.updateUserById(userId, {
-            password,
-            user_metadata: { ...got.user.user_metadata, ...metadata },
-          });
-        }
+      userId = existingId;
+      const { data: got } = await admin.auth.admin.getUserById(existingId);
+      if (got?.user && hasTempPassword(got.user)) {
+        password = tempPassword();
+        await admin.auth.admin.updateUserById(existingId, {
+          password,
+          user_metadata: { ...got.user.user_metadata, ...metadata },
+          app_metadata: { ...got.user.app_metadata, must_change_password: true },
+        });
       }
-    } else {
-      userId = created.user.id;
     }
 
     const { error: memberError } = await admin.from("members").upsert({
@@ -350,7 +465,7 @@ Deno.serve(async (req) => {
 
     // Give invited tenants a profiles row so the customer-status login gate
     // applies to them too (disabled customer ⇒ tenant blocked).
-    if (userId && customerId) {
+    if (userId && customerId && (!existingProfile || existingProfile.role === "tenant")) {
       await admin.from("profiles").upsert({
         id: userId,
         role: "tenant",
@@ -374,7 +489,6 @@ Deno.serve(async (req) => {
     await audit(action === "resend" ? "tenant_invite_resent" : "tenant_invited", customerId, tenantId, { email: address });
 
     const mail = inviteMails[String(body.lang ?? "en")] ?? inviteMails.en;
-    const pgName = String(body.pgName ?? "").trim() || "your PG";
     const emailSent = await sendMail(
       address,
       mail.subject(pgName),

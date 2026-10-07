@@ -9,12 +9,24 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// Browsers may call this only from the web app (plus localhost for
+// development). Mobile apps send no Origin and are unaffected. Override with
+// the ALLOWED_ORIGINS secret (comma-separated) if the web app moves.
+const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ?? "https://mrvamsireddy.github.io")
+  .split(",").map((o) => o.trim()).filter(Boolean);
+
+function corsHeadersFor(req: Request): Record<string, string> {
+  const origin = req.headers.get("origin") ?? "";
+  const local = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+  return {
+    "Access-Control-Allow-Origin": allowedOrigins.includes(origin) || local ? origin : (allowedOrigins[0] ?? ""),
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Vary": "Origin",
+  };
+}
 
 Deno.serve(async (req) => {
+  const corsHeaders = corsHeadersFor(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const json = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "content-type": "application/json" } });
@@ -58,16 +70,22 @@ Deno.serve(async (req) => {
 
 // deno-lint-ignore no-explicit-any
 async function purgePrefix(admin: any, bucket: string, prefix: string): Promise<void> {
-  const { data } = await admin.storage.from(bucket).list(prefix, { limit: 1000 });
-  if (!data || data.length === 0) return;
+  const PAGE = 1000;
   const files: string[] = [];
-  for (const entry of data) {
-    const path = `${prefix}/${entry.name}`;
-    if (entry.id === null) {
-      await purgePrefix(admin, bucket, path); // nested folder
-    } else {
-      files.push(path);
+  const folders: string[] = [];
+  // List every page first; removing while paging would shift the offsets.
+  for (let offset = 0; ; offset += PAGE) {
+    const { data } = await admin.storage.from(bucket).list(prefix, { limit: PAGE, offset });
+    if (!data || data.length === 0) break;
+    for (const entry of data) {
+      const path = `${prefix}/${entry.name}`;
+      if (entry.id === null) folders.push(path); // nested folder
+      else files.push(path);
     }
+    if (data.length < PAGE) break;
   }
-  if (files.length) await admin.storage.from(bucket).remove(files);
+  for (const folder of folders) await purgePrefix(admin, bucket, folder);
+  for (let i = 0; i < files.length; i += PAGE) {
+    await admin.storage.from(bucket).remove(files.slice(i, i + PAGE));
+  }
 }

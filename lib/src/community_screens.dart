@@ -375,7 +375,7 @@ class NotificationsScreen extends StatelessWidget {
               itemBuilder: (context, index) {
                 final item = items[index];
                 return Card(
-                    color: item.read
+                    color: state.isRead(item)
                         ? surfaceCard
                         : softTint.withValues(alpha: .55),
                     child: ListTile(
@@ -391,7 +391,7 @@ class NotificationsScreen extends StatelessWidget {
                           '${item.body}\n${relativeTime(item.createdAt)}',
                           maxLines: 2),
                       isThreeLine: true,
-                      trailing: item.read
+                      trailing: state.isRead(item)
                           ? null
                           : Container(
                               width: 8,

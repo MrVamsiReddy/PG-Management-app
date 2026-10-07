@@ -24,6 +24,10 @@ class SupabaseRepository<T> implements Repository<T> {
   final T Function(Map<String, dynamic> map) fromMap;
   final Map<String, dynamic> Function(T item) toMap;
 
+  /// The collection as this device last loaded or saved it. A save sends it
+  /// along so the server applies only this device's own changes.
+  List<Map<String, dynamic>> _base = const [];
+
   @override
   Future<List<T>> loadAll() async {
     final row = await client
@@ -33,19 +37,46 @@ class SupabaseRepository<T> implements Repository<T> {
         .eq('key', key)
         .maybeSingle();
     final data = row?['data'] as List? ?? const [];
-    return data
-        .map((e) => fromMap(Map<String, dynamic>.from(e as Map)))
-        .toList();
+    _base = data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    return parseItems(data, fromMap);
   }
 
+  /// Merges instead of replacing: `owner_save` applies the items this device
+  /// added, edited or deleted since [_base] onto the stored list under a row
+  /// lock, so a concurrent save from another device or a tenant is kept
+  /// (supabase/015_security_hardening.sql).
   @override
   Future<void> saveAll(List<T> items) async {
-    await client.from('app_data').upsert({
-      'owner_id': workspaceOwnerId,
-      'key': key,
-      'data': items.map(toMap).toList(),
-    }, onConflict: 'owner_id,key');
+    final base = _base;
+    final mine = items.map(toMap).toList();
+    _base = mine;
+    try {
+      await client.rpc('owner_save', params: {
+        'p_owner': workspaceOwnerId,
+        'p_key': key,
+        'p_base': base,
+        'p_items': mine,
+      });
+    } catch (_) {
+      _base = base;
+      rethrow;
+    }
   }
+}
+
+/// Parses stored items, skipping any that don't match the model, so one bad
+/// row can't make the whole workspace fail to load.
+List<T> parseItems<T>(
+    List<dynamic> data, T Function(Map<String, dynamic>) fromMap) {
+  final items = <T>[];
+  for (final e in data) {
+    try {
+      items.add(fromMap(Map<String, dynamic>.from(e as Map)));
+    } catch (_) {
+      // Malformed item: leave it out of the in-memory list.
+    }
+  }
+  return items;
 }
 
 /// Tenant view of the owner's workspace. Tenants have no direct access to
@@ -79,9 +110,7 @@ class TenantRepository<T> implements Repository<T> {
   Future<List<T>> loadAll() async {
     final data = await client.rpc('tenant_collection',
         params: {'p_owner': workspaceOwnerId, 'p_key': key});
-    return (data as List? ?? const [])
-        .map((e) => fromMap(Map<String, dynamic>.from(e as Map)))
-        .toList();
+    return parseItems(data as List? ?? const [], fromMap);
   }
 
   @override

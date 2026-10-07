@@ -704,6 +704,7 @@ class AppNotification {
     required this.type,
     required this.createdAt,
     this.read = false,
+    this.readBy = const [],
     this.roleScope = NotificationScope.managers,
     this.tenantId,
     this.pgId,
@@ -719,6 +720,11 @@ class AppNotification {
   final bool read;
   final String? customerId;
 
+  /// Who has read a shared ([NotificationScope.everyone]) notification:
+  /// tenant ids, plus `managers` for the owner side. [read] alone would let
+  /// the first reader clear it for everybody.
+  final List<String> readBy;
+
   /// Audience. Combined with [tenantId] and [pgId] this decides who may see it.
   final NotificationScope roleScope;
 
@@ -731,7 +737,8 @@ class AppNotification {
   /// The payment/request/visitor/bill this notification refers to.
   final String? relatedEntityId;
 
-  AppNotification copyWith({bool? read}) => AppNotification(
+  AppNotification copyWith({bool? read, List<String>? readBy}) =>
+      AppNotification(
         id: id,
         title: title,
         body: body,
@@ -743,7 +750,12 @@ class AppNotification {
         relatedEntityId: relatedEntityId,
         customerId: customerId,
         read: read ?? this.read,
+        readBy: readBy ?? this.readBy,
       );
+
+  /// Whether [reader] (a tenant id, or `managers`) has read this.
+  bool isReadBy(String reader) =>
+      roleScope == NotificationScope.everyone ? readBy.contains(reader) : read;
 
   Map<String, dynamic> toMap() => {
         'id': id,
@@ -752,6 +764,7 @@ class AppNotification {
         'type': type.name,
         'createdAt': createdAt.toIso8601String(),
         'read': read,
+        if (readBy.isNotEmpty) 'readBy': readBy,
         'roleScope': roleScope.name,
         'tenantId': tenantId,
         'pgId': pgId,
@@ -765,7 +778,9 @@ class AppNotification {
         body: map['body'] as String,
         type: NotificationType.values.byName(map['type'] as String),
         createdAt: DateTime.parse(map['createdAt'] as String),
-        read: map['read'] as bool,
+        read: map['read'] as bool? ?? false,
+        readBy:
+            (map['readBy'] as List?)?.whereType<String>().toList() ?? const [],
         // Legacy rows (pre-privacy) default to managers-only — fail closed so
         // tenants never inherit visibility into old workspace notifications.
         roleScope: map['roleScope'] == null

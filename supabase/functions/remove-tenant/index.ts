@@ -3,8 +3,8 @@
 // Called by the owner after they permanently remove a tenant from their PG.
 // Server-side cleanup the app itself cannot do:
 //   - delete the tenant's login (auth user), profiles row and push tokens
-//   - delete the members link, every invite row and UPI submissions
-//   - delete their payment-proof screenshots from storage
+//   - delete the members link and every invite row
+//   (rent records and UPI submissions are kept: they are the PG's books)
 //   - email the tenant that they are no longer part of the PG and that
 //     their data has been permanently deleted (English/Hindi/Telugu)
 //
@@ -19,31 +19,37 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// Browsers may call this only from the web app (plus localhost for
+// development). Mobile apps send no Origin and are unaffected. Override with
+// the ALLOWED_ORIGINS secret (comma-separated) if the web app moves.
+const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ?? "https://mrvamsireddy.github.io")
+  .split(",").map((o) => o.trim()).filter(Boolean);
 
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "content-type": "application/json" },
-  });
+function corsHeadersFor(req: Request): Record<string, string> {
+  const origin = req.headers.get("origin") ?? "";
+  const local = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+  return {
+    "Access-Control-Allow-Origin": allowedOrigins.includes(origin) || local ? origin : (allowedOrigins[0] ?? ""),
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Vary": "Origin",
+  };
+}
+
 
 const emails: Record<string, { subject: (pg: string) => string; body: (name: string, pg: string) => string }> = {
   en: {
     subject: (pg) => `You are no longer a resident of ${pg}`,
     body: (name, pg) =>
       `Hi ${name},\n\nThis is to let you know that you are no longer a part of ${pg}. ` +
-      `Your account and all your data — profile, rent records and visitors — ` +
-      `have been permanently deleted, and your login no longer works.\n\n` +
+      `Your account, profile and visitor records have been permanently deleted, ` +
+      `and your login no longer works. The PG keeps its record of the rent you paid.\n\n` +
       `If you believe this was a mistake, please contact your PG owner directly.\n\n— ${pg}, via PG Management`,
   },
   hi: {
     subject: (pg) => `अब आप ${pg} के निवासी नहीं हैं`,
     body: (name, pg) =>
       `नमस्ते ${name},\n\nयह सूचित किया जाता है कि अब आप ${pg} का हिस्सा नहीं हैं। ` +
-      `आपका खाता और आपका सारा डेटा — प्रोफ़ाइल, किराये के रिकॉर्ड और विज़िटर — ` +
+      `आपका खाता और आपका डेटा — प्रोफ़ाइल और विज़िटर — ` +
       `स्थायी रूप से हटा दिया गया है, और आपका लॉगिन अब काम नहीं करेगा।\n\n` +
       `यदि आपको लगता है कि यह गलती से हुआ है, तो कृपया सीधे अपने पीजी मालिक से संपर्क करें।\n\n— ${pg}, PG Management के माध्यम से`,
   },
@@ -51,13 +57,19 @@ const emails: Record<string, { subject: (pg: string) => string; body: (name: str
     subject: (pg) => `మీరు ఇకపై ${pg} నివాసి కారు`,
     body: (name, pg) =>
       `నమస్తే ${name},\n\nమీరు ఇకపై ${pg}లో భాగం కాదని తెలియజేస్తున్నాము. ` +
-      `మీ ఖాతా మరియు మీ మొత్తం డేటా — ప్రొఫైల్, అద్దె రికార్డులు మరియు సందర్శకులు — ` +
+      `మీ ఖాతా మరియు మీ డేటా — ప్రొఫైల్ మరియు సందర్శకులు — ` +
       `శాశ్వతంగా తొలగించబడ్డాయి, మీ లాగిన్ ఇకపై పనిచేయదు.\n\n` +
       `ఇది పొరపాటున జరిగిందని మీరు భావిస్తే, దయచేసి మీ పీజీ యజమానిని నేరుగా సంప్రదించండి.\n\n— ${pg}, PG Management ద్వారా`,
   },
 };
 
 Deno.serve(async (req) => {
+  const corsHeaders = corsHeadersFor(req);
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { ...corsHeaders, "content-type": "application/json" },
+    });
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const admin = createClient(
@@ -91,16 +103,6 @@ Deno.serve(async (req) => {
       member?.member_email ?? (inviteRows ?? []).find((r) => r.email)?.email ?? null;
     const userId: string | null =
       (inviteRows ?? []).find((r) => r.user_id)?.user_id ?? null;
-
-    // Payment-proof screenshots, then the submissions that reference them.
-    const { data: submissions } = await admin.from("upi_submissions")
-      .select("screenshot_path")
-      .eq("owner_id", caller.id).eq("tenant_id", tenantId);
-    const paths = (submissions ?? [])
-      .map((s) => s.screenshot_path).filter((p): p is string => !!p);
-    if (paths.length > 0) await admin.storage.from("payment-proofs").remove(paths);
-    await admin.from("upi_submissions")
-      .delete().eq("owner_id", caller.id).eq("tenant_id", tenantId);
 
     await admin.from("invites")
       .delete().eq("owner_id", caller.id).eq("tenant_id", tenantId);
