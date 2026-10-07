@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
   const corsHeaders = corsHeadersFor(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
-    const { workspaceOwnerId, title, body, scope, tenantId } = await req.json();
+    const { workspaceOwnerId, title, body, scope, tenantId, pgId } = await req.json();
     if (!workspaceOwnerId || !title) return new Response("bad request", { status: 400, headers: corsHeaders });
 
     const admin = createClient(
@@ -109,7 +109,8 @@ Deno.serve(async (req) => {
     // same privacy as the in-app list:
     //   managers -> the owner's devices only
     //   tenant   -> the invited member whose tenant_id matches
-    //   everyone -> the owner + every invited member
+    //   everyone -> the owner + every invited member (only the members
+    //               living in `pgId` when one is given)
     // Tenants may only alert the managers; addressing other residents is an
     // owner action.
     const effectiveScope = isOwner ? scope : "managers";
@@ -127,7 +128,22 @@ Deno.serve(async (req) => {
         .map((m: { member_email: string }) => m.member_email);
     } else {
       ownerIds = [workspaceOwnerId];
-      emails = allMembers.map((m: { member_email: string }) => m.member_email);
+      // A message for one PG reaches only the tenants living in that PG.
+      let inPg: Set<string> | null = null;
+      if (typeof pgId === "string" && pgId) {
+        const blob = async (key: string): Promise<Record<string, unknown>[]> => {
+          const { data } = await admin.from("app_data").select("data")
+            .eq("owner_id", workspaceOwnerId).eq("key", key).maybeSingle();
+          return Array.isArray(data?.data) ? data.data : [];
+        };
+        const roomIds = new Set((await blob("rooms"))
+          .filter((r) => r.pgId === pgId).map((r) => String(r.id)));
+        inPg = new Set((await blob("tenants"))
+          .filter((t) => roomIds.has(String(t.roomId))).map((t) => String(t.id)));
+      }
+      emails = allMembers
+        .filter((m: { tenant_id: string }) => inPg === null || inPg.has(m.tenant_id))
+        .map((m: { member_email: string }) => m.member_email);
     }
 
     // Two plain filters, never a hand-built filter string: member emails are

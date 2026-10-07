@@ -1,6 +1,7 @@
 -- PG Management — tenant data isolation inside a workspace.
--- Run once in the Supabase dashboard AFTER schema.sql, 002, 006, 007, 013.
--- Re-runnable.
+-- Run once in the Supabase dashboard AFTER schema.sql, 002, 006, 007, 013,
+-- then run 015 and 016. Re-runnable: functions that 015/016 replaced are
+-- skipped, so running this file again never brings back the older versions.
 --
 -- Before: 002_members.sql let any linked tenant SELECT every app_data row of
 -- the workspace (the whole `tenants` blob with every resident's phone, email
@@ -33,6 +34,11 @@ drop policy if exists "member updates tenant collections" on public.app_data;
 -- 2. Who is the calling tenant? (tenant id, their room, their PG)
 -- ---------------------------------------------------------------------------
 
+-- Skipped once 015 has replaced it.
+do $guard$
+begin
+  if to_regprocedure('public._tenant_new_item(text,jsonb,text,text)') is null then
+    execute $def$
 create or replace function public._tenant_context(p_owner uuid,
   out tenant_id text, out room_id text, out pg_id text)
 language plpgsql stable security definer set search_path = public as
@@ -56,7 +62,10 @@ begin
   where a.owner_id = p_owner and a.key = 'rooms' and r ->> 'id' = room_id
   limit 1;
 end
-$$;
+$$
+$def$;
+  end if;
+end $guard$;
 
 -- Whether item `e` of collection `p_key` is visible to that tenant.
 create or replace function public._tenant_can_see(p_key text, e jsonb,
@@ -84,6 +93,11 @@ $$;
 -- 3. Tenant reads: one collection, filtered server-side.
 -- ---------------------------------------------------------------------------
 
+-- Skipped once 016 has replaced it.
+do $guard$
+begin
+  if to_regprocedure('public._migration_016()') is null then
+    execute $def$
 create or replace function public.tenant_collection(p_owner uuid, p_key text)
 returns jsonb
 language plpgsql stable security definer set search_path = public as
@@ -103,12 +117,20 @@ begin
     where public._tenant_can_see(p_key, x.e, ctx.tenant_id, ctx.room_id, ctx.pg_id)
   ), '[]'::jsonb);
 end
-$$;
+$$
+$def$;
+  end if;
+end $guard$;
 
 -- ---------------------------------------------------------------------------
 -- 4. Tenant writes: merge, never replace.
 -- ---------------------------------------------------------------------------
 
+-- Skipped once 015 has replaced it.
+do $guard$
+begin
+  if to_regprocedure('public._tenant_new_item(text,jsonb,text,text)') is null then
+    execute $def$
 create or replace function public.tenant_save(p_owner uuid, p_key text, p_items jsonb)
 returns void
 language plpgsql volatile security definer set search_path = public as
@@ -197,7 +219,10 @@ begin
   set data = added || kept
   where owner_id = p_owner and key = p_key;
 end
-$$;
+$$
+$def$;
+  end if;
+end $guard$;
 
 revoke all on function public._tenant_context(uuid) from public, anon;
 revoke all on function public.tenant_collection(uuid, text) from public, anon;
@@ -228,6 +253,11 @@ create policy "workspace reads changes" on public.workspace_changes
         and m.member_email = lower((select auth.email()))
     ));
 
+-- Skipped once 016 has replaced it.
+do $guard$
+begin
+  if to_regprocedure('public._migration_016()') is null then
+    execute $def$
 create or replace function public.touch_workspace_changes()
 returns trigger language plpgsql security definer set search_path = public as
 $$
@@ -237,7 +267,10 @@ begin
   on conflict (owner_id) do update set changed_at = excluded.changed_at;
   return null;
 end
-$$;
+$$
+$def$;
+  end if;
+end $guard$;
 
 drop trigger if exists app_data_workspace_changes on public.app_data;
 create trigger app_data_workspace_changes
@@ -260,6 +293,11 @@ end $$;
 --    Path: {owner_id}/{pg_id}/{tenant_id}/{payment_id}/{filename}
 -- ---------------------------------------------------------------------------
 
+-- Skipped once 016 has replaced it.
+do $guard$
+begin
+  if to_regprocedure('public._migration_016()') is null then
+    execute $def$
 create or replace function public.can_access_proof(ws text, tenant text) returns boolean
 language sql stable security definer set search_path = public, auth as
 $$
@@ -270,7 +308,10 @@ $$
         and m.tenant_id = tenant
         and m.member_email = lower((select auth.email()))
     )
-$$;
+$$
+$def$;
+  end if;
+end $guard$;
 
 drop policy if exists "proofs workspace read" on storage.objects;
 create policy "proofs workspace read" on storage.objects

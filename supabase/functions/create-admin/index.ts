@@ -19,8 +19,12 @@ function corsHeadersFor(req: Request): Record<string, string> {
 const WINDOW_MS = 15 * 60 * 1000;
 const MAX_FAILURES = 5;
 // x-forwarded-for can be set by the caller, so the per-IP limit alone is
-// easy to dodge. This cap counts failures from every IP together.
+// easy to dodge. This cap counts failures from every IP together. Once it is
+// hit, wrong keys are refused without being checked, but the right key still
+// works, so strangers can't lock the real admin out.
 const MAX_FAILURES_GLOBAL = 20;
+// A setup key this long can't be guessed even without a rate limit.
+const MIN_KEY_LENGTH = 24;
 
 function timingSafeEqual(a: string, b: string): boolean {
   const enc = new TextEncoder();
@@ -50,7 +54,7 @@ Deno.serve(async (req) => {
     const { count: globalCount } = await admin.from("admin_setup_attempts")
       .select("id", { count: "exact", head: true })
       .eq("success", false).gte("created_at", since);
-    if ((globalCount ?? 0) >= MAX_FAILURES_GLOBAL) return json({ error: "code:rate_limited" }, 429);
+    const globallyLimited = (globalCount ?? 0) >= MAX_FAILURES_GLOBAL;
 
     const { fullName, email, password, setupKey } = await req.json().catch(() => ({}));
     const fail = async (code: string, status = 400) => {
@@ -66,9 +70,12 @@ Deno.serve(async (req) => {
 
     const current = Deno.env.get("ADMIN_SETUP_KEY") ?? "";
     const previous = Deno.env.get("ADMIN_SETUP_KEY_PREVIOUS") ?? "";
-    const ok = (current.length > 0 && timingSafeEqual(String(setupKey), current)) ||
-      (previous.length > 0 && timingSafeEqual(String(setupKey), previous));
-    if (!ok) return fail("code:invalid_key", 403);
+    if (current.length < MIN_KEY_LENGTH) return fail("code:key_too_short", 500);
+    const ok = timingSafeEqual(String(setupKey), current) ||
+      (previous.length >= MIN_KEY_LENGTH && timingSafeEqual(String(setupKey), previous));
+    if (!ok) {
+      return globallyLimited ? fail("code:rate_limited", 429) : fail("code:invalid_key", 403);
+    }
 
     const { data: created, error: createError } = await admin.auth.admin.createUser({
       email,

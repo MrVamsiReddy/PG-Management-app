@@ -33,6 +33,12 @@ jobs:
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
+          # Without the release key Gradle silently signs with the debug key,
+          # and phones refuse to update over the previous release.
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 is not set; refusing to publish a debug-signed APK."
+            exit 1
+          fi
           echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
           cat > android/key.properties <<EOF
           storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}

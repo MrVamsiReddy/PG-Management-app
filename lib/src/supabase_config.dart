@@ -6,8 +6,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 const supabaseUrl = 'https://trtinltbnuscjhswhfdp.supabase.co';
 const supabasePublishableKey = 'sb_publishable_AbpcjS3ZRxowxBSdkvu5PA_Yto9Teob';
 
-/// Public web build — shown in tenant invites.
+/// Public web build of the tenant app — shown in tenant invites.
 const appWebUrl = 'https://mrvamsireddy.github.io/PG-Management-app/';
+
+/// Public web build of the owner/admin app.
+const ownerWebUrl = '${appWebUrl}owner/';
 
 /// Always points at the newest published tenant APK (GitHub release asset) —
 /// this link is shared in tenant invites.

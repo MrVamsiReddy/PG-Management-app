@@ -36,6 +36,10 @@ function corsHeadersFor(req: Request): Record<string, string> {
 }
 
 
+function cleanText(value: unknown, max: number): string {
+  return String(value ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, max);
+}
+
 const emails: Record<string, { subject: (pg: string) => string; body: (name: string, pg: string) => string }> = {
   en: {
     subject: (pg) => `You are no longer a resident of ${pg}`,
@@ -85,11 +89,18 @@ Deno.serve(async (req) => {
     const caller = userData?.user;
     if (!caller) return json({ error: "code:unauthorized" }, 401);
 
+    // Only PG owners remove tenants.
+    const { data: callerProfile } = await admin.from("profiles")
+      .select("role").eq("id", caller.id).maybeSingle();
+    if (callerProfile?.role !== "owner") return json({ error: "code:not_owner" }, 403);
+
     const body = await req.json().catch(() => ({}));
     const tenantId = String(body.tenantId ?? "");
     if (!tenantId) return json({ error: "code:missing_fields" }, 400);
-    const tenantName = String(body.tenantName ?? "").trim() || "resident";
-    const pgName = String(body.pgName ?? "").trim() || "your PG";
+    // Names end up in an email subject and body: no control characters
+    // (no header injection), length capped.
+    const tenantName = cleanText(body.tenantName, 100) || "resident";
+    const pgName = cleanText(body.pgName, 100) || "your PG";
     const lang = String(body.lang ?? "en");
 
     // The tenant's login, when one was ever invited for this tenant record.

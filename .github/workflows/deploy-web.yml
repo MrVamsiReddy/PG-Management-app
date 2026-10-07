@@ -1,4 +1,4 @@
-name: Deploy web demo
+name: Deploy web apps
 
 on:
   push:
@@ -28,7 +28,12 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter build web --release --base-href "/PG-Management-app/"
+      # The production builds, never the combined dev app (lib/main.dart):
+      #   /PG-Management-app/        tenant app (invite links point here)
+      #   /PG-Management-app/owner/  owner + admin app
+      - run: flutter build web --release -t lib/main_tenant.dart --base-href "/PG-Management-app/"
+      - run: flutter build web --release -t lib/main_owner.dart --base-href "/PG-Management-app/owner/" --output "$GITHUB_WORKSPACE/build/web-owner"
+      - run: cp -r build/web-owner build/web/owner
       - uses: actions/configure-pages@v5
         with:
           enablement: true

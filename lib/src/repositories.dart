@@ -36,9 +36,13 @@ class SupabaseRepository<T> implements Repository<T> {
         .eq('owner_id', workspaceOwnerId)
         .eq('key', key)
         .maybeSingle();
-    final data = row?['data'] as List? ?? const [];
-    _base = data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-    return parseItems(data, fromMap);
+    final items = parseItems(row?['data'] as List? ?? const [], fromMap);
+    // The base holds only what this app version understood. An item it
+    // couldn't parse (e.g. written by a newer version) is then neither in the
+    // base nor in a save, so `owner_save` leaves it alone instead of reading
+    // its absence as a delete.
+    _base = items.map(toMap).toList();
+    return items;
   }
 
   /// Merges instead of replacing: `owner_save` applies the items this device
@@ -110,8 +114,11 @@ class TenantRepository<T> implements Repository<T> {
   Future<List<T>> loadAll() async {
     final data = await client.rpc('tenant_collection',
         params: {'p_owner': workspaceOwnerId, 'p_key': key});
-    return parseItems(data as List? ?? const [], fromMap);
+    return parse(data as List? ?? const []);
   }
+
+  /// Parses this collection out of a `tenant_workspace` result.
+  List<T> parse(List<dynamic> data) => parseItems(data, fromMap);
 
   @override
   Future<void> saveAll(List<T> items) async {

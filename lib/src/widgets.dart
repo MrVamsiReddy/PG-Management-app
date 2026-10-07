@@ -61,12 +61,24 @@ Future<String?> pickImageBase64(BuildContext context) async {
   }
 }
 
-Widget base64Image(String data, {double? height, BoxFit fit = BoxFit.cover}) =>
-    Image.memory(base64Decode(data),
+/// Shows a stored base64 image. Tenants upload these, so bad data shows a
+/// placeholder instead of breaking the screen.
+Widget base64Image(String data, {double? height, BoxFit fit = BoxFit.cover}) {
+  final placeholder = SizedBox(
+      height: height ?? 120,
+      width: double.infinity,
+      child: const Center(child: Icon(Icons.broken_image_outlined)));
+  try {
+    return Image.memory(base64Decode(data),
         height: height,
         width: double.infinity,
         fit: fit,
-        gaplessPlayback: true);
+        gaplessPlayback: true,
+        errorBuilder: (context, error, stackTrace) => placeholder);
+  } on FormatException {
+    return placeholder;
+  }
+}
 
 IconData notificationIcon(NotificationType type) => switch (type) {
       NotificationType.payment => Icons.payments_outlined,

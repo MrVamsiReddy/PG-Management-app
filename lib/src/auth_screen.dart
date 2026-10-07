@@ -1,7 +1,10 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'app_state.dart';
 import 'l10n.dart';
+import 'supabase_config.dart';
 import 'theme.dart';
 
 class AuthScreen extends StatelessWidget {
@@ -126,8 +129,13 @@ class AuthScreen extends StatelessWidget {
 }
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key, required this.portal});
+  const LoginScreen(
+      {super.key, required this.portal, this.showOwnerLink = false});
   final LoginPortal portal;
+
+  /// The tenant web app shows a link to the owner/admin web app, for owners
+  /// who still have the old address bookmarked.
+  final bool showOwnerLink;
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
@@ -154,7 +162,10 @@ class _LoginScreenState extends State<LoginScreen> {
           .showSnackBar(SnackBar(content: Text(l.t('auth.enterEmailFirst'))));
       return;
     }
-    final error = await AppScope.of(context).sendPasswordReset(address);
+    // The reset link opens the web app this account signs in to.
+    final error = await AppScope.of(context).sendPasswordReset(address,
+        redirectTo:
+            widget.portal == LoginPortal.tenant ? appWebUrl : ownerWebUrl);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(error ?? '${l.t('auth.resetSentTo')} $address.')));
@@ -267,6 +278,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                       builder: (_) =>
                                           const AdminSetupScreen())),
                           child: Text(l.t('auth.setupAdminLink')),
+                        ),
+                      ],
+                      if (widget.showOwnerLink && kIsWeb) ...[
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: busy ? null : openOwnerWebApp,
+                          child: Text(l.t('auth.ownerHere')),
                         ),
                       ],
                     ]),
@@ -561,4 +579,11 @@ class _AdminSetupScreenState extends State<AdminSetupScreen> {
       ),
     );
   }
+}
+
+/// Opens the owner/admin web app in this tab.
+Future<void> openOwnerWebApp() async {
+  try {
+    await launchUrl(Uri.parse(ownerWebUrl), webOnlyWindowName: '_self');
+  } catch (_) {}
 }
