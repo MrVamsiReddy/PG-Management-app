@@ -17,6 +17,7 @@
 14. `supabase/014_tenant_isolation.sql` — tenants read/write only through `tenant_collection` / `tenant_save`; `workspace_changes` live-sync pings; per-tenant proof folders. Re-runnable.
 15. `supabase/015_security_hardening.sql` — profile column rights, no anon RPCs, service-role-only members writes, app_metadata temp-password flag, server-side disabled/expired cut-off, typed tenant writes, `owner_save` merge. Re-runnable.
 16. `supabase/016_review_fixes.sql` — no profile ⇒ no workspace (existing profile-less owners are converted to `legacy` customers first — review them in the admin console), `push_tokens` bound to the user's own email, `owner_save` keeps unknown fields, owner-deletion trigger fix, proofs follow account status, `tenant_workspace` one-call tenant view. Re-runnable.
+17. `supabase/017_review_fixes_2.sql` — `payment-proofs` bucket accepts images up to 5 MB only; every UPI submission is written to `audit_logs` by a trigger (tenants can't insert audit rows themselves). Re-runnable.
 
 Always finish with the highest-numbered file. 014 and 015 skip the functions a later file replaced, so re-running an older file never undoes a newer one.
 
@@ -63,7 +64,7 @@ GitHub Actions builds/tests `main.dart` and publishes a release APK on tag `vX.Y
 Deploy `create-admin` + set `ADMIN_SETUP_KEY` → in the app: **Admin login → Set up a platform admin** → enter the key. Then admins create customers via **New customer**.
 
 ## Release checklist
-- [ ] Migrations 1–16 run; **sign-ups off**; email confirmation off; `payment-proofs` bucket present.
+- [ ] Migrations 1–17 run; **sign-ups off**; email confirmation off; `payment-proofs` bucket present.
 - [ ] Auth → URL Configuration: Site URL set; Redirect URLs include both `/PG-Management-app/` and `/PG-Management-app/owner/` (reset links).
 - [ ] All 6 functions deployed (`push`, `invite`, `remove-tenant`, `create-admin`, `create-customer`, `delete-customer`); `ADMIN_SETUP_KEY` (24+ chars) + `FIREBASE_SERVICE_ACCOUNT` set.
 - [ ] Release signing secrets set (`ANDROID_KEYSTORE_BASE64`, …) — the release workflow now fails without them.

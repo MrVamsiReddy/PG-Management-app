@@ -2860,4 +2860,76 @@ void main() {
       expect(l.t('com.openOwnerApp'), isNot('com.openOwnerApp'));
     }
   });
+
+  // ---- Second 2026-10-08 review ----
+
+  testWidgets('tenants see visitor status but no approve/check-out buttons',
+      (tester) async {
+    state.debugSignIn(UserRole.tenant, tenantId: 't1');
+    state.addVisitor(name: 'Guest One', tenantId: 't1', purpose: 'Visit');
+    await tester.pumpWidget(AppScope(
+      notifier: state,
+      child: MaterialApp(localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ], theme: buildAppTheme(), home: const VisitorsScreen()),
+    ));
+    await tester.pump();
+    expect(find.textContaining('Guest One'), findsOneWidget);
+    expect(find.text('Approve'), findsNothing);
+    expect(find.text('Decline'), findsNothing);
+  });
+
+  test('a blank technician or rent is never filled with demo values', () {
+    final ops = File('lib/src/operations_screens.dart').readAsStringSync();
+    expect(ops, isNot(contains("'Ravi Kumar'")));
+    final props = File('lib/src/property_screens.dart').readAsStringSync();
+    expect(props, isNot(contains('rating: 4.5')));
+    expect(props, isNot(contains('?? 9000')));
+    expect(props, isNot(contains('?? 24')));
+    final fin = File('lib/src/finance_screens.dart').readAsStringSync();
+    expect(fin, isNot(contains('?? 9000')));
+  });
+
+  test('addRoom rejects a duplicate number and grows the PG bed count', () {
+    final pgBefore = state.pgById('p1')!.beds;
+    final existing = state.rooms.firstWhere((r) => r.pgId == 'p1');
+    expect(
+        state.addRoom(Room(
+            id: 'r-dup',
+            pgId: 'p1',
+            number: existing.number,
+            floor: 1,
+            beds: 2,
+            occupied: 0,
+            rent: 5000)),
+        contains('already exists'));
+    expect(
+        state.addRoom(const Room(
+            id: 'r-new',
+            pgId: 'p1',
+            number: 'NEW-1',
+            floor: 1,
+            beds: 3,
+            occupied: 0,
+            rent: 5000)),
+        isNull);
+    expect(state.pgById('p1')!.beds, pgBefore + 3);
+  });
+
+  test('the push switch controls receiving, not sending', () {
+    final src = File('lib/src/app_state.dart').readAsStringSync();
+    expect(src, isNot(contains('!pushEnabled) return')));
+    expect(src, contains('unregisterPushToken()'));
+    expect(src, contains("'push_enabled'"));
+  });
+
+  test('017 limits proof uploads and audits tenant submissions', () {
+    final sql = File('supabase/017_review_fixes_2.sql').readAsStringSync();
+    expect(sql, contains('file_size_limit'));
+    expect(sql, contains('allowed_mime_types'));
+    expect(sql, contains('after insert on public.upi_submissions'));
+    expect(sql, contains("'payment_submitted'"));
+  });
 }

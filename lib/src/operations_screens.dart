@@ -291,7 +291,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                             : MaintenanceStatus.resolved,
                         assignee: open
                             ? (assignee.text.trim().isEmpty
-                                ? 'Ravi Kumar'
+                                ? null
                                 : assignee.text)
                             : item.assignee,
                       );
