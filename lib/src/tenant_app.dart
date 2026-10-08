@@ -104,15 +104,18 @@ class TenantShell extends StatefulWidget {
 
 class _TenantShellState extends State<TenantShell> {
   int index = 0;
+  late final _updates = UpdateWatch(this, 'PG-Management-Tenant.apk');
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        maybePromptUpdate(context, apkAsset: 'PG-Management-Tenant.apk');
-      }
-    });
+    _updates.start();
+  }
+
+  @override
+  void dispose() {
+    _updates.stop();
+    super.dispose();
   }
 
   @override

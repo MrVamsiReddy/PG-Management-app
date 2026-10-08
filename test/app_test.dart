@@ -3097,4 +3097,53 @@ void main() {
         .widget<TextButton>(find.widgetWithText(TextButton, 'Mark all read'));
     expect(markAll.onPressed, isNull);
   });
+
+  testWidgets('a running app keeps checking for updates until it closes',
+      (tester) async {
+    expect(updateCheckInterval, lessThanOrEqualTo(const Duration(minutes: 15)));
+    await tester.pumpWidget(const MaterialApp(home: _UpdateWatchHost()));
+    final host =
+        tester.state<_UpdateWatchHostState>(find.byType(_UpdateWatchHost));
+    expect(host.watch.isRunning, isTrue);
+    // Back to the foreground triggers a check without crashing.
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump(updateCheckInterval);
+    // Leaving the screen stops the timer: no pending timer survives.
+    await tester.pumpWidget(const SizedBox());
+    expect(host.watch.isRunning, isFalse);
+  });
+
+  test('both apps watch for updates while running', () {
+    for (final f in ['lib/src/home_shell.dart', 'lib/src/tenant_app.dart']) {
+      final src = File(f).readAsStringSync();
+      expect(src, contains('UpdateWatch(this,'), reason: f);
+      expect(src, contains('_updates.stop()'), reason: f);
+    }
+  });
+}
+
+class _UpdateWatchHost extends StatefulWidget {
+  const _UpdateWatchHost();
+  @override
+  State<_UpdateWatchHost> createState() => _UpdateWatchHostState();
+}
+
+class _UpdateWatchHostState extends State<_UpdateWatchHost> {
+  late final watch = UpdateWatch(this, 'PG-Management-Tenant.apk');
+
+  @override
+  void initState() {
+    super.initState();
+    watch.start();
+  }
+
+  @override
+  void dispose() {
+    watch.stop();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox();
 }
