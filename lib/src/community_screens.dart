@@ -365,13 +365,17 @@ class NotificationsScreen extends StatelessWidget {
           title: Text(AppLocalizations.of(context).t('nav.notifications')),
           actions: [
             TextButton(
-                onPressed: state.markAllNotificationsRead,
+                // Nothing to mark when everything is read.
+                onPressed: items.any((n) => !state.isRead(n))
+                    ? state.markAllNotificationsRead
+                    : null,
                 child: Text(AppLocalizations.of(context).t('ntf.markAll')))
           ]),
       body: items.isEmpty
-          ? EmptyState(
-              icon: Icons.notifications_none_rounded,
-              title: AppLocalizations.of(context).t('ntf.none'))
+          ? Center(
+              child: EmptyState(
+                  icon: Icons.notifications_none_rounded,
+                  title: AppLocalizations.of(context).t('ntf.none')))
           : ListView.separated(
               padding: const EdgeInsets.fromLTRB(20, 10, 20, 40),
               itemCount: items.length,

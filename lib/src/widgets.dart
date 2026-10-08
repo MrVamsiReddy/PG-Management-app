@@ -235,14 +235,21 @@ class EmptyState extends StatelessWidget {
   final IconData icon;
   final String title;
 
+  // Full width so the icon and message sit in the middle of the screen
+  // rather than hugging the left edge.
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(children: [
-          Icon(icon, size: 46, color: faint),
-          const SizedBox(height: 12),
-          Text(title, style: Theme.of(context).textTheme.titleMedium),
-        ]),
+  Widget build(BuildContext context) => SizedBox(
+        width: double.infinity,
+        child: Padding(
+          padding: const EdgeInsets.all(40),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 46, color: faint),
+            const SizedBox(height: 12),
+            Text(title,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium),
+          ]),
+        ),
       );
 }
 
@@ -287,4 +294,32 @@ class FormLabel extends StatelessWidget {
         child: Text(text,
             style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
       );
+}
+
+/// "Ground floor" for floor 0, else "Floor N".
+String floorLabel(AppLocalizations l, int floor) =>
+    floor == 0 ? l.t('room.ground') : '${l.t('room.floor')} $floor';
+
+/// Floor choice from the ground floor up to [maxFloor]. A room already
+/// saved on a floor outside that range keeps it as an option.
+class FloorPicker extends StatelessWidget {
+  const FloorPicker({super.key, required this.value, required this.onChanged});
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final floors = {for (var f = 0; f <= maxFloor; f++) f, value}.toList()
+      ..sort();
+    return DropdownButtonFormField<int>(
+        initialValue: value,
+        items: [
+          for (final f in floors)
+            DropdownMenuItem(value: f, child: Text(floorLabel(l, f)))
+        ],
+        onChanged: (v) {
+          if (v != null) onChanged(v);
+        });
+  }
 }

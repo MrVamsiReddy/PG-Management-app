@@ -1471,6 +1471,9 @@ class AppState extends ChangeNotifier {
   /// Adds a room to its PG. Returns an error when the PG already has a room
   /// with that number.
   String? addRoom(Room room) {
+    if (room.floor < 0 || room.floor > maxFloor) {
+      return 'Pick a floor from Ground to $maxFloor.';
+    }
     final number = room.number.trim().toLowerCase();
     if (rooms.any((r) =>
         r.pgId == room.pgId && r.number.trim().toLowerCase() == number)) {
@@ -1590,6 +1593,10 @@ class AppState extends ChangeNotifier {
     final clean = number.trim();
     if (clean.isEmpty) return 'Enter a room number.';
     final r = rooms[i];
+    // A room already on a higher floor may keep it.
+    if (floor < 0 || (floor > maxFloor && floor != r.floor)) {
+      return 'Pick a floor from Ground to $maxFloor.';
+    }
     if (rooms.any((o) =>
         o.id != roomId &&
         o.pgId == r.pgId &&
@@ -1643,25 +1650,48 @@ class AppState extends ChangeNotifier {
     if (i == -1) return 'Room not found.';
     final before = rooms[i].rent;
     rooms[i] = rooms[i].copyWith(rent: rent);
-    // The new rent shows up immediately on untouched current/future dues in
-    // this room. Anything with money against it — paid, partial, or a UPI
-    // proof under review — keeps its snapshot (rent history is preserved).
+    // Tenants with their own agreed rent keep it.
+    final duesChanged = _repriceDues(tenants
+        .where((t) => t.roomId == roomId && t.rent == null)
+        .map((t) => t.id)
+        .toSet());
+    _persist({'rooms', if (duesChanged) 'payments'});
+    _audit('rent_changed',
+        entityType: 'room',
+        entityId: roomId,
+        before: {'rent': before},
+        after: {'rent': rent});
+    return null;
+  }
+
+  /// The monthly rent a tenant is billed: their own agreed rent, else the
+  /// room's rent per bed.
+  int rentFor(Tenant tenant) =>
+      tenant.rent ?? roomById(tenant.roomId)?.rent ?? 0;
+
+  /// Applies each tenant's current rent ([rentFor]) to their untouched
+  /// current and future dues. Anything with money against it — paid,
+  /// partial, or a UPI proof under review — keeps its amount, so rent
+  /// history is never rewritten. Returns true when a due changed.
+  bool _repriceDues(Set<String> tenantIds) {
     final now = DateTime.now();
     final month = DateTime(now.year, now.month);
-    final tenantIds =
-        tenants.where((t) => t.roomId == roomId).map((t) => t.id).toSet();
     final underReview = submissions
         .where((s) => s.status != UpiStatus.rejected)
         .map((s) => s.paymentId)
         .toSet();
-    var duesChanged = false;
+    var changed = false;
     for (var p = 0; p < payments.length; p++) {
       final pay = payments[p];
-      if (tenantIds.contains(pay.tenantId) &&
-          pay.status == PaymentStatus.due &&
+      if (!tenantIds.contains(pay.tenantId)) continue;
+      final tenant = tenantById(pay.tenantId);
+      if (tenant == null) continue;
+      final rent = rentFor(tenant);
+      if (pay.status == PaymentStatus.due &&
           pay.paidAmount == 0 &&
           !pay.period.isBefore(month) &&
           !underReview.contains(pay.id) &&
+          rent > 0 &&
           pay.amount != rent) {
         payments[p] = Payment(
           id: pay.id,
@@ -1675,15 +1705,44 @@ class AppState extends ChangeNotifier {
           paidAmount: pay.paidAmount,
           customerId: pay.customerId,
         );
-        duesChanged = true;
+        changed = true;
       }
     }
-    _persist({'rooms', if (duesChanged) 'payments'});
-    _audit('rent_changed',
-        entityType: 'room',
-        entityId: roomId,
-        before: {'rent': before},
-        after: {'rent': rent});
+    return changed;
+  }
+
+  /// Sets the monthly rent agreed with one tenant, or with [rent] null puts
+  /// them back on the room's rent. Untouched current and future dues follow
+  /// at once; paid, part-paid and under-review dues keep their amount.
+  /// Returns an error message, or null.
+  String? setTenantRent(String tenantId, int? rent) {
+    final i = tenants.indexWhere((t) => t.id == tenantId);
+    if (i == -1) return 'Tenant not found.';
+    if (rent != null && rent <= 0) return 'Enter a rent above zero.';
+    final tenant = tenants[i];
+    final before = rentFor(tenant);
+    tenants[i] = rent == null
+        ? tenant.copyWith(useRoomRent: true)
+        : tenant.copyWith(rent: rent);
+    final after = rentFor(tenants[i]);
+    final duesChanged = _repriceDues({tenantId});
+    if (after != before) {
+      _notify('Rent updated', 'Your monthly rent is now ${inr(after)}.',
+          NotificationType.payment,
+          scope: NotificationScope.tenant,
+          tenantId: tenantId,
+          pgId: _pgIdForTenant(tenantId));
+    }
+    _persist({
+      'tenants',
+      if (duesChanged) 'payments',
+      if (after != before) 'notifications'
+    });
+    _audit('tenant_rent_changed',
+        entityType: 'tenant',
+        entityId: tenantId,
+        before: {'rent': before, 'custom': tenant.rent != null},
+        after: {'rent': after, 'custom': rent != null});
     return null;
   }
 
@@ -1956,7 +2015,7 @@ class AppState extends ChangeNotifier {
     var added = false;
     for (final tenant in tenants) {
       if (onlyTenantId != null && tenant.id != onlyTenantId) continue;
-      final rent = roomById(tenant.roomId)?.rent ?? 0;
+      final rent = rentFor(tenant);
       if (rent <= 0) continue;
       DateTime? latest;
       for (final p in payments) {

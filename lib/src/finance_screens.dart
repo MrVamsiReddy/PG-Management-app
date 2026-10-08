@@ -215,13 +215,18 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     }
   }
 
+  /// The tenant's monthly rent as a prefill, or blank when none is set.
+  String _rentText(AppState state, Tenant tenant) {
+    final rent = state.rentFor(tenant);
+    return rent > 0 ? '$rent' : '';
+  }
+
   void _recordPayment(AppState state) {
     final scoped = state.pgTenants;
     if (scoped.isEmpty) return;
     var tenantId = scoped.first.id;
     var method = 'UPI';
-    final amount = TextEditingController(
-        text: '${state.roomById(scoped.first.roomId)?.rent ?? ''}');
+    final amount = TextEditingController(text: _rentText(state, scoped.first));
     showAppSheet(
         context,
         StatefulBuilder(
@@ -241,8 +246,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                             .toList(),
                         onChanged: (v) => setModalState(() {
                           tenantId = v!;
-                          amount.text =
-                              '${state.roomById(state.tenantById(v)!.roomId)?.rent ?? ''}';
+                          amount.text = _rentText(state, state.tenantById(v)!);
                         }),
                       ),
                       FormLabel(

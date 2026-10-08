@@ -294,6 +294,7 @@ class Tenant {
     this.email,
     this.kycDoc,
     this.customerId,
+    this.rent,
   });
 
   final String id;
@@ -308,6 +309,10 @@ class Tenant {
   final String? kycDoc; // identity document image, base64
   final String? customerId;
 
+  /// Monthly rent agreed with this tenant. Null means the room's rent per
+  /// bed applies.
+  final int? rent;
+
   String get initials => name
       .split(' ')
       .where((e) => e.isNotEmpty)
@@ -321,13 +326,16 @@ class Tenant {
           String? email,
           KycStatus? kyc,
           AgreementStatus? agreement,
-          String? kycDoc}) =>
+          String? kycDoc,
+          int? rent,
+          bool useRoomRent = false}) =>
       Tenant(
         id: id,
         roomId: roomId,
         bed: bed,
         joinDate: joinDate,
         customerId: customerId,
+        rent: useRoomRent ? null : (rent ?? this.rent),
         name: name ?? this.name,
         phone: phone ?? this.phone,
         email: email ?? this.email,
@@ -348,6 +356,7 @@ class Tenant {
         'email': email,
         'kycDoc': kycDoc,
         'customerId': customerId,
+        'rent': rent,
       };
 
   static Tenant fromMap(Map<String, dynamic> map) => Tenant(
@@ -362,8 +371,12 @@ class Tenant {
         email: map['email'] as String?,
         kycDoc: map['kycDoc'] as String?,
         customerId: map['customerId'] as String?,
+        rent: (map['rent'] as num?)?.toInt(),
       );
 }
+
+/// Highest floor a room can be on. Floor 0 is the ground floor.
+const maxFloor = 10;
 
 class Payment {
   const Payment({

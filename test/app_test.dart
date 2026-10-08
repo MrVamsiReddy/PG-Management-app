@@ -9,7 +9,6 @@ import 'package:pg_management/src/access.dart';
 import 'package:pg_management/src/app_state.dart';
 import 'package:pg_management/src/auth_screen.dart';
 import 'package:pg_management/src/dashboard_screen.dart';
-import 'package:pg_management/src/format.dart';
 import 'package:pg_management/src/home_shell.dart';
 import 'package:pg_management/src/invite_message.dart';
 import 'package:pg_management/src/l10n.dart';
@@ -22,6 +21,7 @@ import 'package:pg_management/src/tenant_app.dart';
 import 'package:pg_management/src/theme.dart';
 import 'package:pg_management/src/update_check.dart';
 import 'package:pg_management/src/upi_screens.dart';
+import 'package:pg_management/src/widgets.dart';
 
 // Cloud-only build: there is no local store, seed path or demo login in the
 // product. Tests inject an in-memory fixture directly into the public
@@ -2931,5 +2931,170 @@ void main() {
     expect(sql, contains('allowed_mime_types'));
     expect(sql, contains('after insert on public.upi_submissions'));
     expect(sql, contains("'payment_submitted'"));
+  });
+
+  // ---- Per-tenant rent ----
+
+  test('setTenantRent reprices untouched dues and tells the tenant', () {
+    final due = state.payments
+        .firstWhere((p) => p.tenantId == 't2' && p.status == PaymentStatus.due);
+    final roomRent = state.roomById(state.tenantById('t2')!.roomId)!.rent;
+
+    expect(state.setTenantRent('t2', roomRent - 1500), isNull);
+
+    expect(state.tenantById('t2')!.rent, roomRent - 1500);
+    expect(state.rentFor(state.tenantById('t2')!), roomRent - 1500);
+    expect(state.payments.firstWhere((p) => p.id == due.id).amount,
+        roomRent - 1500);
+    expect(
+        state.notifications.any((n) =>
+            n.title == 'Rent updated' &&
+            n.tenantId == 't2' &&
+            n.roleScope == NotificationScope.tenant),
+        isTrue);
+  });
+
+  test('a paid month keeps its amount when the tenant rent changes', () {
+    final due = state.payments
+        .firstWhere((p) => p.tenantId == 't2' && p.status == PaymentStatus.due);
+    state.recordPayment(tenantId: 't2', amount: due.amount, method: 'Cash');
+
+    state.setTenantRent('t2', due.amount + 2000);
+
+    final paid = state.payments.firstWhere((p) => p.id == due.id);
+    expect(paid.amount, due.amount);
+    expect(paid.status, PaymentStatus.paid);
+  });
+
+  test('a room rent change skips tenants with their own rent', () {
+    final roomId = state.tenantById('t2')!.roomId;
+    final roommates = state.tenants
+        .where((t) => t.roomId == roomId && t.id != 't2')
+        .map((t) => t.id)
+        .toSet();
+    state.setTenantRent('t2', 4321);
+
+    state.setRoomRent(roomId, 12345);
+
+    final t2Due = state.payments
+        .firstWhere((p) => p.tenantId == 't2' && p.status == PaymentStatus.due);
+    expect(t2Due.amount, 4321);
+    for (final p in state.payments.where((p) =>
+        roommates.contains(p.tenantId) &&
+        p.status == PaymentStatus.due &&
+        p.paidAmount == 0 &&
+        !p.period
+            .isBefore(DateTime(DateTime.now().year, DateTime.now().month)))) {
+      expect(p.amount, 12345);
+    }
+  });
+
+  test('use room rent puts the tenant back on the room rate', () {
+    final roomRent = state.roomById(state.tenantById('t2')!.roomId)!.rent;
+    state.setTenantRent('t2', 3000);
+    expect(state.setTenantRent('t2', null), isNull);
+    expect(state.tenantById('t2')!.rent, isNull);
+    final due = state.payments
+        .firstWhere((p) => p.tenantId == 't2' && p.status == PaymentStatus.due);
+    expect(due.amount, roomRent);
+    expect(state.setTenantRent('t2', 0), isNotNull);
+    expect(state.setTenantRent('missing', 100), isNotNull);
+  });
+
+  test('new monthly dues bill the tenant rent', () {
+    final i = state.tenants.indexWhere((t) => t.id == 't2');
+    state.tenants[i] = state.tenants[i].copyWith(rent: 6100);
+    state.payments.removeWhere((p) => p.tenantId == 't2');
+
+    expect(state.generateMonthlyDues(onlyTenantId: 't2'), isTrue);
+
+    expect(state.payments.firstWhere((p) => p.tenantId == 't2').amount, 6100);
+  });
+
+  test('tenant rent survives a save/load round trip, and old rows have none',
+      () {
+    final t = state.tenantById('t2')!.copyWith(rent: 7777);
+    expect(Tenant.fromMap(t.toMap()).rent, 7777);
+    final old = Map<String, dynamic>.from(t.toMap())..remove('rent');
+    expect(Tenant.fromMap(old).rent, isNull);
+    expect(t.copyWith(useRoomRent: true).rent, isNull);
+  });
+
+  // ---- Floors: ground floor + up to 10 ----
+
+  Room floorRoom(String id, int floor) => Room(
+      id: id,
+      pgId: 'p1',
+      number: id,
+      floor: floor,
+      beds: 2,
+      occupied: 0,
+      rent: 5000);
+
+  test('rooms can be on the ground floor up to floor 10', () {
+    expect(state.addRoom(floorRoom('G-1', 0)), isNull);
+    expect(state.addRoom(floorRoom('T-1', 10)), isNull);
+    expect(state.addRoom(floorRoom('X-1', 11)), contains('Ground to 10'));
+    expect(state.addRoom(floorRoom('X-2', -1)), contains('Ground to 10'));
+
+    expect(state.editRoom('T-1', number: 'T-1', floor: 0), isNull);
+    expect(state.roomById('T-1')!.floor, 0);
+    expect(state.editRoom('T-1', number: 'T-1', floor: 11),
+        contains('Ground to 10'));
+  });
+
+  test('a room already above floor 10 can keep its floor', () {
+    state.rooms.add(floorRoom('HIGH', 12));
+    expect(state.editRoom('HIGH', number: 'HIGH-2', floor: 12), isNull);
+    expect(state.roomById('HIGH')!.number, 'HIGH-2');
+  });
+
+  testWidgets('the floor picker offers Ground floor through Floor 10',
+      (tester) async {
+    var picked = 1;
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ],
+      home: Scaffold(
+          body: StatefulBuilder(
+              builder: (context, setState) => Center(
+                  child: SizedBox(
+                      width: 300,
+                      child: FloorPicker(
+                          value: picked,
+                          onChanged: (v) => setState(() => picked = v)))))),
+    ));
+    await tester.tap(find.text('Floor 1'));
+    await tester.pumpAndSettle();
+    expect(find.text('Ground floor'), findsWidgets);
+    expect(find.text('Floor 10'), findsWidgets);
+    expect(find.text('Floor 11'), findsNothing);
+    await tester.tap(find.text('Ground floor').hitTestable().last);
+    await tester.pumpAndSettle();
+    expect(picked, 0);
+  });
+
+  testWidgets('an empty notification list is centred and has nothing to mark',
+      (tester) async {
+    state.debugSignIn(UserRole.tenant, tenantId: 't1');
+    state.notifications = [];
+    await tester.pumpWidget(AppScope(
+      notifier: state,
+      child: MaterialApp(localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ], theme: buildAppTheme(), home: const NotificationsScreen()),
+    ));
+    await tester.pump();
+    final screen = tester.getSize(find.byType(Scaffold));
+    final title = tester.getCenter(find.text('No notifications yet'));
+    expect((title.dx - screen.width / 2).abs(), lessThan(1));
+    final markAll = tester
+        .widget<TextButton>(find.widgetWithText(TextButton, 'Mark all read'));
+    expect(markAll.onPressed, isNull);
   });
 }
