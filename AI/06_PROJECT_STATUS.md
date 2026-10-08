@@ -29,6 +29,11 @@ Roadmap = `app improvements.md` (Prompts 1–11). Details of each area live in `
 ## Improvements batch complete
 - Tasks 1–9 shipped. Interim bugfix: admin "View PGs" reads app_data.
 
+## v1.18.0 (2026-10-08): per-tenant rent, ground floor + 10 floors, notifications
+- Owners can set a tenant's own monthly rent (Tenants → ⋮ → Adjust rent) or put them back on the room rate. `Tenant.rent` (null = room rent); `AppState.rentFor` drives dues; untouched current/future dues are repriced, paid/part-paid/under-review ones keep their amount; room rent changes skip tenants with their own rent; the tenant gets a "Rent updated" notification.
+- Floors: Ground (floor 0) up to `maxFloor` = 10 via the shared `FloorPicker` (add room, edit room, onboarding); `floorLabel` shows "Ground floor".
+- Notifications: empty state centred (shared `EmptyState` now full width); Mark all read disabled when nothing is unread.
+
 ## v1.17.0 (2026-10-08): code-review fixes
 - Security: no profile ⇒ no workspace; sign-ups off; push tokens bound to own email; re-running old migrations can't undo newer ones (014–017).
 - Data: unparseable items no longer deleted on save; payments allocated oldest-due-first with advances; bed counts derived from tenants; tenant submissions audited by trigger.

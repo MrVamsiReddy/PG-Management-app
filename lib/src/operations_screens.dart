@@ -154,7 +154,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                               .map((r) => DropdownMenuItem(
                                   value: r.id,
                                   child: Text(
-                                      'Room ${r.number} · Floor ${r.floor}')))
+                                      'Room ${r.number} · ${floorLabel(AppLocalizations.of(context), r.floor)}')))
                               .toList(),
                           onChanged: (v) => setModalState(() => roomId = v!),
                         )

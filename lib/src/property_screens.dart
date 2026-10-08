@@ -323,7 +323,8 @@ class _RoomsScreenState extends State<RoomsScreen> {
                   itemCount: floors.length,
                   separatorBuilder: (_, __) => const SizedBox(width: 8),
                   itemBuilder: (context, i) => ChoiceChip(
-                    label: Text('Floor ${floors[i]}'),
+                    label: Text(
+                        floorLabel(AppLocalizations.of(context), floors[i])),
                     selected: selected == floors[i],
                     onSelected: (_) => setState(() => floor = floors[i]),
                   ),
@@ -404,16 +405,9 @@ class _RoomsScreenState extends State<RoomsScreen> {
                           decoration:
                               const InputDecoration(hintText: 'e.g. 204')),
                       FormLabel(AppLocalizations.of(context).t('room.floor')),
-                      DropdownButtonFormField<int>(
-                          initialValue: roomFloor,
-                          items: [1, 2, 3, 4, 5]
-                              .map((e) => DropdownMenuItem(
-                                  value: e,
-                                  child: Text(
-                                      '${AppLocalizations.of(context).t('room.floor')} $e')))
-                              .toList(),
-                          onChanged: (v) =>
-                              setModalState(() => roomFloor = v!)),
+                      FloorPicker(
+                          value: roomFloor,
+                          onChanged: (v) => setModalState(() => roomFloor = v)),
                       FormLabel(AppLocalizations.of(context).t('room.sharing')),
                       DropdownButtonFormField<int>(
                           initialValue: beds,
@@ -534,11 +528,8 @@ void _editRoomDialog(BuildContext context, AppState state, Room room) {
               FormLabel(AppLocalizations.of(context).t('room.number')),
               TextField(controller: number),
               FormLabel(AppLocalizations.of(context).t('room.floor')),
-              TextField(
-                keyboardType: TextInputType.number,
-                controller: TextEditingController(text: '$floor'),
-                onChanged: (v) => floor = int.tryParse(v) ?? floor,
-              ),
+              FloorPicker(
+                  value: floor, onChanged: (v) => setLocal(() => floor = v)),
             ]),
       ),
       actions: [
@@ -711,7 +702,7 @@ class RoomDetailsScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _detail(AppLocalizations.of(context).t('room.floor'),
-                        '${AppLocalizations.of(context).t('room.floor')} ${room.floor}'),
+                        floorLabel(AppLocalizations.of(context), room.floor)),
                     _detail(AppLocalizations.of(context).t('room.sharing'),
                         room.type),
                     _detail(AppLocalizations.of(context).t('room.currentRent'),
@@ -845,6 +836,11 @@ class _TenantsScreenState extends State<TenantsScreen> {
                                     formatFullDate(tenant.joinDate)),
                                 _detail(Icons.verified_user_outlined, 'KYC',
                                     tenant.kyc.label),
+                                _detail(
+                                    Icons.currency_rupee,
+                                    AppLocalizations.of(context)
+                                        .t('ten.monthlyRent'),
+                                    '${inr(state.rentFor(tenant))} · ${AppLocalizations.of(context).t(tenant.rent == null ? 'ten.rentRoom' : 'ten.rentCustom')}'),
                                 const SizedBox(height: 12),
                                 Row(children: [
                                   Expanded(
@@ -872,7 +868,9 @@ class _TenantsScreenState extends State<TenantsScreen> {
                                     tooltip: AppLocalizations.of(context)
                                         .t('inv.options'),
                                     onSelected: (value) {
-                                      if (value == 'resend') {
+                                      if (value == 'rent') {
+                                        _editTenantRent(context, state, tenant);
+                                      } else if (value == 'resend') {
                                         _resendInvite(context, state, tenant);
                                       } else if (value == 'revoke') {
                                         _revokeInvite(context, state, tenant);
@@ -881,6 +879,15 @@ class _TenantsScreenState extends State<TenantsScreen> {
                                       }
                                     },
                                     itemBuilder: (context) => [
+                                      PopupMenuItem(
+                                          value: 'rent',
+                                          child: ListTile(
+                                              leading: const Icon(
+                                                  Icons.currency_rupee),
+                                              title: Text(
+                                                  AppLocalizations.of(context)
+                                                      .t('ten.adjustRent')),
+                                              contentPadding: EdgeInsets.zero)),
                                       PopupMenuItem(
                                           value: 'resend',
                                           child: ListTile(
@@ -931,6 +938,58 @@ class _TenantsScreenState extends State<TenantsScreen> {
         Text(value,
             style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700))
       ]));
+
+  /// Sets this tenant's own monthly rent, or puts them back on the room's.
+  void _editTenantRent(BuildContext context, AppState state, Tenant tenant) {
+    final l = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final roomRent = state.roomById(tenant.roomId)?.rent ?? 0;
+    final rent = TextEditingController(text: '${state.rentFor(tenant)}');
+    void done(String? error) {
+      messenger
+          .showSnackBar(SnackBar(content: Text(error ?? l.t('ten.rentSaved'))));
+    }
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('${l.t('ten.adjustRent')} · ${tenant.name}'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(
+              controller: rent,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                  prefixText: '₹ ', labelText: l.t('ten.monthlyRent'))),
+          const SizedBox(height: 8),
+          Text(
+              '${l.t('ten.roomRentIs')} ${inr(roomRent)}. ${l.t('ten.rentNote')}',
+              style: TextStyle(fontSize: 11, color: subtle)),
+        ]),
+        actions: [
+          if (tenant.rent != null)
+            TextButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                  done(state.setTenantRent(tenant.id, null));
+                },
+                child: Text(l.t('ten.useRoomRent'))),
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(l.t('common.cancel'))),
+          FilledButton(
+              onPressed: () {
+                final value =
+                    int.tryParse(rent.text.replaceAll(RegExp(r'[^0-9]'), ''));
+                if (value == null || value <= 0) return;
+                Navigator.pop(dialogContext);
+                done(state.setTenantRent(tenant.id, value));
+              },
+              child: Text(l.t('common.save'))),
+        ],
+      ),
+    );
+  }
 
   void _call(String phone) {
     final digits = phone.replaceAll(RegExp(r'[^0-9+]'), '');
@@ -1061,7 +1120,7 @@ class _TenantsScreenState extends State<TenantsScreen> {
     final phone = TextEditingController();
     final email = TextEditingController();
     final roomNumber = TextEditingController();
-    final floorCtl = TextEditingController(text: '1');
+    var onboardFloor = 1;
     final rent = TextEditingController(text: '9000');
     final bed = TextEditingController(text: 'A');
     var pgId = (state.activePg ?? state.pgs.first).id;
@@ -1176,9 +1235,10 @@ class _TenantsScreenState extends State<TenantsScreen> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                       FormLabel(AppLocalizations.of(context).t('room.floor')),
-                      TextFormField(
-                          controller: floorCtl,
-                          keyboardType: TextInputType.number),
+                      FloorPicker(
+                          value: onboardFloor,
+                          onChanged: (v) =>
+                              setModalState(() => onboardFloor = v)),
                     ])),
                 const SizedBox(width: 10),
                 Expanded(
@@ -1277,7 +1337,7 @@ class _TenantsScreenState extends State<TenantsScreen> {
                   final roomId = isNew
                       ? state.ensureRoom(
                           pgId: pgId,
-                          floor: int.tryParse(floorCtl.text) ?? 1,
+                          floor: onboardFloor,
                           roomNumber: roomNumber.text,
                           sharingType: sharing,
                           rent: int.tryParse(rent.text) ?? 0)
