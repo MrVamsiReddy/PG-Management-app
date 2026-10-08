@@ -29,6 +29,12 @@ Roadmap = `app improvements.md` (Prompts 1–11). Details of each area live in `
 ## Improvements batch complete
 - Tasks 1–9 shipped. Interim bugfix: admin "View PGs" reads app_data.
 
+## v1.20.0 (2026-10-09): payment fixes
+- Receipts only for money received (amount = collected, balance shown); owners can reverse a mistaken payment (`reversePayment`, rejects a confirmed UPI submission for it, notifies the tenant).
+- Overpayment becomes advance credit (`Payment.advance`), spent on the next dues by `_applyCredit` during due generation; collections count money by `paidDate` so credit is never counted twice.
+- Part-paid dues become overdue; tenants see the total owed and pay the oldest month first (`tenantDuePayment` = oldest, `tenantOutstanding`).
+- UPI confirm is one transaction via `owner_confirm_submission` (018) with a fallback; UTR must be 12 digits.
+
 ## v1.19.0 (2026-10-08): update prompt while the app is running
 - `UpdateWatch` (update_check.dart) checks for a newer GitHub release when the shell opens, whenever the app returns to the foreground, and every `updateCheckInterval` (15 min) while open. One prompt at a time; "Later" snoozes that version for `updateSnooze` (2 h). Owner (`HomeShell`) and tenant (`TenantShell`) apps both use it.
 

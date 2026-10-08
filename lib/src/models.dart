@@ -390,6 +390,7 @@ class Payment {
     this.method,
     this.paidAmount = 0,
     this.customerId,
+    this.advance = false,
   });
 
   final String id;
@@ -416,6 +417,10 @@ class Payment {
   /// Money still owed.
   int get balance => amount - collected;
 
+  /// True for money received beyond every due: tenant credit that is used
+  /// up against the next dues (its amount is what is still unused).
+  final bool advance;
+
   /// Receipt number: 7 characters derived from the whole payment id (FNV-1a),
   /// the same on every device. The old "last 4 characters of the id" scheme
   /// repeated across tenants and months.
@@ -430,8 +435,9 @@ class Payment {
     return hash.toRadixString(36).toUpperCase().padLeft(7, '0');
   }
 
+  /// Past the due date with money still owed — part-paid dues included.
   bool get isOverdue =>
-      status == PaymentStatus.due && DateTime.now().isAfter(dueDate);
+      status != PaymentStatus.paid && DateTime.now().isAfter(dueDate);
   String get displayStatus => switch (status) {
         PaymentStatus.paid => 'Paid',
         PaymentStatus.partial => 'Partial',
@@ -454,6 +460,7 @@ class Payment {
         paidDate: paidDate ?? this.paidDate,
         method: method ?? this.method,
         paidAmount: paidAmount ?? this.paidAmount,
+        advance: advance,
       );
 
   Map<String, dynamic> toMap() => {
@@ -467,6 +474,7 @@ class Payment {
         'method': method,
         'paidAmount': paidAmount,
         'customerId': customerId,
+        if (advance) 'advance': true,
       };
 
   static Payment fromMap(Map<String, dynamic> map) => Payment(
@@ -482,6 +490,7 @@ class Payment {
         method: map['method'] as String?,
         paidAmount: map['paidAmount'] as int? ?? 0,
         customerId: map['customerId'] as String?,
+        advance: map['advance'] == true,
       );
 }
 

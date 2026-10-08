@@ -299,7 +299,7 @@ class TenantHome extends StatelessWidget {
               StatusPill(latest.displayStatus),
             ]),
             const SizedBox(height: 14),
-            Text(inr(paid ? latest.amount : latest.balance),
+            Text(inr(paid ? latest.amount : state.tenantOutstanding),
                 style: Theme.of(context)
                     .textTheme
                     .headlineLarge

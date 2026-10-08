@@ -3121,6 +3121,167 @@ void main() {
       expect(src, contains('_updates.stop()'), reason: f);
     }
   });
+
+  // ---- v1.20.0 payment fixes ----
+
+  Payment dueFor(String tenantId, DateTime period, int amount) => Payment(
+      id: 'pay-${period.year}-${period.month}-$tenantId',
+      tenantId: tenantId,
+      period: period,
+      amount: amount,
+      status: PaymentStatus.due,
+      dueDate: DateTime(period.year, period.month, 5));
+
+  test('money beyond every due is credit that pays the next due', () {
+    final now = DateTime.now();
+    final due = state.payments
+        .firstWhere((p) => p.tenantId == 't2' && p.status == PaymentStatus.due);
+    state.recordPayment(
+        tenantId: 't2', amount: due.amount + 3000, method: 'Cash');
+    expect(state.creditOf('t2'), 3000);
+    expect(state.payments.first.advance, isTrue);
+
+    // Next month's due arrives and the credit is spent on it.
+    final next = DateTime(now.year, now.month + 1);
+    state.payments.add(dueFor('t2', next, 9500));
+    state.generateMonthlyDues(onlyTenantId: 't2');
+
+    final nextDue = state.payments
+        .firstWhere((p) => p.id == 'pay-${next.year}-${next.month}-t2');
+    expect(nextDue.status, PaymentStatus.partial);
+    expect(nextDue.collected, 3000);
+    expect(nextDue.method, 'Advance');
+    expect(state.creditOf('t2'), 0);
+    expect(state.payments.any((p) => p.tenantId == 't2' && p.advance), isFalse);
+  });
+
+  test('credit is never counted twice in collections', () {
+    final due = state.payments
+        .firstWhere((p) => p.tenantId == 't2' && p.status == PaymentStatus.due);
+    final before = state.collectedAmount;
+    state.recordPayment(
+        tenantId: 't2', amount: due.amount + 3000, method: 'Cash');
+    expect(state.collectedAmount, before + due.amount + 3000);
+    final now = DateTime.now();
+    state.payments.add(dueFor('t2', DateTime(now.year, now.month + 1), 9500));
+    state.generateMonthlyDues(onlyTenantId: 't2');
+    // The credit moved onto the due; the money received is unchanged.
+    expect(state.collectedAmount, before + due.amount + 3000);
+  });
+
+  test('a part-paid due becomes overdue after its due date', () {
+    final overdue = state.payments
+        .firstWhere((p) => p.tenantId == 't3' && p.status == PaymentStatus.due);
+    state.recordPayment(tenantId: 't3', amount: 1000, method: 'Cash');
+    final partial = state.payments.firstWhere((p) => p.id == overdue.id);
+    expect(partial.status, PaymentStatus.partial);
+    expect(partial.isOverdue, isTrue);
+    expect(state.paymentStatusKey(partial), 'overdue');
+  });
+
+  test('tenants see the total owed and pay the oldest month first', () {
+    final now = DateTime.now();
+    final last = DateTime(now.year, now.month - 1);
+    state.payments.removeWhere((p) =>
+        p.tenantId == 't2' &&
+        p.period.year == last.year &&
+        p.period.month == last.month);
+    state.payments.add(dueFor('t2', last, 9000));
+    state.debugSignIn(UserRole.tenant, tenantId: 't2');
+
+    expect(state.tenantDuePayment!.period, last);
+    expect(state.tenantUnpaidMonths, 2);
+    expect(state.tenantOutstanding, 9000 + 9500);
+  });
+
+  test('collections count money by the day it arrived', () {
+    final now = DateTime.now();
+    final last = DateTime(now.year, now.month - 1);
+    state.payments.add(dueFor('t3', last, 4000));
+    final before = state.collectedAmount;
+    // Arrears for last month, paid today, count in this month's collection.
+    state.recordPayment(tenantId: 't3', amount: 4000, method: 'Cash');
+    expect(state.collectedAmount, before + 4000);
+    expect(state.monthlyRevenue().last.total, state.collectedAmount);
+  });
+
+  test('an owner can reverse a payment recorded by mistake', () async {
+    state.debugSignIn(UserRole.owner);
+    final due = state.payments
+        .firstWhere((p) => p.tenantId == 't2' && p.status == PaymentStatus.due);
+    state.recordPayment(tenantId: 't2', amount: due.amount, method: 'Cash');
+    expect(state.payments.firstWhere((p) => p.id == due.id).status,
+        PaymentStatus.paid);
+
+    expect(await state.reversePayment(due.id), isNull);
+
+    final back = state.payments.firstWhere((p) => p.id == due.id);
+    expect(back.status, PaymentStatus.due);
+    expect(back.collected, 0);
+    expect(back.paidDate, isNull);
+    expect(
+        state.notifications.any((n) => n.title == 'Payment reversed'), isTrue);
+    expect(await state.reversePayment(due.id), contains('Nothing'));
+  });
+
+  test('reversing an advance removes the unused credit', () async {
+    state.debugSignIn(UserRole.owner);
+    final due = state.payments
+        .firstWhere((p) => p.tenantId == 't2' && p.status == PaymentStatus.due);
+    state.recordPayment(
+        tenantId: 't2', amount: due.amount + 2000, method: 'Cash');
+    final advance = state.payments.firstWhere((p) => p.advance);
+    expect(await state.reversePayment(advance.id), isNull);
+    expect(state.creditOf('t2'), 0);
+  });
+
+  test('tenants cannot reverse payments', () async {
+    state.debugSignIn(UserRole.tenant, tenantId: 't1');
+    final paid = state.payments.firstWhere(
+        (p) => p.tenantId == 't1' && p.status == PaymentStatus.paid);
+    expect(await state.reversePayment(paid.id), contains('Only the owner'));
+  });
+
+  test('a UTR must be exactly 12 digits', () async {
+    state.debugSignIn(UserRole.tenant, tenantId: 't1');
+    final due = state.tenantDuePayment!;
+    for (final bad in ['12345678901', 'ABC123456789', '1234567890123']) {
+      expect(await state.submitPayment(payment: due, utr: bad, paidAmount: 100),
+          contains('12-digit'),
+          reason: bad);
+    }
+  });
+
+  test('receipts exist only for money received', () {
+    final src = File('lib/src/finance_screens.dart').readAsStringSync();
+    expect(src, contains('payment.collected > 0'));
+    expect(src, contains('amount: payment.collected'));
+    expect(src, contains('Text(inr(payment.collected)'));
+  });
+
+  test('018 confirms a submission and saves the money together', () {
+    final sql = File('supabase/018_payments.sql').readAsStringSync();
+    expect(sql, contains('function public.owner_confirm_submission'));
+    expect(sql, contains("status = 'pending_confirmation'"));
+    expect(sql, contains('public.owner_save('));
+    final src = File('lib/src/app_state.dart').readAsStringSync();
+    expect(src, contains("'owner_confirm_submission'"));
+  });
+
+  test('advance rows survive a save/load round trip', () {
+    final p = Payment(
+        id: 'adv',
+        tenantId: 't1',
+        period: DateTime(2026, 10),
+        amount: 500,
+        status: PaymentStatus.paid,
+        paidAmount: 500,
+        dueDate: DateTime(2026, 10, 5),
+        advance: true);
+    expect(Payment.fromMap(p.toMap()).advance, isTrue);
+    final plain = Payment.fromMap(p.toMap()..remove('advance'));
+    expect(plain.advance, isFalse);
+  });
 }
 
 class _UpdateWatchHost extends StatefulWidget {

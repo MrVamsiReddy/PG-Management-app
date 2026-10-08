@@ -245,7 +245,7 @@ class DashboardScreen extends StatelessWidget {
               StatusPill(latest.displayStatus),
             ]),
             const SizedBox(height: 14),
-            Text(inr(latest.amount),
+            Text(inr(paid ? latest.amount : state.tenantOutstanding),
                 style: Theme.of(context)
                     .textTheme
                     .headlineLarge

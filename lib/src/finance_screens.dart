@@ -126,12 +126,29 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                                     fontWeight: FontWeight.w800,
                                     letterSpacing: 1)),
                             const SizedBox(height: 10),
-                            Text(inr(due?.balance ?? 0),
+                            Text(inr(state.tenantOutstanding),
                                 style: Theme.of(context)
                                     .textTheme
                                     .headlineLarge
                                     ?.copyWith(color: Colors.white)),
                             const SizedBox(height: 4),
+                            if (state.tenantUnpaidMonths > 1)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Text(
+                                    '${state.tenantUnpaidMonths} ${l.t('pay.monthsDue')} · ${l.t('pay.oldestFirst')}',
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w700)),
+                              ),
+                            if (state.creditOf(state.currentTenantId) > 0)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Text(
+                                    '${l.t('pay.credit')}: ${inr(state.creditOf(state.currentTenantId))}',
+                                    style:
+                                        const TextStyle(color: Colors.white70)),
+                              ),
                             Text(
                               due == null
                                   ? '${AppLocalizations.of(context).t('pay.noDues')} · ${AppLocalizations.of(context).t('common.room')} ${state.currentTenantRoomLabel}'
@@ -169,7 +186,9 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                             color: primary)),
                     title: Text(
                         tenant
-                            ? formatMonth(payment.period)
+                            ? (payment.advance
+                                ? l.t('pay.advance')
+                                : formatMonth(payment.period))
                             : state.tenantName(payment.tenantId),
                         style: const TextStyle(fontWeight: FontWeight.w700)),
                     subtitle: Text(
@@ -185,7 +204,10 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                           StatusPill(
                               statusLabel(l, state.paymentStatusKey(payment)))
                         ]),
-                    onTap: () => _receipt(context, state, payment),
+                    // A receipt only exists for money actually received.
+                    onTap: payment.collected > 0
+                        ? () => _receipt(context, state, payment)
+                        : null,
                   ),
                 )),
             if (items.isEmpty)
@@ -294,8 +316,11 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
           const Divider(height: 30),
           _receiptRow(AppLocalizations.of(context).t('pay.receivedFrom'),
               state.tenantName(payment.tenantId)),
-          _receiptRow(AppLocalizations.of(context).t('pay.forMonth'),
-              formatMonth(payment.period)),
+          _receiptRow(
+              AppLocalizations.of(context).t('pay.forMonth'),
+              payment.advance
+                  ? AppLocalizations.of(context).t('pay.advance')
+                  : formatMonth(payment.period)),
           _receiptRow(AppLocalizations.of(context).t('pay.date'),
               payment.paidDate == null ? '—' : formatDay(payment.paidDate!)),
           if (payment.method != null)
@@ -303,11 +328,14 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                 AppLocalizations.of(context).t('pay.method'), payment.method!),
           _receiptRow(AppLocalizations.of(context).t('pay.status'),
               AppLocalizations.of(context).status(payment.displayStatus)),
+          if (payment.balance > 0)
+            _receiptRow(AppLocalizations.of(context).t('pay.balanceDue'),
+                inr(payment.balance)),
           const Divider(height: 28),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Text(AppLocalizations.of(context).t('pay.totalPaid'),
                 style: const TextStyle(fontWeight: FontWeight.w800)),
-            Text(inr(payment.amount),
+            Text(inr(payment.collected),
                 style: Theme.of(context).textTheme.headlineMedium)
           ]),
           const SizedBox(height: 20),
@@ -328,7 +356,44 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                     label: Text(
                         AppLocalizations.of(context).t('common.download')))),
           ]),
+          if (state.role != UserRole.tenant) ...[
+            const SizedBox(height: 8),
+            TextButton.icon(
+                onPressed: () => _reverse(context, state, payment),
+                icon: const Icon(Icons.undo, color: coral),
+                label: Text(AppLocalizations.of(context).t('pay.reverse'),
+                    style: const TextStyle(color: coral))),
+          ],
         ]));
+  }
+
+  /// Confirms, then puts a mistakenly recorded payment back to unpaid.
+  Future<void> _reverse(
+      BuildContext sheetContext, AppState state, Payment payment) async {
+    final l = AppLocalizations.of(sheetContext);
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await showDialog<bool>(
+      context: sheetContext,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l.t('pay.reverse')),
+        content: Text(
+            '${inr(payment.collected)} · ${state.tenantName(payment.tenantId)}\n\n${l.t('pay.reverseBody')}'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text(l.t('common.cancel'))),
+          FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: coral),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(l.t('pay.reverse'))),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    if (sheetContext.mounted) Navigator.pop(sheetContext);
+    final error = await state.reversePayment(payment.id);
+    messenger
+        .showSnackBar(SnackBar(content: Text(error ?? l.t('pay.reversed'))));
   }
 
   Future<void> _exportReceipt(AppState state, Payment payment, String ref,
@@ -336,10 +401,11 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     final bytes = await buildReceiptPdf(
       pgName: state.pgNameForTenant(payment.tenantId),
       ref: 'PGM-$ref',
-      amount: payment.amount,
+      amount: payment.collected,
       rows: [
         ('Received from', state.tenantName(payment.tenantId)),
-        ('For', formatMonth(payment.period)),
+        ('For', payment.advance ? 'Advance' : formatMonth(payment.period)),
+        if (payment.balance > 0) ('Balance due', inr(payment.balance)),
         (
           'Payment date',
           payment.paidDate == null ? '-' : formatDay(payment.paidDate!)
