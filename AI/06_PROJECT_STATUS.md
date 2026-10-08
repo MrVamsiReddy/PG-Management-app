@@ -29,6 +29,9 @@ Roadmap = `app improvements.md` (Prompts 1–11). Details of each area live in `
 ## Improvements batch complete
 - Tasks 1–9 shipped. Interim bugfix: admin "View PGs" reads app_data.
 
+## v1.19.0 (2026-10-08): update prompt while the app is running
+- `UpdateWatch` (update_check.dart) checks for a newer GitHub release when the shell opens, whenever the app returns to the foreground, and every `updateCheckInterval` (15 min) while open. One prompt at a time; "Later" snoozes that version for `updateSnooze` (2 h). Owner (`HomeShell`) and tenant (`TenantShell`) apps both use it.
+
 ## v1.18.0 (2026-10-08): per-tenant rent, ground floor + 10 floors, notifications
 - Owners can set a tenant's own monthly rent (Tenants → ⋮ → Adjust rent) or put them back on the room rate. `Tenant.rent` (null = room rent); `AppState.rentFor` drives dues; untouched current/future dues are repriced, paid/part-paid/under-review ones keep their amount; room rent changes skip tenants with their own rent; the tenant gets a "Rent updated" notification.
 - Floors: Ground (floor 0) up to `maxFloor` = 10 via the shared `FloorPicker` (add room, edit room, onboarding); `floorLabel` shows "Ground floor".

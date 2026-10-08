@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -45,12 +46,24 @@ bool isNewerVersion(String current, String latest) {
   return (version: tag, url: asset.first['browser_download_url'] as String);
 }
 
+/// How often a running app looks for a new release.
+const updateCheckInterval = Duration(minutes: 15);
+
+/// After "Later", the same version isn't offered again for this long.
+const updateSnooze = Duration(hours: 2);
+
+bool _prompting = false;
+String? _snoozedVersion;
+DateTime? _snoozedUntil;
+
 /// Android-only, best-effort update prompt: compares the installed version
 /// against the latest GitHub release and offers to download the new APK.
 /// Installing it updates the app in place — data and login are kept.
+/// Never shows two prompts at once, and respects a recent "Later".
 Future<void> maybePromptUpdate(BuildContext context,
     {required String apkAsset}) async {
   if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+  if (_prompting) return;
   ({String version, String url})? update;
   try {
     final info = await PackageInfo.fromPlatform();
@@ -65,26 +78,78 @@ Future<void> maybePromptUpdate(BuildContext context,
   } catch (_) {
     return;
   }
-  if (update == null || !context.mounted) return;
+  if (update == null || !context.mounted || _prompting) return;
+  final snoozedUntil = _snoozedUntil;
+  if (update.version == _snoozedVersion &&
+      snoozedUntil != null &&
+      DateTime.now().isBefore(snoozedUntil)) {
+    return;
+  }
   final l = AppLocalizations.of(context);
-  final go = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      icon: const Icon(Icons.system_update_alt),
-      title: Text('${l.t('upd.title')} — v${update!.version}'),
-      content: Text(l.t('upd.body')),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(l.t('upd.later'))),
-        FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(l.t('upd.update'))),
-      ],
-    ),
-  );
+  _prompting = true;
+  final bool? go;
+  try {
+    go = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.system_update_alt),
+        title: Text('${l.t('upd.title')} — v${update!.version}'),
+        content: Text(l.t('upd.body')),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(l.t('upd.later'))),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(l.t('upd.update'))),
+        ],
+      ),
+    );
+  } finally {
+    _prompting = false;
+  }
   if (go == true) {
     await launchUrl(Uri.parse(update.url),
         mode: LaunchMode.externalApplication);
+  } else {
+    _snoozedVersion = update.version;
+    _snoozedUntil = DateTime.now().add(updateSnooze);
+  }
+}
+
+/// Keeps a running app looking for updates: once when started, again
+/// whenever the app comes back to the foreground, and every
+/// [updateCheckInterval] while it stays open. Start it from a screen's
+/// initState and stop it in dispose.
+class UpdateWatch with WidgetsBindingObserver {
+  UpdateWatch(this._state, this.apkAsset);
+
+  final State _state;
+  final String apkAsset;
+  Timer? _timer;
+
+  bool get isRunning => _timer != null;
+
+  void start() {
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => check());
+    _timer = Timer.periodic(updateCheckInterval, (_) => check());
+  }
+
+  void stop() {
+    _timer?.cancel();
+    _timer = null;
+    WidgetsBinding.instance.removeObserver(this);
+  }
+
+  void check() {
+    if (_state.mounted) {
+      unawaited(maybePromptUpdate(_state.context, apkAsset: apkAsset));
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) check();
   }
 }

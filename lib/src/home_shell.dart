@@ -17,15 +17,18 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   int index = 0;
+  late final _updates = UpdateWatch(this, 'PG-Management-Owner.apk');
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        maybePromptUpdate(context, apkAsset: 'PG-Management-Owner.apk');
-      }
-    });
+    _updates.start();
+  }
+
+  @override
+  void dispose() {
+    _updates.stop();
+    super.dispose();
   }
 
   @override
