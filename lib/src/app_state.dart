@@ -1217,12 +1217,16 @@ class AppState extends ChangeNotifier {
 
   int get pgDueAmount => pgPayments.fold(0, (sum, e) => sum + e.balance);
 
-  int get pgCollectedAmount {
-    final now = DateTime.now();
-    return pgPayments
-        .where((e) => e.period.year == now.year && e.period.month == now.month)
-        .fold(0, (sum, e) => sum + e.collected);
-  }
+  int get pgCollectedAmount => _receivedIn(pgPayments, DateTime.now());
+
+  /// Money received in [month] (by the day it arrived, not the rent month
+  /// it paid for), so arrears collected today count today.
+  static int _receivedIn(Iterable<Payment> pool, DateTime month) => pool
+      .where((e) =>
+          e.paidDate != null &&
+          e.paidDate!.year == month.year &&
+          e.paidDate!.month == month.month)
+      .fold(0, (sum, e) => sum + e.collected);
 
   String pgNameForTenant(String tenantId) {
     final room = roomById(tenantById(tenantId)?.roomId ?? '');
@@ -1305,12 +1309,7 @@ class AppState extends ChangeNotifier {
   /// partially-settled dues, not just untouched ones.
   int get dueAmount => payments.fold(0, (sum, e) => sum + e.balance);
 
-  int get collectedAmount {
-    final now = DateTime.now();
-    return payments
-        .where((e) => e.period.year == now.year && e.period.month == now.month)
-        .fold(0, (sum, e) => sum + e.collected);
-  }
+  int get collectedAmount => _receivedIn(payments, DateTime.now());
 
   List<({DateTime month, int total})> monthlyRevenue(
       {int months = 6, List<Payment>? source}) {
@@ -1318,11 +1317,7 @@ class AppState extends ChangeNotifier {
     final pool = source ?? payments;
     return List.generate(months, (i) {
       final month = DateTime(now.year, now.month - (months - 1 - i));
-      final total = pool
-          .where((e) =>
-              e.period.year == month.year && e.period.month == month.month)
-          .fold(0, (sum, e) => sum + e.collected);
-      return (month: month, total: total);
+      return (month: month, total: _receivedIn(pool, month));
     });
   }
 
@@ -1960,8 +1955,28 @@ class AppState extends ChangeNotifier {
   }
 
   /// The current tenant's next unsettled payment (due or partially paid).
-  Payment? get tenantDuePayment => _firstOrNull(payments,
-      (p) => p.tenantId == currentTenantId && p.status != PaymentStatus.paid);
+  Payment? get tenantDuePayment {
+    Payment? oldest;
+    for (final p in payments) {
+      if (p.tenantId != currentTenantId || p.status == PaymentStatus.paid) {
+        continue;
+      }
+      if (oldest == null || p.period.isBefore(oldest.period)) oldest = p;
+    }
+    return oldest;
+  }
+
+  /// Everything the signed-in tenant still owes, across all months.
+  int get tenantOutstanding => _tenantBalance(currentTenantId);
+
+  /// How many of the signed-in tenant's months are still unsettled.
+  int get tenantUnpaidMonths => payments
+      .where((p) =>
+          p.tenantId == currentTenantId && p.status != PaymentStatus.paid)
+      .length;
+
+  /// What [tenantId] still owes across all months.
+  int balanceOf(String tenantId) => _tenantBalance(tenantId);
 
   /// The signed-in tenant's own payments — never anyone else's.
   List<Payment> get tenantPayments =>
@@ -2045,6 +2060,8 @@ class AppState extends ChangeNotifier {
             ));
         added = true;
       }
+      // Money paid in advance settles the dues it covers.
+      if (_applyCredit(tenant.id)) added = true;
     }
     return added;
   }
@@ -2169,8 +2186,10 @@ class AppState extends ChangeNotifier {
       required int paidAmount,
       String note = '',
       Uint8List? screenshot}) async {
-    final ref = utr.trim();
-    if (ref.length < 6) return 'Enter the 12-digit UPI reference (UTR).';
+    final ref = utr.replaceAll(RegExp(r'\s'), '');
+    if (!RegExp(r'^\d{12}$').hasMatch(ref)) {
+      return 'Enter the 12-digit UPI reference (UTR).';
+    }
     if (paidAmount <= 0) return 'Enter the amount you paid.';
     // One live submission per due: wait for the owner's decision first.
     if (!canSubmit(payment)) {
@@ -2244,6 +2263,56 @@ class AppState extends ChangeNotifier {
     if (!payments.any((p) => p.id == s.paymentId && p.tenantId == s.tenantId)) {
       return 'This rent due is no longer in the books. Refresh and try again.';
     }
+    final repo = _paymentRepo;
+    if (repo is SupabaseRepository<Payment>) {
+      // One server transaction marks the submission confirmed and saves the
+      // rent record: both happen or neither does (018_payments.sql).
+      final before = List<Payment>.of(payments);
+      final touched = _applyReceipt(
+          tenantId: s.tenantId,
+          amount: s.amount,
+          method: 'UPI',
+          dueId: s.paymentId);
+      try {
+        await repo.saveAllVia(
+            'owner_confirm_submission', payments, {'p_submission': s.id});
+      } on PostgrestException catch (e) {
+        payments = before;
+        if (e.code == 'PGRST202') {
+          // Database without 018: the older two-step confirm.
+          return _confirmSubmissionLegacy(client, s);
+        }
+        await loadSubmissions();
+        notifyListeners();
+        return e.message.contains('already reviewed')
+            ? 'This payment was already reviewed.'
+            : 'Could not confirm the payment. Check your connection.';
+      } catch (_) {
+        payments = before;
+        notifyListeners();
+        return 'Could not confirm the payment. Check your connection.';
+      }
+      _notifyReceipt(s.tenantId, s.amount, touched,
+          managerSettled: 'Rent received',
+          managerPartial: 'Part payment received',
+          tenantSettled: 'Payment confirmed',
+          tenantPartial: 'Payment confirmed');
+      _persist({'notifications'});
+      _audit('payment_confirmed',
+          entityType: 'payment',
+          entityId: s.paymentId,
+          after: {'utr': s.utr, 'amount': s.amount});
+      await loadSubmissions();
+      notifyListeners();
+      return null;
+    }
+    return _confirmSubmissionLegacy(client, s);
+  }
+
+  /// Confirm for a database without `owner_confirm_submission`: the
+  /// submission and the rent record are saved one after the other.
+  Future<String?> _confirmSubmissionLegacy(
+      SupabaseClient client, UpiSubmission s) async {
     try {
       // Only a pending submission can be confirmed (not one rejected from
       // another screen in the meantime).
@@ -2278,6 +2347,64 @@ class AppState extends ChangeNotifier {
     } catch (_) {
       return 'Could not confirm the payment. Check your connection.';
     }
+  }
+
+  /// Owner-side undo for a payment recorded by mistake: the due goes back
+  /// to unpaid (an advance row is removed), a confirmed UPI submission for
+  /// it is marked rejected so the tenant can submit again, and the tenant
+  /// is told. Returns an error message, or null.
+  Future<String?> reversePayment(String paymentId) async {
+    if (role == UserRole.tenant) return 'Only the owner can reverse payments.';
+    final i = payments.indexWhere((p) => p.id == paymentId);
+    if (i == -1) return 'Payment not found.';
+    final p = payments[i];
+    if (p.collected == 0) return 'Nothing has been received for this due.';
+    if (p.advance) {
+      payments.removeAt(i);
+    } else {
+      payments[i] = Payment(
+        id: p.id,
+        tenantId: p.tenantId,
+        period: p.period,
+        amount: p.amount,
+        status: PaymentStatus.due,
+        dueDate: p.dueDate,
+        customerId: p.customerId,
+      );
+    }
+    final client = supabaseOrNull;
+    if (client != null && isLoggedIn) {
+      for (final sub in submissions.where(
+          (x) => x.paymentId == paymentId && x.status == UpiStatus.confirmed)) {
+        try {
+          await client.from('upi_submissions').update({
+            'status': 'rejected',
+            'rejection_reason': 'Payment reversed by the owner',
+          }).eq('id', sub.id);
+        } catch (_) {}
+      }
+      await loadSubmissions();
+    }
+    _notify(
+        'Payment reversed',
+        p.advance
+            ? 'An advance of ${inr(p.collected)} was removed from your account.'
+            : 'The ${inr(p.collected)} recorded for ${formatMonthName(p.period)} rent was reversed. Contact your PG owner if this is wrong.',
+        NotificationType.payment,
+        scope: NotificationScope.tenant,
+        tenantId: p.tenantId,
+        pgId: _pgIdForTenant(p.tenantId),
+        relatedEntityId: p.id);
+    final saved = await _persist({'payments', 'notifications'});
+    _audit('payment_reversed',
+        entityType: 'payment',
+        entityId: paymentId,
+        before: {
+          'collected': p.collected,
+          'method': p.method,
+          'advance': p.advance
+        });
+    return saved ? null : 'Could not save. Check your connection.';
   }
 
   Future<String?> rejectSubmission(UpiSubmission s, String reason) async {
@@ -2369,12 +2496,72 @@ class AppState extends ChangeNotifier {
         paidDate: now,
         method: method,
         customerId: customerId,
+        advance: true,
       );
       payments.insert(0, advance);
       touched.add(advance);
     }
     return touched;
   }
+
+  /// Uses a tenant's unused advance money (oldest first) to settle their
+  /// unsettled dues (oldest first). The settled due keeps the day the money
+  /// actually arrived and is marked as paid from advance; the advance row
+  /// shrinks by what was used and disappears when empty, so no rupee is
+  /// counted twice. Returns true when anything changed.
+  bool _applyCredit(String tenantId) {
+    var changed = false;
+    while (true) {
+      final credits = payments
+          .where((p) => p.tenantId == tenantId && p.advance && p.amount > 0)
+          .toList()
+        ..sort((a, b) =>
+            (a.paidDate ?? a.period).compareTo(b.paidDate ?? b.period));
+      final open = payments
+          .where((p) =>
+              p.tenantId == tenantId &&
+              !p.advance &&
+              p.status != PaymentStatus.paid)
+          .toList()
+        ..sort((a, b) => a.period.compareTo(b.period));
+      if (credits.isEmpty || open.isEmpty) return changed;
+      final credit = credits.first;
+      final due = open.first;
+      final take = credit.amount < due.balance ? credit.amount : due.balance;
+      final collected = due.collected + take;
+      final settled = collected >= due.amount;
+      payments[payments.indexOf(due)] = due.copyWith(
+          status: settled ? PaymentStatus.paid : PaymentStatus.partial,
+          paidAmount: settled ? due.amount : collected,
+          paidDate: credit.paidDate,
+          method: 'Advance');
+      final left = credit.amount - take;
+      final ci = payments.indexOf(credit);
+      if (left <= 0) {
+        payments.removeAt(ci);
+      } else {
+        payments[ci] = Payment(
+          id: credit.id,
+          tenantId: credit.tenantId,
+          period: credit.period,
+          amount: left,
+          status: PaymentStatus.paid,
+          paidAmount: left,
+          dueDate: credit.dueDate,
+          paidDate: credit.paidDate,
+          method: credit.method,
+          customerId: credit.customerId,
+          advance: true,
+        );
+      }
+      changed = true;
+    }
+  }
+
+  /// Unused advance money a tenant has.
+  int creditOf(String tenantId) => payments
+      .where((p) => p.tenantId == tenantId && p.advance)
+      .fold(0, (sum, p) => sum + p.amount);
 
   /// What a tenant still owes across all their dues.
   int _tenantBalance(String tenantId) => payments

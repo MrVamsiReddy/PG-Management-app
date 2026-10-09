@@ -45,6 +45,29 @@ class SupabaseRepository<T> implements Repository<T> {
     return items;
   }
 
+  /// Like [saveAll], through [function]: a server function taking the same
+  /// owner/key/base/items arguments plus [extra], for a save that must
+  /// succeed or fail together with another change (e.g. confirming a UPI
+  /// submission and recording its money, 018_payments.sql).
+  Future<void> saveAllVia(
+      String function, List<T> items, Map<String, dynamic> extra) async {
+    final base = _base;
+    final mine = items.map(toMap).toList();
+    _base = mine;
+    try {
+      await client.rpc(function, params: {
+        'p_owner': workspaceOwnerId,
+        'p_key': key,
+        'p_base': base,
+        'p_items': mine,
+        ...extra,
+      });
+    } catch (_) {
+      _base = base;
+      rethrow;
+    }
+  }
+
   /// Merges instead of replacing: `owner_save` applies the items this device
   /// added, edited or deleted since [_base] onto the stored list under a row
   /// lock, so a concurrent save from another device or a tenant is kept

@@ -28,10 +28,10 @@ Future<void> showUpiPayFlow(
   // built it). If the row vanished, fall back to the latest unsettled due.
   await state.refresh();
   payment = state.payments.firstWhere((p) => p.id == payment.id,
-      orElse: () => state.payments.firstWhere(
-          (p) =>
-              p.tenantId == payment.tenantId && p.status != PaymentStatus.paid,
-          orElse: () => payment));
+      orElse: () => state.tenantDuePayment ?? payment);
+  // The tenant pays everything they owe; the owner's confirmation settles
+  // the oldest months first and keeps any extra as advance credit.
+  final owed = state.balanceOf(payment.tenantId);
   final pgId = state.pgIdForPayment(payment);
   final settings = await state.loadUpiSettings(pgId);
   if (!context.mounted) return;
@@ -44,7 +44,7 @@ Future<void> showUpiPayFlow(
           .toString();
 
   final utr = TextEditingController();
-  final paidAmount = TextEditingController(text: '${payment.balance}');
+  final paidAmount = TextEditingController(text: '$owed');
   final note = TextEditingController();
   String? screenshot;
   var busy = false;
@@ -90,7 +90,7 @@ Future<void> showUpiPayFlow(
                           ]),
                         ),
                         const SizedBox(height: 6),
-                        Text('${l.t('upi.amount')}: ${inr(payment.balance)}',
+                        Text('${l.t('upi.amount')}: ${inr(owed)}',
                             style: const TextStyle(color: Colors.white70)),
                       ]),
                 ),
@@ -113,8 +113,7 @@ Future<void> showUpiPayFlow(
                 Expanded(
                     child: OutlinedButton.icon(
                         onPressed: () {
-                          Clipboard.setData(
-                              ClipboardData(text: '${payment.balance}'));
+                          Clipboard.setData(ClipboardData(text: '$owed'));
                           messenger.showSnackBar(
                               SnackBar(content: Text(l.t('upi.amountCopied'))));
                         },
@@ -164,7 +163,7 @@ Future<void> showUpiPayFlow(
                             style: const TextStyle(fontSize: 12)))),
               ]),
               const SizedBox(height: 10),
-              Text('${l.t('upi.typeAmount')} ${inr(payment.balance)}',
+              Text('${l.t('upi.typeAmount')} ${inr(owed)}',
                   style: const TextStyle(
                       fontSize: 12, color: coral, fontWeight: FontWeight.w700)),
               const SizedBox(height: 14),
