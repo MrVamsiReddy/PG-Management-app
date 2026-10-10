@@ -31,7 +31,7 @@ class AuthScreen extends StatelessWidget {
                         width: 48,
                         height: 48,
                         decoration: BoxDecoration(
-                            color: primary,
+                            color: accent,
                             borderRadius: BorderRadius.circular(15)),
                         child: const Icon(Icons.apartment_rounded,
                             color: Colors.white, size: 28),
@@ -62,13 +62,12 @@ class AuthScreen extends StatelessWidget {
                             color: coral.withValues(alpha: .14),
                             borderRadius: BorderRadius.circular(14)),
                         child: Row(children: [
-                          const Icon(Icons.info_outline,
-                              color: Color(0xFFC94444)),
+                          Icon(Icons.info_outline, color: danger),
                           const SizedBox(width: 10),
                           Expanded(
                               child: Text(state.authNotice!,
-                                  style: const TextStyle(
-                                      color: Color(0xFFC94444),
+                                  style: TextStyle(
+                                      color: danger,
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600))),
                         ]),
@@ -117,7 +116,7 @@ class AuthScreen extends StatelessWidget {
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                   color: softTint, borderRadius: BorderRadius.circular(12)),
-              child: Icon(icon, color: primary)),
+              child: Icon(icon, color: accent)),
           title:
               Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
           subtitle: Text(subtitle),
@@ -364,7 +363,7 @@ class _SetPasswordScreenState extends State<SetPasswordScreen> {
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Icon(Icons.lock_reset, size: 54, color: primary),
+                      Icon(Icons.lock_reset, size: 54, color: accent),
                       const SizedBox(height: 16),
                       Text(l.t('setpw.title'),
                           textAlign: TextAlign.center,

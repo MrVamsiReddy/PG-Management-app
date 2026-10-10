@@ -44,8 +44,7 @@ class VisitorsScreen extends StatelessWidget {
                         Row(children: [
                           CircleAvatar(
                               backgroundColor: softTint,
-                              child: const Icon(Icons.badge_outlined,
-                                  color: primary)),
+                              child: Icon(Icons.badge_outlined, color: accent)),
                           const SizedBox(width: 11),
                           Expanded(
                               child: Column(
@@ -201,8 +200,8 @@ class AnnouncementsScreen extends StatelessWidget {
                                             Colors.pink.withValues(alpha: .12),
                                         borderRadius:
                                             BorderRadius.circular(11)),
-                                    child: const Icon(Icons.campaign_outlined,
-                                        color: Color(0xFFB65B87))),
+                                    child: Icon(Icons.campaign_outlined,
+                                        color: pink)),
                                 const Spacer(),
                                 if (item.pgId != null) ...[
                                   Container(
@@ -214,10 +213,10 @@ class AnnouncementsScreen extends StatelessWidget {
                                               BorderRadius.circular(8)),
                                       child: Text(
                                           state.pgById(item.pgId!)?.name ?? '',
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                               fontSize: 9,
                                               fontWeight: FontWeight.w800,
-                                              color: primary))),
+                                              color: accent))),
                                   const SizedBox(width: 8),
                                 ],
                                 Text(relativeTime(item.postedAt),
@@ -233,10 +232,10 @@ class AnnouncementsScreen extends StatelessWidget {
                                   maxLines: 2, overflow: TextOverflow.ellipsis),
                               const Divider(height: 25),
                               Text('${l.t('ann.postedBy')} ${item.author}',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                       fontWeight: FontWeight.w700,
                                       fontSize: 11,
-                                      color: primary)),
+                                      color: accent)),
                             ])),
                   ),
                 )),
@@ -258,8 +257,7 @@ class AnnouncementsScreen extends StatelessWidget {
                 decoration: BoxDecoration(
                     color: Colors.pink.withValues(alpha: .12),
                     borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.campaign_outlined,
-                    color: Color(0xFFB65B87))),
+                child: Icon(Icons.campaign_outlined, color: pink)),
             const SizedBox(width: 12),
             Expanded(
                 child: Text(item.title,
@@ -273,8 +271,8 @@ class AnnouncementsScreen extends StatelessWidget {
           Text(item.body, style: const TextStyle(height: 1.4)),
           const Divider(height: 30),
           Text('${l.t('ann.postedBy')} ${item.author}',
-              style: const TextStyle(
-                  fontWeight: FontWeight.w700, fontSize: 12, color: primary)),
+              style: TextStyle(
+                  fontWeight: FontWeight.w700, fontSize: 12, color: accent)),
           const SizedBox(height: 16),
           FilledButton(
               onPressed: () => Navigator.pop(context),
@@ -392,7 +390,7 @@ class NotificationsScreen extends StatelessWidget {
                       leading: CircleAvatar(
                           backgroundColor: surfaceCard,
                           child: Icon(notificationIcon(item.type),
-                              color: primary, size: 21)),
+                              color: accent, size: 21)),
                       title: Text(item.title,
                           style: const TextStyle(fontWeight: FontWeight.w800)),
                       subtitle: Text(

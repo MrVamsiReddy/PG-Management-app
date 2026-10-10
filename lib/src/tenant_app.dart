@@ -68,7 +68,7 @@ class _WrongApp extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.info_outline, size: 48, color: primary),
+              Icon(Icons.info_outline, size: 48, color: accent),
               const SizedBox(height: 16),
               Text(AppLocalizations.of(context).t('com.wrongAppTenant'),
                   textAlign: TextAlign.center),
@@ -160,7 +160,7 @@ class _TenantShellState extends State<TenantShell> {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                  color: primary, borderRadius: BorderRadius.circular(11)),
+                  color: accent, borderRadius: BorderRadius.circular(11)),
               child: const Icon(Icons.apartment_rounded,
                   color: Colors.white, size: 21)),
           const SizedBox(width: 10),
@@ -261,7 +261,7 @@ class TenantHome extends StatelessWidget {
                               leading: CircleAvatar(
                                   backgroundColor: softTint,
                                   child: Icon(notificationIcon(n.type),
-                                      color: primary, size: 20)),
+                                      color: accent, size: 20)),
                               title: Text(n.title,
                                   style: const TextStyle(
                                       fontWeight: FontWeight.w700)),
@@ -345,7 +345,7 @@ class TenantHome extends StatelessWidget {
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                       color: softTint, borderRadius: BorderRadius.circular(12)),
-                  child: Icon(icon, color: primary, size: 22)),
+                  child: Icon(icon, color: accent, size: 22)),
               const SizedBox(height: 8),
               Text(label,
                   textAlign: TextAlign.center,
@@ -372,10 +372,10 @@ class TenantProfileScreen extends StatelessWidget {
               radius: 43,
               backgroundColor: softTint,
               child: Text(state.initials,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 25,
                       fontWeight: FontWeight.w800,
-                      color: primary))),
+                      color: accent))),
           const SizedBox(height: 13),
           Center(
               child: Text(state.displayName,
@@ -418,8 +418,7 @@ class TenantProfileScreen extends StatelessWidget {
               icon: const Icon(Icons.logout),
               label: Text(l.t('common.signOut')),
               style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFFC94444),
-                  padding: const EdgeInsets.all(15))),
+                  foregroundColor: danger, padding: const EdgeInsets.all(15))),
           const SizedBox(height: 16),
           Center(
               child: Text('PG Management v3.0',
@@ -435,7 +434,7 @@ class TenantProfileScreen extends StatelessWidget {
             padding: const EdgeInsets.all(9),
             decoration: BoxDecoration(
                 color: softTint, borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: primary, size: 21)),
+            child: Icon(icon, color: accent, size: 21)),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
         subtitle: Text(subtitle),
         trailing: const Icon(Icons.chevron_right),
@@ -528,12 +527,12 @@ class TenantProfileScreen extends StatelessWidget {
               const SizedBox(height: 16),
               ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.mail_outline, color: primary),
+                  leading: Icon(Icons.mail_outline, color: accent),
                   title: Text(l.t('help.email')),
                   subtitle: const Text('support@pgmanagement.app')),
               ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.call_outlined, color: primary),
+                  leading: Icon(Icons.call_outlined, color: accent),
                   title: Text(l.t('help.call')),
                   subtitle: const Text('+91 98765 43210')),
               const SizedBox(height: 12),

@@ -47,9 +47,8 @@ class PgListingsScreen extends StatelessWidget {
                   children: [
                     Container(
                       height: 140,
-                      decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                              colors: [Color(0xFF195F59), Color(0xFF45A497)])),
+                      decoration: BoxDecoration(
+                          gradient: LinearGradient(colors: heroGradient)),
                       child: Stack(children: [
                         if (pg.photo != null)
                           Positioned.fill(child: base64Image(pg.photo!))
@@ -151,9 +150,9 @@ class PgListingsScreen extends StatelessWidget {
                                 Text(
                                     AppLocalizations.of(context)
                                         .t('pg.tapManage'),
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                         fontSize: 11,
-                                        color: primary,
+                                        color: accent,
                                         fontWeight: FontWeight.w700)),
                             ]),
                           ]),
@@ -351,9 +350,9 @@ class _RoomsScreenState extends State<RoomsScreen> {
                                 color: softTint,
                                 borderRadius: BorderRadius.circular(13)),
                             child: Text(room.number,
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontWeight: FontWeight.w800,
-                                    color: primary))),
+                                    color: accent))),
                         const SizedBox(width: 12),
                         Expanded(
                             child: Column(
@@ -729,8 +728,8 @@ class RoomDetailsScreen extends StatelessWidget {
                     leading: CircleAvatar(
                         backgroundColor: softTint,
                         child: Text(t.initials,
-                            style: const TextStyle(
-                                color: primary, fontWeight: FontWeight.w800))),
+                            style: TextStyle(
+                                color: accent, fontWeight: FontWeight.w800))),
                     title: Text(t.name,
                         style: const TextStyle(fontWeight: FontWeight.w700)),
                     subtitle: Text('Bed ${t.bed} · ${t.phone}'),
@@ -803,8 +802,8 @@ class _TenantsScreenState extends State<TenantsScreen> {
                     leading: CircleAvatar(
                         backgroundColor: softTint,
                         child: Text(tenant.initials,
-                            style: const TextStyle(
-                                color: primary, fontWeight: FontWeight.w800))),
+                            style: TextStyle(
+                                color: accent, fontWeight: FontWeight.w800))),
                     title: Text(tenant.name,
                         style: const TextStyle(fontWeight: FontWeight.w700)),
                     subtitle: Text(
@@ -1284,10 +1283,10 @@ class _TenantsScreenState extends State<TenantsScreen> {
                     color: softTint, borderRadius: BorderRadius.circular(12)),
                 child: Text(
                     '${selected.type} · ${inr(selected.rent)} / bed / month (inherited)',
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: primary)),
+                        color: accent)),
               ),
             ],
             FormLabel(AppLocalizations.of(context).t('ten.bed')),

@@ -71,7 +71,7 @@ class SettingsScreen extends StatelessWidget {
                   ])
                     RadioListTile<ThemeMode>(
                       value: mode,
-                      secondary: Icon(icon, color: primary, size: 21),
+                      secondary: Icon(icon, color: accent, size: 21),
                       title: Text(l.t(key),
                           style: const TextStyle(fontWeight: FontWeight.w700)),
                     ),
@@ -90,8 +90,8 @@ class SettingsScreen extends StatelessWidget {
                     decoration: BoxDecoration(
                         color: softTint,
                         borderRadius: BorderRadius.circular(10)),
-                    child: const Icon(Icons.notifications_active_outlined,
-                        color: primary, size: 21)),
+                    child: Icon(Icons.notifications_active_outlined,
+                        color: accent, size: 21)),
                 title: Text(l.t('settings.push'),
                     style: const TextStyle(fontWeight: FontWeight.w700)),
                 subtitle: Text(l.t('settings.pushSub')),
@@ -109,8 +109,8 @@ class SettingsScreen extends StatelessWidget {
                         decoration: BoxDecoration(
                             color: softTint,
                             borderRadius: BorderRadius.circular(10)),
-                        child: const Icon(Icons.lock_outline,
-                            color: primary, size: 21)),
+                        child:
+                            Icon(Icons.lock_outline, color: accent, size: 21)),
                     title: Text(l.t('profile.changePassword'),
                         style: const TextStyle(fontWeight: FontWeight.w700)),
                     subtitle: Text(state.accountEmail ?? ''),
@@ -124,8 +124,7 @@ class SettingsScreen extends StatelessWidget {
                           decoration: BoxDecoration(
                               color: softTint,
                               borderRadius: BorderRadius.circular(10)),
-                          child: const Icon(Icons.history,
-                              color: primary, size: 21)),
+                          child: Icon(Icons.history, color: accent, size: 21)),
                       title: Text(l.t('set.activity'),
                           style: const TextStyle(fontWeight: FontWeight.w700)),
                       trailing: const Icon(Icons.chevron_right),
@@ -145,8 +144,8 @@ class SettingsScreen extends StatelessWidget {
                     decoration: BoxDecoration(
                         color: softTint,
                         borderRadius: BorderRadius.circular(10)),
-                    child: const Icon(Icons.apartment_rounded,
-                        color: primary, size: 21)),
+                    child:
+                        Icon(Icons.apartment_rounded, color: accent, size: 21)),
                 title: const Text('PG Management',
                     style: TextStyle(fontWeight: FontWeight.w700)),
                 subtitle: Text('${l.t('settings.version')} 3.0'),

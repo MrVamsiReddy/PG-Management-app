@@ -173,8 +173,7 @@ Future<void> showUpiPayFlow(
                 const SizedBox(height: 8),
                 ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: Image.memory(base64Decode(screenshot!),
-                        height: 120, fit: BoxFit.cover)),
+                    child: base64Image(screenshot!, height: 120)),
               ],
               const SizedBox(height: 10),
               TextField(

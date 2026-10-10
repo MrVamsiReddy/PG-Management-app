@@ -91,7 +91,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                         label: AppLocalizations.of(context).t('dash.collected'),
                         value: inr(state.pgCollectedAmount),
                         icon: Icons.check_circle_outline,
-                        tint: primary,
+                        tint: accent,
                         caption:
                             AppLocalizations.of(context).t('dash.thisMonth'))),
                 const SizedBox(width: 12),
@@ -182,8 +182,8 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                         decoration: BoxDecoration(
                             color: softTint,
                             borderRadius: BorderRadius.circular(12)),
-                        child: const Icon(Icons.receipt_long_outlined,
-                            color: primary)),
+                        child:
+                            Icon(Icons.receipt_long_outlined, color: accent)),
                     title: Text(
                         tenant
                             ? (payment.advance
@@ -307,7 +307,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
         context,
         Column(mainAxisSize: MainAxisSize.min, children: [
           const SheetHandle(),
-          const Icon(Icons.apartment_rounded, color: primary, size: 38),
+          Icon(Icons.apartment_rounded, color: accent, size: 38),
           const SizedBox(height: 8),
           Text(AppLocalizations.of(context).t('pay.receipt'),
               style: Theme.of(context).textTheme.titleLarge),

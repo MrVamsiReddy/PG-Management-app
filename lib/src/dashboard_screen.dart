@@ -86,7 +86,7 @@ class DashboardScreen extends StatelessWidget {
                           leading: CircleAvatar(
                               backgroundColor: softTint,
                               child: Icon(notificationIcon(n.type),
-                                  color: primary, size: 20)),
+                                  color: accent, size: 20)),
                           title: Text(n.title,
                               style:
                                   const TextStyle(fontWeight: FontWeight.w700)),
@@ -125,8 +125,8 @@ class DashboardScreen extends StatelessWidget {
                 growth == null
                     ? l.t('dash.last6')
                     : '${l.t('dash.last6')} · ${growth >= 0 ? '+' : ''}${growth.toStringAsFixed(1)}%',
-                style: const TextStyle(
-                    color: primary, fontWeight: FontWeight.w700, fontSize: 12),
+                style: TextStyle(
+                    color: accent, fontWeight: FontWeight.w700, fontSize: 12),
               ),
             ]),
             StatusPill(
@@ -174,7 +174,7 @@ class DashboardScreen extends StatelessWidget {
         label: l.t('dash.occupancy'),
         value: '$occupancy%',
         icon: Icons.bed_rounded,
-        tint: primary,
+        tint: accent,
         caption: '$occupied/$beds ${l.t('dash.beds')}',
         onTap: () => _open(context, const RoomsScreen()),
       ),
@@ -182,7 +182,7 @@ class DashboardScreen extends StatelessWidget {
         label: l.t('dash.collected'),
         value: inr(state.pgCollectedAmount),
         icon: Icons.savings_outlined,
-        tint: const Color(0xFF3478C7),
+        tint: info,
         caption: l.t('dash.thisMonth'),
         onTap: () =>
             _open(context, const PaymentsScreen(initialFilter: 'Paid')),
@@ -348,7 +348,7 @@ class DashboardScreen extends StatelessWidget {
                       decoration: BoxDecoration(
                           color: softTint,
                           borderRadius: BorderRadius.circular(13)),
-                      child: Icon(a.$2, color: primary, size: 22)),
+                      child: Icon(a.$2, color: accent, size: 22)),
                   const SizedBox(height: 9),
                   Text(a.$1,
                       textAlign: TextAlign.center,
@@ -442,11 +442,13 @@ class _RevenuePainter extends CustomPainter {
     canvas.drawPath(
         fillPath,
         Paint()
-          ..shader = const LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0x4D1A7F72), Color(0x001A7F72)])
-              .createShader(Offset.zero & size));
+          ..shader = LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                accent.withValues(alpha: .3),
+                accent.withValues(alpha: 0)
+              ]).createShader(Offset.zero & size));
     final path = Path()..moveTo(points.first.dx, points.first.dy);
     for (var i = 1; i < points.length; i++) {
       final previous = points[i - 1];
@@ -457,13 +459,13 @@ class _RevenuePainter extends CustomPainter {
     canvas.drawPath(
         path,
         Paint()
-          ..color = primary
+          ..color = accent
           ..strokeWidth = 3
           ..style = PaintingStyle.stroke
           ..strokeCap = StrokeCap.round);
     for (final p in points) {
       canvas.drawCircle(p, 4, Paint()..color = surfaceCard);
-      canvas.drawCircle(p, 3, Paint()..color = primary);
+      canvas.drawCircle(p, 3, Paint()..color = accent);
     }
   }
 
