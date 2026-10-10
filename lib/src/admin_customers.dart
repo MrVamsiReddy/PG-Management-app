@@ -173,8 +173,8 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                             title: 'No PGs yet — the owner sets these up')
                       else
                         ...pgs.map((pg) => ListTile(
-                            leading: const Icon(Icons.apartment_outlined,
-                                color: primary),
+                            leading:
+                                Icon(Icons.apartment_outlined, color: accent),
                             title: Text(pg.name),
                             trailing: IconButton(
                                 tooltip: 'Delete PG',
@@ -267,6 +267,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                               keyboardType: TextInputType.phone),
                           const FormLabel('Subscription plan'),
                           DropdownButtonFormField<String>(
+                            isExpanded: true,
                             initialValue: plan,
                             items: const [
                               DropdownMenuItem(

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -62,6 +63,32 @@ Future<String?> pickImageBase64(BuildContext context,
   }
 }
 
+/// Decoded bytes of recently shown base64 images. Decoding a photo on every
+/// rebuild made scrolling stutter (worst on iPhone web apps); reusing the
+/// same bytes also lets Flutter reuse the decoded picture.
+final _imageBytes = <String, Uint8List>{};
+const _imageBytesLimit = 40;
+
+/// The bytes of a base64 image, decoded once. Null when it isn't valid.
+Uint8List? decodedImage(String data) {
+  final cached = _imageBytes.remove(data);
+  if (cached != null) {
+    _imageBytes[data] = cached; // most recently used goes last
+    return cached;
+  }
+  final Uint8List bytes;
+  try {
+    bytes = base64Decode(data);
+  } on FormatException {
+    return null;
+  }
+  _imageBytes[data] = bytes;
+  if (_imageBytes.length > _imageBytesLimit) {
+    _imageBytes.remove(_imageBytes.keys.first);
+  }
+  return bytes;
+}
+
 /// Shows a stored base64 image. Tenants upload these, so bad data shows a
 /// placeholder instead of breaking the screen.
 Widget base64Image(String data, {double? height, BoxFit fit = BoxFit.cover}) {
@@ -69,16 +96,14 @@ Widget base64Image(String data, {double? height, BoxFit fit = BoxFit.cover}) {
       height: height ?? 120,
       width: double.infinity,
       child: const Center(child: Icon(Icons.broken_image_outlined)));
-  try {
-    return Image.memory(base64Decode(data),
-        height: height,
-        width: double.infinity,
-        fit: fit,
-        gaplessPlayback: true,
-        errorBuilder: (context, error, stackTrace) => placeholder);
-  } on FormatException {
-    return placeholder;
-  }
+  final bytes = decodedImage(data);
+  if (bytes == null) return placeholder;
+  return Image.memory(bytes,
+      height: height,
+      width: double.infinity,
+      fit: fit,
+      gaplessPlayback: true,
+      errorBuilder: (context, error, stackTrace) => placeholder);
 }
 
 IconData notificationIcon(NotificationType type) => switch (type) {
@@ -176,8 +201,8 @@ class StatCard extends StatelessWidget {
                     if (caption != null) ...[
                       const SizedBox(height: 8),
                       Text(caption!,
-                          style: const TextStyle(
-                              color: primary,
+                          style: TextStyle(
+                              color: accent,
                               fontWeight: FontWeight.w700,
                               fontSize: 12)),
                     ],
@@ -206,22 +231,22 @@ class StatusPill extends StatelessWidget {
             lower.contains('signed') ||
             lower.contains('generated') ||
             lower.contains('enabled')
-        ? primary
+        ? success
         : lower.contains('overdue') ||
                 lower.contains('high') ||
                 lower.contains('declined') ||
                 lower.contains('disabled')
-            ? const Color(0xFFD44B47)
+            ? danger
             : lower.contains('progress') ||
                     lower.contains('inside') ||
                     lower.contains('medium') ||
                     lower.contains('partial')
-                ? const Color(0xFF3478C7)
-                : const Color(0xFFB7791F);
+                ? info
+                : amber;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-          color: color.withValues(alpha: .11),
+          color: color.withValues(alpha: .16),
           borderRadius: BorderRadius.circular(20)),
       // Colors key off the English label above; the display is localized.
       child: Text(AppLocalizations.of(context).status(text),
@@ -314,6 +339,7 @@ class FloorPicker extends StatelessWidget {
     final floors = {for (var f = 0; f <= maxFloor; f++) f, value}.toList()
       ..sort();
     return DropdownButtonFormField<int>(
+        isExpanded: true,
         initialValue: value,
         items: [
           for (final f in floors)

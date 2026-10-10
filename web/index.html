@@ -7,7 +7,18 @@
   <meta name="description" content="PG Management platform for owners, admins and tenants">
   <meta name="theme-color" content="#1A7F72">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="PG Management">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
   <title>PG Management</title>
+  <style>
+    /* Match the app so opening it never flashes white, and stop the page
+       itself from rubber-banding behind the app on iPhone. */
+    html, body { margin: 0; height: 100%; background: #F5F7F6; overscroll-behavior: none; }
+    @media (prefers-color-scheme: dark) { html, body { background: #000000; } }
+  </style>
   <link rel="manifest" href="manifest.json">
 </head>
 <body>

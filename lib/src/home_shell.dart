@@ -118,7 +118,7 @@ class _HomeShellState extends State<HomeShell> {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-                color: primary, borderRadius: BorderRadius.circular(11)),
+                color: accent, borderRadius: BorderRadius.circular(11)),
             child: const Icon(Icons.apartment_rounded,
                 color: Colors.white, size: 21),
           ),
@@ -135,7 +135,7 @@ class _HomeShellState extends State<HomeShell> {
                         value: p.id,
                         child: Row(children: [
                           if (p.id == state.activePg!.id)
-                            const Icon(Icons.check, size: 16, color: primary)
+                            Icon(Icons.check, size: 16, color: accent)
                           else
                             const SizedBox(width: 16),
                           const SizedBox(width: 8),
@@ -170,8 +170,8 @@ class _HomeShellState extends State<HomeShell> {
             decoration: BoxDecoration(
                 color: softTint, borderRadius: BorderRadius.circular(8)),
             child: Text(state.role.label,
-                style: const TextStyle(
-                    color: primary, fontSize: 10, fontWeight: FontWeight.w800)),
+                style: TextStyle(
+                    color: accent, fontSize: 10, fontWeight: FontWeight.w800)),
           ),
         ]),
         actions: [
@@ -242,8 +242,8 @@ class ProfileScreen extends StatelessWidget {
           radius: 43,
           backgroundColor: softTint,
           child: Text(state.initials,
-              style: const TextStyle(
-                  fontSize: 25, fontWeight: FontWeight.w800, color: primary)),
+              style: TextStyle(
+                  fontSize: 25, fontWeight: FontWeight.w800, color: accent)),
         ),
         const SizedBox(height: 13),
         Center(
@@ -286,8 +286,7 @@ class ProfileScreen extends StatelessWidget {
           icon: const Icon(Icons.logout),
           label: Text(l.t('common.signOut')),
           style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFFC94444),
-              padding: const EdgeInsets.all(15)),
+              foregroundColor: danger, padding: const EdgeInsets.all(15)),
         ),
         const SizedBox(height: 16),
         Center(
@@ -305,7 +304,7 @@ class ProfileScreen extends StatelessWidget {
             padding: const EdgeInsets.all(9),
             decoration: BoxDecoration(
                 color: softTint, borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: primary, size: 21)),
+            child: Icon(icon, color: accent, size: 21)),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
         subtitle: Text(subtitle),
         trailing: onTap == null ? null : const Icon(Icons.chevron_right),
@@ -421,13 +420,13 @@ class ProfileScreen extends StatelessWidget {
               const SizedBox(height: 16),
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.mail_outline, color: primary),
+                leading: Icon(Icons.mail_outline, color: accent),
                 title: Text(l.t('help.email')),
                 subtitle: const Text('support@pgmanagement.app'),
               ),
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.call_outlined, color: primary),
+                leading: Icon(Icons.call_outlined, color: accent),
                 title: Text(l.t('help.call')),
                 subtitle: const Text('+91 98765 43210'),
               ),

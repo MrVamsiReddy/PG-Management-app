@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'app_state.dart';
 import 'l10n.dart';
 import 'supabase_config.dart';
+import 'tenant_register.dart';
 import 'theme.dart';
 
 class AuthScreen extends StatelessWidget {
@@ -31,7 +32,7 @@ class AuthScreen extends StatelessWidget {
                         width: 48,
                         height: 48,
                         decoration: BoxDecoration(
-                            color: primary,
+                            color: accent,
                             borderRadius: BorderRadius.circular(15)),
                         child: const Icon(Icons.apartment_rounded,
                             color: Colors.white, size: 28),
@@ -62,13 +63,12 @@ class AuthScreen extends StatelessWidget {
                             color: coral.withValues(alpha: .14),
                             borderRadius: BorderRadius.circular(14)),
                         child: Row(children: [
-                          const Icon(Icons.info_outline,
-                              color: Color(0xFFC94444)),
+                          Icon(Icons.info_outline, color: danger),
                           const SizedBox(width: 10),
                           Expanded(
                               child: Text(state.authNotice!,
-                                  style: const TextStyle(
-                                      color: Color(0xFFC94444),
+                                  style: TextStyle(
+                                      color: danger,
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600))),
                         ]),
@@ -117,7 +117,7 @@ class AuthScreen extends StatelessWidget {
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                   color: softTint, borderRadius: BorderRadius.circular(12)),
-              child: Icon(icon, color: primary)),
+              child: Icon(icon, color: accent)),
           title:
               Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
           subtitle: Text(subtitle),
@@ -198,6 +198,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
+    final notice = AppScope.of(context).loginNotice;
     final loginTitle = switch (widget.portal) {
       LoginPortal.owner => l.t('auth.ownerLogin'),
       LoginPortal.tenant => l.t('auth.tenantLogin'),
@@ -227,6 +228,26 @@ class _LoginScreenState extends State<LoginScreen> {
                               .textTheme
                               .bodyLarge
                               ?.copyWith(color: subtle)),
+                      if (notice != null) ...[
+                        const SizedBox(height: 18),
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                              color: success.withValues(alpha: .14),
+                              borderRadius: BorderRadius.circular(14)),
+                          child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(Icons.mark_email_read_outlined,
+                                    color: success),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                    child: Text(notice,
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w600))),
+                              ]),
+                        ),
+                      ],
                       const SizedBox(height: 24),
                       TextFormField(
                         controller: email,
@@ -283,6 +304,19 @@ class _LoginScreenState extends State<LoginScreen> {
                                       builder: (_) =>
                                           const AdminSetupScreen())),
                           child: Text(l.t('auth.setupAdminLink')),
+                        ),
+                      ],
+                      if (widget.portal == LoginPortal.tenant) ...[
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: busy
+                              ? null
+                              : () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) =>
+                                          const TenantRegisterScreen())),
+                          child: Text(l.t('reg.link')),
                         ),
                       ],
                       if (widget.showOwnerLink && kIsWeb) ...[
@@ -364,7 +398,7 @@ class _SetPasswordScreenState extends State<SetPasswordScreen> {
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Icon(Icons.lock_reset, size: 54, color: primary),
+                      Icon(Icons.lock_reset, size: 54, color: accent),
                       const SizedBox(height: 16),
                       Text(l.t('setpw.title'),
                           textAlign: TextAlign.center,

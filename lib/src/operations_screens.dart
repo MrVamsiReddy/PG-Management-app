@@ -94,7 +94,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                                             ? Icons.person_add_alt
                                             : Icons.person_outline,
                                         size: 15,
-                                        color: primary)),
+                                        color: accent)),
                                 const SizedBox(width: 7),
                                 Text(
                                     item.assignee ??
@@ -149,6 +149,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                       FormLabel(AppLocalizations.of(context).t('common.room')),
                       if (manager)
                         DropdownButtonFormField<String>(
+                          isExpanded: true,
                           initialValue: roomId,
                           items: scoped
                               .map((r) => DropdownMenuItem(
@@ -165,6 +166,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                                 hintText: 'Room ${state.roomNumber(roomId)}')),
                       FormLabel(AppLocalizations.of(context).t('mnt.category')),
                       DropdownButtonFormField<String>(
+                          isExpanded: true,
                           initialValue: category,
                           items: [
                             'Plumbing',
@@ -315,19 +317,18 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
               if (!first)
                 Expanded(
                     child:
-                        Container(width: 2, color: done ? primary : hairline)),
+                        Container(width: 2, color: done ? accent : hairline)),
               Container(
                   width: 14,
                   height: 14,
                   decoration: BoxDecoration(
-                      color: done ? primary : surfaceCard,
+                      color: done ? accent : surfaceCard,
                       shape: BoxShape.circle,
                       border:
-                          Border.all(color: done ? primary : faint, width: 2))),
+                          Border.all(color: done ? accent : faint, width: 2))),
               if (!last)
                 Expanded(
-                    child:
-                        Container(width: 2, color: done ? primary : hairline))
+                    child: Container(width: 2, color: done ? accent : hairline))
             ])),
         Expanded(
             child: Padding(

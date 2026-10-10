@@ -112,6 +112,10 @@ class AppState extends ChangeNotifier {
   String? _workspaceOwnerId;
   String? _resolvedCustomerId;
 
+  /// Good news for the login screen (e.g. "registration sent"). Cleared on
+  /// sign-in.
+  String? loginNotice;
+
   /// A message to show on the login screen after a blocked/rejected sign-in
   /// (disabled customer, wrong portal, session revoked). Cleared on success.
   String? authNotice;
@@ -128,6 +132,12 @@ class AppState extends ChangeNotifier {
   /// The app must block on the set-password screen until the account has a
   /// permanent password — for both first-login and reset-link flows.
   bool get needsPasswordSet => mustChangePassword || passwordRecovery;
+
+  /// Shows [message] on the login screen (e.g. after registering).
+  void showLoginNotice(String message) {
+    loginNotice = message;
+    notifyListeners();
+  }
 
   /// Called from the auth listener when a reset link is opened.
   void markPasswordRecovery() {
@@ -391,6 +401,7 @@ class AppState extends ChangeNotifier {
     utilities = [];
     notifications = [];
     submissions = [];
+    tenantRequests = [];
     isLoggedIn = false;
     notifyListeners();
   }
@@ -898,6 +909,7 @@ class AppState extends ChangeNotifier {
     accountEmail = user.email;
     mustChangePassword = _hasTempPassword(user);
     authNotice = null;
+    loginNotice = null;
     _workspaceOwnerId = workspaceOwnerId;
     _resolvedCustomerId = gate.customerId;
     _useSupabaseRepos(workspaceOwnerId);
@@ -2077,6 +2089,168 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  // ---- Tenant self-registration (020_tenant_registration.sql) ----
+
+  /// Registrations waiting for this owner's decision, newest first.
+  List<TenantRequest> tenantRequests = [];
+
+  Future<void> loadTenantRequests() async {
+    final client = supabaseOrNull;
+    if (client == null) return;
+    try {
+      final rows = await client
+          .from('tenant_requests')
+          .select()
+          .eq('status', 'pending')
+          .order('created_at', ascending: false);
+      tenantRequests = (rows as List)
+          .map(
+              (r) => TenantRequest.fromRow(Map<String, dynamic>.from(r as Map)))
+          .toList();
+    } catch (_) {
+      // A database without 020 simply has no requests.
+      tenantRequests = [];
+    }
+  }
+
+  /// The registration code tenants use to ask to join [pgId]; created the
+  /// first time it is needed. Null when it couldn't be loaded.
+  Future<String?> joinCodeFor(String pgId) async {
+    final client = supabaseOrNull;
+    final uid = client?.auth.currentUser?.id;
+    if (client == null || uid == null) return null;
+    final pgName = pgById(pgId)?.name ?? '';
+    try {
+      final existing = await client
+          .from('pg_join_codes')
+          .select('code, pg_name')
+          .eq('owner_id', uid)
+          .eq('pg_id', pgId)
+          .maybeSingle();
+      if (existing != null) {
+        // Keep the name tenants see in step with a renamed property.
+        if (existing['pg_name'] != pgName) {
+          await client
+              .from('pg_join_codes')
+              .update({'pg_name': pgName})
+              .eq('owner_id', uid)
+              .eq('pg_id', pgId);
+        }
+        return existing['code'] as String?;
+      }
+      final created = await client
+          .from('pg_join_codes')
+          .insert({'owner_id': uid, 'pg_id': pgId, 'pg_name': pgName})
+          .select('code')
+          .single();
+      return created['code'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// The link a tenant opens to register for the PG with [code].
+  static String joinLink(String code) => '$appWebUrl?join=$code';
+
+  /// Before sign-in: the PG a registration code belongs to, or null when
+  /// the code isn't valid.
+  Future<String?> pgNameForJoinCode(String code) async {
+    final client = supabaseOrNull;
+    if (client == null || code.trim().isEmpty) return null;
+    try {
+      final name =
+          await client.rpc('pg_for_join_code', params: {'p_code': code.trim()});
+      return name is String && name.isNotEmpty ? name : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Before sign-in: files a registration request with the PG's owner.
+  /// Returns the PG's name on success, or an error message.
+  Future<({String? pgName, String? error})> registerTenant(
+      {required String code,
+      required String name,
+      required String phone,
+      required String email,
+      required String? kycDoc}) async {
+    final cleanName = name.trim();
+    final cleanEmail = email.trim().toLowerCase();
+    if (code.trim().isEmpty) {
+      return (pgName: null, error: 'Enter the PG code from your owner.');
+    }
+    if (cleanName.length < 2) {
+      return (pgName: null, error: 'Enter your full name.');
+    }
+    if (phone.replaceAll(RegExp(r'[^0-9]'), '').length < 10) {
+      return (pgName: null, error: 'Enter a valid 10-digit phone number.');
+    }
+    if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(cleanEmail)) {
+      return (pgName: null, error: 'Enter a valid email address.');
+    }
+    if (kycDoc == null || kycDoc.isEmpty) {
+      return (pgName: null, error: 'Attach a photo of your ID document.');
+    }
+    final client = supabaseOrNull;
+    if (client == null) {
+      return (
+        pgName: null,
+        error: 'Cannot reach the server. Check your connection.'
+      );
+    }
+    try {
+      final pgName = await client.rpc('register_tenant', params: {
+        'p_code': code.trim(),
+        'p_name': cleanName,
+        'p_phone': phone.trim(),
+        'p_email': cleanEmail,
+        'p_kyc_doc': kycDoc,
+      });
+      return (pgName: pgName is String ? pgName : '', error: null);
+    } on PostgrestException catch (e) {
+      final message = e.message;
+      return (
+        pgName: null,
+        error: message.contains('code:bad_code')
+            ? 'That PG code is not valid. Check it with your owner.'
+            : message.contains('code:already_registered')
+                ? 'This email already has an account. Sign in instead.'
+                : message.contains('code:too_many')
+                    ? 'This PG has too many pending requests. Ask your owner to review them.'
+                    : message.contains('code:missing_fields')
+                        ? 'Please fill in every field correctly.'
+                        : 'Could not send your registration. Try again.'
+      );
+    } catch (_) {
+      return (
+        pgName: null,
+        error: 'Could not send your registration. Check your connection.'
+      );
+    }
+  }
+
+  /// Owner: closes a registration request. Accepting happens after the
+  /// tenant was onboarded; rejecting also erases their ID document.
+  Future<String?> resolveTenantRequest(String id,
+      {required bool accepted}) async {
+    final client = supabaseOrNull;
+    if (client == null || !isLoggedIn) return 'Sign in to review requests.';
+    try {
+      await client.from('tenant_requests').update({
+        'status': accepted ? 'accepted' : 'rejected',
+        'decided_at': DateTime.now().toIso8601String(),
+        'kyc_doc': null, // kept on the tenant record when accepted
+      }).eq('id', id);
+      tenantRequests = tenantRequests.where((r) => r.id != id).toList();
+      _audit(accepted ? 'tenant_request_accepted' : 'tenant_request_rejected',
+          entityType: 'tenant_request', entityId: id);
+      notifyListeners();
+      return null;
+    } catch (_) {
+      return 'Could not update the request. Check your connection.';
+    }
+  }
+
   // ---- Manual UPI rent payments (Prompt 9) ----
 
   String get workspaceId => _workspaceOwnerId ?? '';
@@ -2089,6 +2263,9 @@ class AppState extends ChangeNotifier {
       submissions = [];
       return;
     }
+    // Every reload of the owner's data also refreshes the registration
+    // requests waiting for them.
+    if (role == UserRole.owner) await loadTenantRequests();
     try {
       final rows = await client
           .from('upi_submissions')

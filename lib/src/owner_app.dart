@@ -64,7 +64,7 @@ class _WrongApp extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.info_outline, size: 48, color: primary),
+              Icon(Icons.info_outline, size: 48, color: accent),
               const SizedBox(height: 16),
               const Text(
                   'This is the owner/admin app. Tenant accounts use the tenant app.',

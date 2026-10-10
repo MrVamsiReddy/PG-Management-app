@@ -40,7 +40,7 @@ class ModulesHubScreen extends StatelessWidget {
           subtitle: l.t('mod.pgSub'),
           icon: Icons.apartment_outlined,
           page: const PgListingsScreen(),
-          color: primary
+          color: accent
         ),
       if (manager)
         (
@@ -48,7 +48,7 @@ class ModulesHubScreen extends StatelessWidget {
           subtitle: l.t('mod.roomSub'),
           icon: Icons.bed_outlined,
           page: const RoomsScreen(),
-          color: const Color(0xFF3478C7)
+          color: info
         ),
       if (manager)
         (
@@ -56,7 +56,7 @@ class ModulesHubScreen extends StatelessWidget {
           subtitle: l.t('mod.tenSub'),
           icon: Icons.groups_outlined,
           page: const TenantsScreen(),
-          color: const Color(0xFF7656B1)
+          color: violet
         ),
       (
         title: l.t('mod.rent'),
@@ -77,21 +77,21 @@ class ModulesHubScreen extends StatelessWidget {
         subtitle: l.t('mod.visSub'),
         icon: Icons.badge_outlined,
         page: const VisitorsScreen(),
-        color: const Color(0xFF2B9A91)
+        color: accent
       ),
       (
         title: l.t('ann.title'),
         subtitle: manager ? l.t('mod.annSubM') : l.t('mod.annSubT'),
         icon: Icons.campaign_outlined,
         page: const AnnouncementsScreen(),
-        color: const Color(0xFFB65B87)
+        color: pink
       ),
       (
         title: l.t('nav.notifications'),
         subtitle: l.t('mod.ntfSub'),
         icon: Icons.notifications_none,
         page: const NotificationsScreen(),
-        color: const Color(0xFF536179)
+        color: slate
       ),
     ];
     final list = ListView(

@@ -4,6 +4,38 @@ library;
 
 enum PaymentStatus { due, partial, paid }
 
+/// A tenant's self-registration, waiting for the owner to accept it.
+class TenantRequest {
+  const TenantRequest({
+    required this.id,
+    required this.pgId,
+    required this.name,
+    required this.phone,
+    required this.email,
+    required this.createdAt,
+    this.kycDoc,
+  });
+
+  final String id;
+  final String pgId;
+  final String name;
+  final String phone;
+  final String email;
+  final DateTime createdAt;
+  final String? kycDoc; // identity document image, base64
+
+  static TenantRequest fromRow(Map<String, dynamic> r) => TenantRequest(
+        id: r['id'] as String,
+        pgId: r['pg_id'] as String? ?? '',
+        name: r['name'] as String? ?? '',
+        phone: r['phone'] as String? ?? '',
+        email: r['email'] as String? ?? '',
+        createdAt: DateTime.tryParse(r['created_at'] as String? ?? '') ??
+            DateTime.now(),
+        kycDoc: r['kyc_doc'] as String?,
+      );
+}
+
 class UpiSettings {
   const UpiSettings(
       {this.upiId = '',

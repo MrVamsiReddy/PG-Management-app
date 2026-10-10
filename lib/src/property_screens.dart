@@ -47,9 +47,8 @@ class PgListingsScreen extends StatelessWidget {
                   children: [
                     Container(
                       height: 140,
-                      decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                              colors: [Color(0xFF195F59), Color(0xFF45A497)])),
+                      decoration: BoxDecoration(
+                          gradient: LinearGradient(colors: heroGradient)),
                       child: Stack(children: [
                         if (pg.photo != null)
                           Positioned.fill(child: base64Image(pg.photo!))
@@ -151,9 +150,9 @@ class PgListingsScreen extends StatelessWidget {
                                 Text(
                                     AppLocalizations.of(context)
                                         .t('pg.tapManage'),
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                         fontSize: 11,
-                                        color: primary,
+                                        color: accent,
                                         fontWeight: FontWeight.w700)),
                             ]),
                           ]),
@@ -351,9 +350,9 @@ class _RoomsScreenState extends State<RoomsScreen> {
                                 color: softTint,
                                 borderRadius: BorderRadius.circular(13)),
                             child: Text(room.number,
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontWeight: FontWeight.w800,
-                                    color: primary))),
+                                    color: accent))),
                         const SizedBox(width: 12),
                         Expanded(
                             child: Column(
@@ -410,6 +409,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                           onChanged: (v) => setModalState(() => roomFloor = v)),
                       FormLabel(AppLocalizations.of(context).t('room.sharing')),
                       DropdownButtonFormField<int>(
+                          isExpanded: true,
                           initialValue: beds,
                           items: [
                             DropdownMenuItem(
@@ -560,6 +560,7 @@ void _editSharingDialog(BuildContext context, AppState state, Room room) {
       title: Text(AppLocalizations.of(context).t('room.editSharing')),
       content: StatefulBuilder(
         builder: (context, setLocal) => DropdownButtonFormField<int>(
+          isExpanded: true,
           initialValue: beds,
           items: [
             DropdownMenuItem(
@@ -729,8 +730,8 @@ class RoomDetailsScreen extends StatelessWidget {
                     leading: CircleAvatar(
                         backgroundColor: softTint,
                         child: Text(t.initials,
-                            style: const TextStyle(
-                                color: primary, fontWeight: FontWeight.w800))),
+                            style: TextStyle(
+                                color: accent, fontWeight: FontWeight.w800))),
                     title: Text(t.name,
                         style: const TextStyle(fontWeight: FontWeight.w700)),
                     subtitle: Text('Bed ${t.bed} · ${t.phone}'),
@@ -772,7 +773,14 @@ class _TenantsScreenState extends State<TenantsScreen> {
             .toList();
     return ManagerOnly(
         child: Scaffold(
-      appBar: AppBar(title: Text(AppLocalizations.of(context).t('ten.title'))),
+      appBar: AppBar(
+          title: Text(AppLocalizations.of(context).t('ten.title')),
+          actions: [
+            IconButton(
+                tooltip: AppLocalizations.of(context).t('reg.shareLink'),
+                onPressed: () => _shareJoinLink(context, state),
+                icon: const Icon(Icons.qr_code_2)),
+          ]),
       floatingActionButton: FloatingActionButton.extended(
           onPressed: () => _onboard(context, state),
           icon: const Icon(Icons.person_add_alt_1),
@@ -785,6 +793,69 @@ class _TenantsScreenState extends State<TenantsScreen> {
                 subtitle:
                     '${state.pgTenants.where((e) => e.kyc == KycStatus.pending).length} KYC pending · ${state.activePg?.name ?? ''}'),
             const SizedBox(height: 18),
+            // Tenants who registered themselves and wait for a decision.
+            for (final request in state.tenantRequests)
+              Card(
+                margin: const EdgeInsets.only(bottom: 10),
+                color: softTint,
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(children: [
+                          Icon(Icons.how_to_reg_outlined, color: accent),
+                          const SizedBox(width: 8),
+                          Expanded(
+                              child: Text(
+                                  AppLocalizations.of(context)
+                                      .t('reg.requestTitle'),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w800))),
+                          Text(relativeTime(request.createdAt),
+                              style: TextStyle(fontSize: 11, color: subtle)),
+                        ]),
+                        const SizedBox(height: 8),
+                        Text(request.name,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w700, fontSize: 15)),
+                        Text('${request.phone} · ${request.email}',
+                            style: TextStyle(fontSize: 12, color: subtle)),
+                        Text(
+                            state.pgById(request.pgId)?.name ??
+                                AppLocalizations.of(context).t('ten.title'),
+                            style: TextStyle(fontSize: 12, color: subtle)),
+                        const SizedBox(height: 10),
+                        Row(children: [
+                          if (request.kycDoc != null)
+                            TextButton.icon(
+                                onPressed: () => showDialog<void>(
+                                    context: context,
+                                    builder: (context) => Dialog(
+                                        child: Padding(
+                                            padding: const EdgeInsets.all(12),
+                                            child: base64Image(request.kycDoc!,
+                                                fit: BoxFit.contain)))),
+                                icon:
+                                    const Icon(Icons.badge_outlined, size: 18),
+                                label: const Text('ID')),
+                          const Spacer(),
+                          TextButton(
+                              onPressed: () =>
+                                  _rejectRequest(context, state, request),
+                              child: Text(
+                                  AppLocalizations.of(context).t('reg.reject'),
+                                  style: TextStyle(color: danger))),
+                          const SizedBox(width: 6),
+                          FilledButton(
+                              onPressed: () =>
+                                  _onboard(context, state, request: request),
+                              child: Text(AppLocalizations.of(context)
+                                  .t('reg.accept'))),
+                        ]),
+                      ]),
+                ),
+              ),
             TextField(
                 onChanged: (value) => setState(() => query = value),
                 decoration: InputDecoration(
@@ -803,8 +874,8 @@ class _TenantsScreenState extends State<TenantsScreen> {
                     leading: CircleAvatar(
                         backgroundColor: softTint,
                         child: Text(tenant.initials,
-                            style: const TextStyle(
-                                color: primary, fontWeight: FontWeight.w800))),
+                            style: TextStyle(
+                                color: accent, fontWeight: FontWeight.w800))),
                     title: Text(tenant.name,
                         style: const TextStyle(fontWeight: FontWeight.w700)),
                     subtitle: Text(
@@ -1106,7 +1177,105 @@ class _TenantsScreenState extends State<TenantsScreen> {
         ),
       );
 
-  void _onboard(BuildContext context, AppState state) {
+  /// Shows the PG's registration code and link for new tenants.
+  Future<void> _shareJoinLink(BuildContext context, AppState state) async {
+    final l = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final pg = state.activePg;
+    if (pg == null) {
+      messenger.showSnackBar(SnackBar(content: Text(l.t('ten.pgFirst'))));
+      return;
+    }
+    final code = await state.joinCodeFor(pg.id);
+    if (!context.mounted) return;
+    if (code == null) {
+      messenger.showSnackBar(SnackBar(content: Text(l.t('reg.codeFailed'))));
+      return;
+    }
+    final link = AppState.joinLink(code);
+    final message =
+        '${l.t('reg.shareText')} ${pg.name}:\n$link\n${l.t('reg.code')}: $code';
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l.t('reg.shareLink')),
+        content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(pg.name,
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 10),
+              SelectableText(code,
+                  style: const TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 3)),
+              const SizedBox(height: 6),
+              SelectableText(link,
+                  style: TextStyle(fontSize: 12, color: subtle)),
+              const SizedBox(height: 10),
+              Text(l.t('reg.shareHelp'),
+                  style: TextStyle(fontSize: 12, color: subtle)),
+            ]),
+        actions: [
+          TextButton(
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: message));
+                Navigator.pop(dialogContext);
+                messenger
+                    .showSnackBar(SnackBar(content: Text(l.t('inv.copied'))));
+              },
+              child: Text(l.t('reg.copy'))),
+          FilledButton(
+              onPressed: () async {
+                Navigator.pop(dialogContext);
+                try {
+                  await SharePlus.instance.share(ShareParams(text: message));
+                } catch (_) {
+                  await Clipboard.setData(ClipboardData(text: message));
+                  messenger
+                      .showSnackBar(SnackBar(content: Text(l.t('inv.copied'))));
+                }
+              },
+              child: Text(l.t('common.share'))),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _rejectRequest(
+      BuildContext context, AppState state, TenantRequest request) async {
+    final l = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l.t('reg.reject')),
+        content: Text(
+            '${request.name} · ${request.email}\n\n${l.t('reg.rejectBody')}'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text(l.t('common.cancel'))),
+          FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: coral),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(l.t('reg.reject'))),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final error = await state.resolveTenantRequest(request.id, accepted: false);
+    messenger
+        .showSnackBar(SnackBar(content: Text(error ?? l.t('reg.rejected'))));
+  }
+
+  /// Onboards a tenant. With [request] (a self-registration the owner is
+  /// accepting) the form starts filled with what the tenant entered, and the
+  /// request is closed once they are onboarded.
+  void _onboard(BuildContext context, AppState state,
+      {TenantRequest? request}) {
     final messenger = ScaffoldMessenger.of(context);
     if (state.pgs.isEmpty) {
       messenger.showSnackBar(SnackBar(
@@ -1116,17 +1285,19 @@ class _TenantsScreenState extends State<TenantsScreen> {
 
     const newRoom = '__new__';
     final formKey = GlobalKey<FormState>();
-    final name = TextEditingController();
-    final phone = TextEditingController();
-    final email = TextEditingController();
+    final name = TextEditingController(text: request?.name ?? '');
+    final phone = TextEditingController(text: request?.phone ?? '');
+    final email = TextEditingController(text: request?.email ?? '');
     final roomNumber = TextEditingController();
     var onboardFloor = 1;
     final rent = TextEditingController(text: '9000');
     final bed = TextEditingController(text: 'A');
-    var pgId = (state.activePg ?? state.pgs.first).id;
+    var pgId =
+        (state.pgById(request?.pgId ?? '') ?? state.activePg ?? state.pgs.first)
+            .id;
     var roomChoice = newRoom; // room id, or the "new room" sentinel
     var sharing = 2;
-    String? kycDoc;
+    String? kycDoc = request?.kycDoc;
 
     List<Room> roomsFor(String pg) =>
         state.rooms.where((r) => r.pgId == pg).toList();
@@ -1184,6 +1355,7 @@ class _TenantsScreenState extends State<TenantsScreen> {
             ),
             const FormLabel('PG'),
             DropdownButtonFormField<String>(
+              isExpanded: true,
               initialValue: pgId,
               items: state.pgs
                   .map(
@@ -1196,6 +1368,7 @@ class _TenantsScreenState extends State<TenantsScreen> {
             ),
             FormLabel(AppLocalizations.of(context).t('common.room')),
             DropdownButtonFormField<String>(
+              isExpanded: true,
               initialValue: roomChoice,
               items: [
                 ...pgRooms.map((r) {
@@ -1205,7 +1378,8 @@ class _TenantsScreenState extends State<TenantsScreen> {
                     value: r.id,
                     enabled: !full,
                     child: Text(
-                        'Room ${r.number} · Floor ${r.floor} · ${r.type} · ${full ? 'Full' : '$free free'}',
+                        'Room ${r.number} · ${floorLabel(AppLocalizations.of(context), r.floor)} · ${r.type} · ${full ? 'Full' : '$free free'}',
+                        overflow: TextOverflow.ellipsis,
                         style: full ? TextStyle(color: subtle) : null),
                   );
                 }),
@@ -1247,6 +1421,7 @@ class _TenantsScreenState extends State<TenantsScreen> {
                         children: [
                       FormLabel(AppLocalizations.of(context).t('room.sharing')),
                       DropdownButtonFormField<int>(
+                        isExpanded: true,
                         initialValue: sharing,
                         items: [
                           DropdownMenuItem(
@@ -1284,10 +1459,10 @@ class _TenantsScreenState extends State<TenantsScreen> {
                     color: softTint, borderRadius: BorderRadius.circular(12)),
                 child: Text(
                     '${selected.type} · ${inr(selected.rent)} / bed / month (inherited)',
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: primary)),
+                        color: accent)),
               ),
             ],
             FormLabel(AppLocalizations.of(context).t('ten.bed')),
@@ -1361,6 +1536,10 @@ class _TenantsScreenState extends State<TenantsScreen> {
                   // share sheet stays as the fallback when email delivery
                   // is unavailable.
                   final tenant = state.tenants.first;
+                  if (request != null) {
+                    await state.resolveTenantRequest(request.id,
+                        accepted: true);
+                  }
                   final result = await state.inviteTenant(tenantId: tenant.id);
                   if (result.error != null) {
                     messenger

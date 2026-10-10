@@ -20,6 +20,7 @@
 17. `supabase/017_review_fixes_2.sql` — `payment-proofs` bucket accepts images up to 5 MB only; every UPI submission is written to `audit_logs` by a trigger (tenants can't insert audit rows themselves). Re-runnable.
 18. `supabase/018_payments.sql` — `owner_confirm_submission`: confirming a UPI submission and saving the rent record happen in one transaction (the app falls back to the old two-step confirm until this is run). Re-runnable.
 19. `supabase/019_upi_qr.sql` — `pg_upi_settings.qr_image` (the owner's own UPI QR picture shown to tenants); a submission's proof may be a screenshot without a UTR. Re-runnable.
+20. `supabase/020_tenant_registration.sql` — tenant self-registration: `pg_join_codes` (one code per PG), `tenant_requests` (owner-only), and the anon-callable `pg_for_join_code` / `register_tenant`. A registration only files a request; the login is created when the owner accepts (normal onboarding + `invite`). Sign-ups stay off. Re-runnable.
 
 Always finish with the highest-numbered file. 014 and 015 skip the functions a later file replaced, so re-running an older file never undoes a newer one.
 
@@ -66,7 +67,7 @@ GitHub Actions builds/tests `main.dart` and publishes a release APK on tag `vX.Y
 Deploy `create-admin` + set `ADMIN_SETUP_KEY` → in the app: **Admin login → Set up a platform admin** → enter the key. Then admins create customers via **New customer**.
 
 ## Release checklist
-- [ ] Migrations 1–19 run; **sign-ups off**; email confirmation off; `payment-proofs` bucket present.
+- [ ] Migrations 1–20 run; **sign-ups off**; email confirmation off; `payment-proofs` bucket present.
 - [ ] Auth → URL Configuration: Site URL set; Redirect URLs include both `/PG-Management-app/` and `/PG-Management-app/owner/` (reset links).
 - [ ] All 6 functions deployed (`push`, `invite`, `remove-tenant`, `create-admin`, `create-customer`, `delete-customer`); `ADMIN_SETUP_KEY` (24+ chars) + `FIREBASE_SERVICE_ACCOUNT` set.
 - [ ] Release signing secrets set (`ANDROID_KEYSTORE_BASE64`, …) — the release workflow now fails without them.
