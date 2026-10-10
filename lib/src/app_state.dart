@@ -2521,7 +2521,10 @@ class AppState extends ChangeNotifier {
           .where((p) =>
               p.tenantId == tenantId &&
               !p.advance &&
-              p.status != PaymentStatus.paid)
+              p.status != PaymentStatus.paid &&
+              // Nothing left to pay: never "open", or the loop below
+              // could spin on it forever.
+              p.balance > 0)
           .toList()
         ..sort((a, b) => a.period.compareTo(b.period));
       if (credits.isEmpty || open.isEmpty) return changed;

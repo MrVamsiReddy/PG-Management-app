@@ -3282,6 +3282,92 @@ void main() {
     final plain = Payment.fromMap(p.toMap()..remove('advance'));
     expect(plain.advance, isFalse);
   });
+
+  // ---- Tenant login must land on the tenant home, not a blank screen ----
+
+  testWidgets('signing in to the tenant app opens the tenant home',
+      (tester) async {
+    final fake = _SignInState(UserRole.tenant, tenantId: 't1');
+    seedFixture(fake);
+    await tester.pumpWidget(TenantApp(state: fake));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+        find.byType(TextFormField).at(0), 'arjun@example.com');
+    await tester.enterText(find.byType(TextFormField).at(1), 'secret123');
+    await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TenantShell), findsOneWidget);
+    expect(find.byType(LoginScreen), findsNothing);
+  });
+
+  testWidgets('signing in from the owner portal opens the owner home',
+      (tester) async {
+    final fake = _SignInState(UserRole.owner);
+    seedFixture(fake);
+    await tester.pumpWidget(OwnerAdminApp(state: fake));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Owner login'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byType(TextFormField).at(0), 'owner@example.com');
+    await tester.enterText(find.byType(TextFormField).at(1), 'secret123');
+    await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(HomeShell), findsOneWidget);
+    expect(find.byType(LoginScreen), findsNothing);
+  });
+
+  test('credit never loops on a due with nothing left to pay', () {
+    final now = DateTime.now();
+    state.payments.add(Payment(
+        id: 'zero-due',
+        tenantId: 't2',
+        period: DateTime(now.year, now.month - 2),
+        amount: 0,
+        status: PaymentStatus.due,
+        dueDate: DateTime(now.year, now.month - 2, 5)));
+    state.payments.add(Payment(
+        id: 'credit-t2',
+        tenantId: 't2',
+        period: DateTime(now.year, now.month),
+        amount: 500,
+        status: PaymentStatus.paid,
+        paidAmount: 500,
+        dueDate: DateTime(now.year, now.month, 5),
+        paidDate: now,
+        advance: true));
+
+    // Terminates, and the credit goes to the real due instead.
+    state.generateMonthlyDues(onlyTenantId: 't2');
+    final due = state.payments.firstWhere((p) =>
+        p.tenantId == 't2' &&
+        !p.advance &&
+        p.id != 'zero-due' &&
+        p.period.year == now.year &&
+        p.period.month == now.month);
+    expect(due.collected, 500);
+  });
+}
+
+/// AppState whose sign-in succeeds without a server, so the real login
+/// screens and app shells can be driven end to end.
+class _SignInState extends AppState {
+  _SignInState(this._role, {this.tenantId = ''});
+  final UserRole _role;
+  final String tenantId;
+
+  @override
+  Future<String?> signInCloud(
+      {required String email,
+      required String password,
+      required LoginPortal portal}) async {
+    debugSignIn(_role, tenantId: tenantId);
+    return null;
+  }
 }
 
 class _UpdateWatchHost extends StatefulWidget {

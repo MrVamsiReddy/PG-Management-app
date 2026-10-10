@@ -187,7 +187,12 @@ class _LoginScreenState extends State<LoginScreen> {
           .showSnackBar(SnackBar(content: Text(l.error(error))));
       return;
     }
-    Navigator.pop(context);
+    // Opened from the portal list (owner/admin app): close it. In the tenant
+    // app this screen is the app's first page, and popping it would leave no
+    // page at all (a blank screen that ignores taps); the app switches to
+    // the tenant home by itself once signed in.
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) navigator.pop();
   }
 
   @override

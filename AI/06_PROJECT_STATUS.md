@@ -29,6 +29,10 @@ Roadmap = `app improvements.md` (Prompts 1–11). Details of each area live in `
 ## Improvements batch complete
 - Tasks 1–9 shipped. Interim bugfix: admin "View PGs" reads app_data.
 
+## v1.20.1 (2026-10-10): tenant sign-in blank screen
+- The tenant app's first page is the login screen; after signing in it called `Navigator.pop`, removing the only page (blank, unresponsive screen). It now pops only when it was pushed (owner portal list). Regression tests drive both apps' real login screens.
+- `_applyCredit` ignores dues with nothing left to pay (could otherwise loop forever).
+
 ## v1.20.0 (2026-10-09): payment fixes
 - Receipts only for money received (amount = collected, balance shown); owners can reverse a mistaken payment (`reversePayment`, rejects a confirmed UPI submission for it, notifies the tenant).
 - Overpayment becomes advance credit (`Payment.advance`), spent on the next dues by `_applyCredit` during due generation; collections count money by `paidDate` so credit is never counted twice.
