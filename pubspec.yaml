@@ -1,14 +1,13 @@
 name: pg_management
 description: A complete role-based PG management platform.
 publish_to: "none"
-version: 1.21.0+23
+version: 1.21.1+24
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
   flutter: ">=3.35.0"
 
 dependencies:
-  android_intent_plus: ^6.1.0
   firebase_core: ^4.11.0
   firebase_messaging: ^16.4.1
   flutter:
@@ -16,6 +15,7 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   http: ^1.2.0
+  http_parser: ^4.1.2
   image_picker: ^1.2.3
   intl: ^0.20.2
   package_info_plus: ^10.2.0

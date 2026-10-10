@@ -29,6 +29,11 @@ Roadmap = `app improvements.md` (Prompts 1–11). Details of each area live in `
 ## Improvements batch complete
 - Tasks 1–9 shipped. Interim bugfix: admin "View PGs" reads app_data.
 
+## v1.21.1 (2026-10-10): UPI app buttons on Android and iPhone; web reload prompt
+- Android app: buttons open UPI apps via `MainActivity.kt` channel `pg_management/apps` (`getLaunchIntentForPackage`); a plain MAIN/LAUNCHER intent was refused (launcher screens lack CATEGORY_DEFAULT). android_intent_plus removed.
+- Web / iPhone home-screen app: buttons use each app's own link (`upiPayUri(..., ios:)` with the owner as payee when a UPI ID exists, else `upiAppHomeUri`: gpay://, phonepe://, paytmmp://, bhim://). Android-only intent:// links are no longer used on iPhone.
+- Web reload prompt: `UpdateWatch` on web compares `appVersion` (lib/src/app_version.dart, kept equal to pubspec by a test) with the deployed version.json and offers Reload once a deploy is ≥11 min old (GitHub Pages caches 10 min).
+
 ## v1.21.0 (2026-10-10): simple UPI with the owner's own QR
 - Owner uploads the QR from their own UPI app (UPI settings); UPI ID optional. Stored in `pg_upi_settings.qr_image` (019).
 - Tenant pay sheet: amount (copy), the owner's QR (`UpiQrView`; generated from the UPI ID when no picture), Share/save QR (`shareUpiQr`), buttons that open GPay/PhonePe/Paytm/BHIM (`openUpiApp`: android_intent_plus by package; Chrome intent link on mobile web; `<queries><package>` in the manifest). Payment-link (pay intent) buttons removed — UPI apps often refuse them for personal accounts.

@@ -448,6 +448,11 @@ const Map<String, Map<String, String>> _strings = {
     'pay.status': 'Status',
     'pay.totalPaid': 'TOTAL PAID',
     'upi.scanThis': 'Scan this QR in any UPI app to pay',
+    'upd.webBody':
+        'A newer version of the app is live. Reload to use it — you stay signed in.',
+    'upd.reload': 'Reload',
+    'upi.openAppYourself':
+        'Save or screenshot the QR, open your UPI app, tap Scan and pick the QR from your gallery.',
     'upi.shareQr': 'Share or save this QR',
     'upi.howToScan':
         'Tap your app, then Scan → upload the saved QR from your gallery (or scan this screen from another phone). Pay the amount above.',
@@ -941,6 +946,11 @@ const Map<String, Map<String, String>> _strings = {
     'pay.status': 'स्थिति',
     'pay.totalPaid': 'कुल भुगतान',
     'upi.scanThis': 'भुगतान के लिए किसी भी UPI ऐप में यह QR स्कैन करें',
+    'upd.webBody':
+        'ऐप का नया संस्करण उपलब्ध है। इसे उपयोग करने के लिए रीलोड करें — आप साइन इन रहेंगे।',
+    'upd.reload': 'रीलोड करें',
+    'upi.openAppYourself':
+        'QR सेव करें या स्क्रीनशॉट लें, अपना UPI ऐप खोलें, स्कैन पर टैप करें और गैलरी से QR चुनें।',
     'upi.shareQr': 'यह QR शेयर या सेव करें',
     'upi.howToScan':
         'अपना ऐप खोलें, फिर स्कैन → गैलरी से सेव किया QR चुनें (या दूसरे फ़ोन से यह स्क्रीन स्कैन करें)। ऊपर दी गई राशि चुकाएँ।',
@@ -1438,6 +1448,11 @@ const Map<String, Map<String, String>> _strings = {
     'pay.status': 'స్థితి',
     'pay.totalPaid': 'మొత్తం చెల్లింపు',
     'upi.scanThis': 'చెల్లించడానికి ఏదైనా UPI యాప్‌లో ఈ QR స్కాన్ చేయండి',
+    'upd.webBody':
+        'యాప్ కొత్త వెర్షన్ అందుబాటులో ఉంది. దాన్ని వాడటానికి రీలోడ్ చేయండి — మీరు సైన్ ఇన్‌లోనే ఉంటారు.',
+    'upd.reload': 'రీలోడ్ చేయండి',
+    'upi.openAppYourself':
+        'QR సేవ్ చేయండి లేదా స్క్రీన్‌షాట్ తీసుకోండి, మీ UPI యాప్ తెరిచి, స్కాన్ నొక్కి గ్యాలరీ నుండి QR ఎంచుకోండి.',
     'upi.shareQr': 'ఈ QR షేర్ లేదా సేవ్ చేయండి',
     'upi.howToScan':
         'మీ యాప్ తెరవండి, తర్వాత స్కాన్ → గ్యాలరీ నుండి సేవ్ చేసిన QR ఎంచుకోండి (లేదా మరో ఫోన్ నుండి ఈ స్క్రీన్ స్కాన్ చేయండి). పై మొత్తాన్ని చెల్లించండి.',
