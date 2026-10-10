@@ -1,9 +1,13 @@
 import 'dart:convert';
+import 'dart:ui' as ui;
 
+import 'package:android_intent_plus/android_intent.dart';
+import 'package:android_intent_plus/flag.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_state.dart';
@@ -25,7 +29,7 @@ Future<void> showUpiPayFlow(
   final messenger = ScaffoldMessenger.of(context);
   // Rent is never cached: reload from the database, then pay against the
   // live row (a rent change may have rewritten this due since the caller
-  // built it). If the row vanished, fall back to the latest unsettled due.
+  // built it). If the row vanished, fall back to the oldest unsettled due.
   await state.refresh();
   payment = state.payments.firstWhere((p) => p.id == payment.id,
       orElse: () => state.tenantDuePayment ?? payment);
@@ -39,9 +43,6 @@ Future<void> showUpiPayFlow(
     messenger.showSnackBar(SnackBar(content: Text(l.t('upi.notEnabled'))));
     return;
   }
-  final qrData =
-      upiPayUri('other', upiId: settings.upiId, payeeName: settings.payeeName)
-          .toString();
 
   final utr = TextEditingController();
   final paidAmount = TextEditingController(text: '$owed');
@@ -60,132 +61,103 @@ Future<void> showUpiPayFlow(
               const SheetHandle(),
               Text(l.t('upi.title'),
                   style: Theme.of(context).textTheme.headlineMedium),
-              const SizedBox(height: 6),
+              const SizedBox(height: 10),
+              // 1. How much.
               Card(
                 color: heroInk,
                 child: Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('${l.t('upi.payTo')}: ${settings.payeeName}',
-                            style: const TextStyle(color: Colors.white)),
-                        InkWell(
-                          onTap: () {
-                            Clipboard.setData(
-                                ClipboardData(text: settings.upiId));
-                            messenger.showSnackBar(
-                                SnackBar(content: Text(l.t('upi.idCopied'))));
-                          },
-                          child: Row(children: [
-                            Flexible(
-                                child: Text(settings.upiId,
-                                    style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 18))),
-                            const SizedBox(width: 8),
-                            const Icon(Icons.copy,
-                                size: 15, color: Colors.white70),
+                  child: Row(children: [
+                    Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(l.t('upi.amount'),
+                                style: const TextStyle(color: Colors.white70)),
+                            Text(inr(owed),
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 24)),
+                            if (settings.payeeName.isNotEmpty)
+                              Text('${l.t('upi.payTo')}: ${settings.payeeName}',
+                                  style:
+                                      const TextStyle(color: Colors.white70)),
                           ]),
-                        ),
-                        const SizedBox(height: 6),
-                        Text('${l.t('upi.amount')}: ${inr(owed)}',
-                            style: const TextStyle(color: Colors.white70)),
-                      ]),
-                ),
-              ),
-              const SizedBox(height: 12),
-              // QR carries payee + note only (never an amount) so any UPI
-              // app can scan it for any rent. White backdrop keeps it
-              // scannable in dark mode.
-              Center(
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(14)),
-                  child: QrImageView(data: qrData, size: 164, gapless: true),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Row(children: [
-                Expanded(
-                    child: OutlinedButton.icon(
+                    ),
+                    IconButton(
+                        tooltip: l.t('upi.copyAmount'),
                         onPressed: () {
                           Clipboard.setData(ClipboardData(text: '$owed'));
                           messenger.showSnackBar(
                               SnackBar(content: Text(l.t('upi.amountCopied'))));
                         },
-                        icon: const Icon(Icons.currency_rupee, size: 16),
-                        label: Text(l.t('upi.copyAmount'),
-                            style: const TextStyle(fontSize: 12)))),
-                const SizedBox(width: 8),
-                Expanded(
-                    child: OutlinedButton.icon(
-                        onPressed: () {
-                          Clipboard.setData(
-                              ClipboardData(text: settings.upiId));
-                          messenger.showSnackBar(
-                              SnackBar(content: Text(l.t('upi.idCopied'))));
-                        },
-                        icon: const Icon(Icons.copy, size: 16),
-                        label: Text(l.t('upi.copyId'),
-                            style: const TextStyle(fontSize: 12)))),
-              ]),
-              const SizedBox(height: 12),
-              Text(l.t('upi.chooseApp'),
-                  style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: subtle)),
-              const SizedBox(height: 8),
-              Row(children: [
-                for (final app in const [
-                  ('gpay', 'GPay'),
-                  ('phonepe', 'PhonePe'),
-                  ('paytm', 'Paytm'),
-                ])
-                  Expanded(
-                      child: Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: OutlinedButton(
-                        onPressed: () =>
-                            _openUpiApp(messenger, settings, payment, app.$1),
-                        child:
-                            Text(app.$2, style: const TextStyle(fontSize: 12))),
-                  )),
-                Expanded(
-                    child: OutlinedButton(
-                        onPressed: () =>
-                            _openUpiApp(messenger, settings, payment, 'other'),
-                        child: Text(l.t('upi.otherApp'),
-                            style: const TextStyle(fontSize: 12)))),
-              ]),
-              const SizedBox(height: 10),
-              Text('${l.t('upi.typeAmount')} ${inr(owed)}',
-                  style: const TextStyle(
-                      fontSize: 12, color: coral, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 14),
-              Text(l.t('upi.afterPay'),
-                  style: TextStyle(fontSize: 12, color: subtle)),
-              const SizedBox(height: 12),
-              TextField(
-                controller: utr,
-                decoration: InputDecoration(
-                    labelText: l.t('upi.utr'), hintText: l.t('upi.utrHint')),
+                        icon: const Icon(Icons.copy, color: Colors.white)),
+                  ]),
+                ),
               ),
+              const SizedBox(height: 14),
+              // 2. The owner's QR.
+              Text(l.t('upi.scanThis'),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              Center(child: UpiQrView(settings: settings, size: 240)),
+              if (settings.upiId.contains('@')) ...[
+                const SizedBox(height: 8),
+                InkWell(
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: settings.upiId));
+                    messenger.showSnackBar(
+                        SnackBar(content: Text(l.t('upi.idCopied'))));
+                  },
+                  child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Flexible(
+                            child: Text(settings.upiId,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700))),
+                        const SizedBox(width: 6),
+                        Icon(Icons.copy, size: 15, color: subtle),
+                      ]),
+                ),
+              ],
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                  onPressed: () => shareUpiQr(messenger, l, settings, owed),
+                  icon: const Icon(Icons.ios_share),
+                  label: Text(l.t('upi.shareQr'))),
+              const SizedBox(height: 14),
+              // 3. Open a UPI app and scan.
+              Text(l.t('upi.openApp'),
+                  style: const TextStyle(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 4),
+              Text(l.t('upi.howToScan'),
+                  style: TextStyle(fontSize: 12, color: subtle)),
+              const SizedBox(height: 8),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                for (final app in upiApps)
+                  OutlinedButton(
+                      onPressed: () async {
+                        if (!await openUpiApp(app.package)) {
+                          messenger.showSnackBar(SnackBar(
+                              content: Text(
+                                  '${app.name}: ${l.t('upi.appMissing')}')));
+                        }
+                      },
+                      child: Text(app.name)),
+              ]),
+              const Divider(height: 32),
+              // 4. Tell the owner.
+              Text(l.t('upi.afterPay'),
+                  style: const TextStyle(fontWeight: FontWeight.w800)),
               const SizedBox(height: 10),
               TextField(
                 controller: paidAmount,
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
                     labelText: l.t('upi.paidAmount'), prefixText: '₹ '),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: note,
-                decoration: InputDecoration(labelText: l.t('upi.note')),
               ),
               const SizedBox(height: 10),
               OutlinedButton.icon(
@@ -197,6 +169,26 @@ Future<void> showUpiPayFlow(
                     ? Icons.image_outlined
                     : Icons.check_circle_outline),
                 label: Text(l.t('upi.screenshot')),
+              ),
+              if (screenshot != null) ...[
+                const SizedBox(height: 8),
+                ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.memory(base64Decode(screenshot!),
+                        height: 120, fit: BoxFit.cover)),
+              ],
+              const SizedBox(height: 10),
+              TextField(
+                controller: utr,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                    labelText: l.t('upi.utrOptional'),
+                    hintText: l.t('upi.utrHint')),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: note,
+                decoration: InputDecoration(labelText: l.t('upi.note')),
               ),
               const SizedBox(height: 16),
               FilledButton.icon(
@@ -235,6 +227,119 @@ Future<void> showUpiPayFlow(
   );
 }
 
+/// UPI apps a tenant can open from the pay screen to scan the owner's QR.
+const upiApps = [
+  (name: 'GPay', package: 'com.google.android.apps.nbu.paisa.user'),
+  (name: 'PhonePe', package: 'com.phonepe.app'),
+  (name: 'Paytm', package: 'net.one97.paytm'),
+  (name: 'BHIM', package: 'in.org.npci.upiapp'),
+];
+
+/// Opens an installed UPI app on its home screen, where the tenant taps
+/// Scan. Android app: launched by package. Mobile web: Chrome's intent link,
+/// which opens the app (or its Play Store page). Returns false when it
+/// couldn't be opened.
+Future<bool> openUpiApp(String package) async {
+  try {
+    if (kIsWeb) {
+      return await launchUrl(
+          Uri.parse('intent://#Intent;action=android.intent.action.MAIN;'
+              'category=android.intent.category.LAUNCHER;package=$package;end'),
+          webOnlyWindowName: '_self');
+    }
+    if (defaultTargetPlatform != TargetPlatform.android) return false;
+    final intent = AndroidIntent(
+        action: 'android.intent.action.MAIN',
+        category: 'android.intent.category.LAUNCHER',
+        package: package,
+        flags: const [Flag.FLAG_ACTIVITY_NEW_TASK]);
+    if (await intent.canResolveActivity() != true) return false;
+    await intent.launch();
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+/// The picture of the owner's UPI QR: their uploaded image, else a QR made
+/// from their UPI ID (same content as the QR their UPI app shows).
+Future<({Uint8List bytes, String mime})?> upiQrPicture(
+    UpiSettings settings) async {
+  if (settings.hasQrImage) {
+    try {
+      return (bytes: base64Decode(settings.qrImage), mime: 'image/jpeg');
+    } on FormatException {
+      return null;
+    }
+  }
+  if (!settings.upiId.contains('@')) return null;
+  // A white card with a quiet margin, so the saved picture scans anywhere.
+  const side = 900.0, margin = 60.0;
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(recorder)
+    ..drawRect(const Rect.fromLTWH(0, 0, side + 2 * margin, side + 2 * margin),
+        Paint()..color = Colors.white)
+    ..translate(margin, margin);
+  QrPainter(
+    data:
+        upiPayUri('other', upiId: settings.upiId, payeeName: settings.payeeName)
+            .toString(),
+    version: QrVersions.auto,
+    gapless: true,
+  ).paint(canvas, const Size(side, side));
+  final image = await recorder
+      .endRecording()
+      .toImage((side + 2 * margin).toInt(), (side + 2 * margin).toInt());
+  final data = await image.toByteData(format: ui.ImageByteFormat.png);
+  if (data == null) return null;
+  return (bytes: data.buffer.asUint8List(), mime: 'image/png');
+}
+
+/// Shares the owner's QR picture: the tenant can send it straight to a UPI
+/// app or save it, then scan it from the gallery inside their UPI app.
+Future<void> shareUpiQr(ScaffoldMessengerState messenger, AppLocalizations l,
+    UpiSettings settings, int amount) async {
+  final picture = await upiQrPicture(settings);
+  if (picture == null) return;
+  try {
+    await SharePlus.instance.share(ShareParams(
+      files: [
+        XFile.fromData(picture.bytes,
+            mimeType: picture.mime,
+            name: picture.mime == 'image/png' ? 'upi-qr.png' : 'upi-qr.jpg')
+      ],
+      text: '${l.t('upi.amount')}: ${inr(amount)}',
+    ));
+  } catch (_) {
+    if (!messenger.mounted) return;
+    messenger.showSnackBar(SnackBar(content: Text(l.t('upi.screenshotQr'))));
+  }
+}
+
+/// The owner's QR on a white card (scannable in dark mode too).
+class UpiQrView extends StatelessWidget {
+  const UpiQrView({super.key, required this.settings, this.size = 220});
+  final UpiSettings settings;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+            color: Colors.white, borderRadius: BorderRadius.circular(14)),
+        child: settings.hasQrImage
+            ? SizedBox(
+                width: size,
+                child: base64Image(settings.qrImage, fit: BoxFit.contain))
+            : QrImageView(
+                data: upiPayUri('other',
+                        upiId: settings.upiId, payeeName: settings.payeeName)
+                    .toString(),
+                size: size,
+                gapless: true),
+      );
+}
+
 /// The deep link for a specific UPI app (or the system chooser for 'other').
 /// App-specific schemes work from mobile browsers too, which is what makes
 /// the PWA able to open the installed app; on the web the generic chooser
@@ -256,28 +361,6 @@ Uri upiPayUri(String app,
         ? Uri.parse('intent://pay?$params#Intent;scheme=upi;end')
         : Uri.parse('upi://pay?$params'),
   };
-}
-
-Future<void> _openUpiApp(ScaffoldMessengerState messenger, UpiSettings s,
-    Payment payment, String app) async {
-  final uri =
-      upiPayUri(app, upiId: s.upiId, payeeName: s.payeeName, web: kIsWeb);
-  try {
-    // On the web the current tab must navigate ('_self'): browsers only
-    // hand custom-scheme/intent links to apps on a same-tab user gesture —
-    // a new tab silently goes nowhere.
-    final ok = await launchUrl(uri,
-        mode: kIsWeb
-            ? LaunchMode.platformDefault
-            : LaunchMode.externalApplication,
-        webOnlyWindowName: '_self');
-    if (!ok) throw Exception();
-  } catch (_) {
-    if (!messenger.mounted) return;
-    messenger.showSnackBar(SnackBar(
-        content:
-            Text(AppLocalizations.of(messenger.context).t('upi.launchFail'))));
-  }
 }
 
 class PaymentReviewScreen extends StatelessWidget {
@@ -427,6 +510,7 @@ class _UpiSettingsScreenState extends State<UpiSettingsScreen> {
   final _payee = TextEditingController();
   bool _enabled = false;
   bool _loading = true;
+  String _qrImage = '';
 
   @override
   void initState() {
@@ -442,6 +526,7 @@ class _UpiSettingsScreenState extends State<UpiSettingsScreen> {
       _upiId.text = s?.upiId ?? '';
       _payee.text = s?.payeeName ?? '';
       _enabled = s?.enabled ?? false;
+      _qrImage = s?.qrImage ?? '';
       _loading = false;
     });
   }
@@ -457,11 +542,50 @@ class _UpiSettingsScreenState extends State<UpiSettingsScreen> {
           : ListView(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
               children: [
+                  // The owner's own QR: the simplest, most reliable way to
+                  // get paid on a personal UPI account.
+                  FormLabel(l.t('upi.qrLabel')),
+                  Text(l.t('upi.qrHelp'),
+                      style: TextStyle(fontSize: 12, color: subtle)),
+                  const SizedBox(height: 10),
+                  if (_qrImage.isNotEmpty)
+                    Center(
+                        child: UpiQrView(
+                            settings: UpiSettings(qrImage: _qrImage),
+                            size: 200)),
+                  const SizedBox(height: 8),
+                  Row(children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                          onPressed: () async {
+                            // Sharper than photos: QR codes must stay
+                            // scannable.
+                            final picked = await pickImageBase64(context,
+                                maxWidth: 1200, quality: 90);
+                            if (picked != null) {
+                              setState(() => _qrImage = picked);
+                            }
+                          },
+                          icon: const Icon(Icons.qr_code_2),
+                          label: Text(_qrImage.isEmpty
+                              ? l.t('upi.uploadQr')
+                              : l.t('upi.changeQr'))),
+                    ),
+                    if (_qrImage.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      IconButton(
+                          tooltip: l.t('upi.removeQr'),
+                          onPressed: () => setState(() => _qrImage = ''),
+                          icon: const Icon(Icons.delete_outline, color: coral)),
+                    ],
+                  ]),
+                  const SizedBox(height: 18),
                   const FormLabel('UPI ID'),
                   TextField(
                       controller: _upiId,
                       decoration: InputDecoration(
-                          hintText: 'name@bank', labelText: l.t('upi.upiId'))),
+                          hintText: 'name@bank',
+                          labelText: l.t('upi.upiIdOptional'))),
                   const SizedBox(height: 12),
                   FormLabel(AppLocalizations.of(context).t('upi.payee')),
                   TextField(
@@ -481,7 +605,8 @@ class _UpiSettingsScreenState extends State<UpiSettingsScreen> {
                         final error = await state.saveUpiSettings(widget.pgId,
                             upiId: _upiId.text,
                             payeeName: _payee.text,
-                            enabled: _enabled);
+                            enabled: _enabled,
+                            qrImage: _qrImage);
                         messenger.showSnackBar(SnackBar(
                             content: Text(error ?? l.t('upi.settingsSaved'))));
                       },

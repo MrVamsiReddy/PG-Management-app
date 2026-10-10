@@ -6,17 +6,29 @@ enum PaymentStatus { due, partial, paid }
 
 class UpiSettings {
   const UpiSettings(
-      {this.upiId = '', this.payeeName = '', this.enabled = false});
+      {this.upiId = '',
+      this.payeeName = '',
+      this.enabled = false,
+      this.qrImage = ''});
   final String upiId;
   final String payeeName;
   final bool enabled;
 
-  bool get usable => enabled && upiId.contains('@');
+  /// The owner's own UPI QR (a picture from their UPI app), base64. Tenants
+  /// scan it to pay; it works for personal accounts, where payment links
+  /// are often refused by UPI apps.
+  final String qrImage;
+
+  bool get hasQrImage => qrImage.isNotEmpty;
+
+  /// Tenants can pay when UPI is on and there is a QR or a UPI ID.
+  bool get usable => enabled && (hasQrImage || upiId.contains('@'));
 
   static UpiSettings fromRow(Map<String, dynamic> r) => UpiSettings(
         upiId: r['upi_id'] as String? ?? '',
         payeeName: r['payee_name'] as String? ?? '',
         enabled: r['enabled'] as bool? ?? false,
+        qrImage: r['qr_image'] as String? ?? '',
       );
 }
 

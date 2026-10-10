@@ -33,7 +33,8 @@ class ManagerOnly extends StatelessWidget {
 
 /// Camera/gallery chooser → picked image compressed and returned as base64
 /// (small enough to store inline), or null if cancelled or unavailable.
-Future<String?> pickImageBase64(BuildContext context) async {
+Future<String?> pickImageBase64(BuildContext context,
+    {double maxWidth = 900, int quality = 55}) async {
   final l = AppLocalizations.of(context);
   final source = await showModalBottomSheet<ImageSource>(
     context: context,
@@ -53,7 +54,7 @@ Future<String?> pickImageBase64(BuildContext context) async {
   if (source == null) return null;
   try {
     final file = await ImagePicker()
-        .pickImage(source: source, maxWidth: 900, imageQuality: 55);
+        .pickImage(source: source, maxWidth: maxWidth, imageQuality: quality);
     if (file == null) return null;
     return base64Encode(await file.readAsBytes());
   } catch (_) {

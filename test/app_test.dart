@@ -1,9 +1,11 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:pg_management/main.dart';
 import 'package:pg_management/src/access.dart';
 import 'package:pg_management/src/app_state.dart';
@@ -3350,6 +3352,100 @@ void main() {
         p.period.year == now.year &&
         p.period.month == now.month);
     expect(due.collected, 500);
+  });
+
+  // ---- Simple UPI: the owner's own QR ----
+
+  // 1x1 white PNG, standing in for an uploaded QR picture.
+  const tinyPng =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
+
+  test('an owner can take payments with just their QR', () {
+    expect(const UpiSettings(enabled: true, qrImage: tinyPng).usable, isTrue);
+    expect(const UpiSettings(enabled: true, upiId: 'owner@upi').usable, isTrue);
+    expect(const UpiSettings(enabled: true).usable, isFalse);
+    expect(const UpiSettings(qrImage: tinyPng).usable, isFalse);
+    final row = UpiSettings.fromRow({
+      'upi_id': '',
+      'payee_name': 'PG',
+      'enabled': true,
+      'qr_image': tinyPng
+    });
+    expect(row.hasQrImage, isTrue);
+    expect(row.usable, isTrue);
+  });
+
+  testWidgets('the pay screen shows the uploaded QR, else one from the UPI ID',
+      (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+        home: Scaffold(
+            body: UpiQrView(
+                settings: UpiSettings(enabled: true, qrImage: tinyPng)))));
+    expect(find.byType(Image), findsOneWidget);
+    expect(find.byType(QrImageView), findsNothing);
+
+    await tester.pumpWidget(const MaterialApp(
+        home: Scaffold(
+            body: UpiQrView(
+                settings: UpiSettings(enabled: true, upiId: 'owner@upi')))));
+    expect(find.byType(QrImageView), findsOneWidget);
+  });
+
+  test('the uploaded QR can be shared as a picture', () async {
+    final picture =
+        await upiQrPicture(const UpiSettings(enabled: true, qrImage: tinyPng));
+    expect(picture, isNotNull);
+    expect(picture!.bytes, isNotEmpty);
+    expect(await upiQrPicture(const UpiSettings(enabled: true)), isNull);
+  });
+
+  test('the pay screen opens the common UPI apps', () {
+    final names = upiApps.map((a) => a.name).toList();
+    expect(names, containsAll(['GPay', 'PhonePe', 'Paytm', 'BHIM']));
+    final manifest =
+        File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
+    for (final app in upiApps) {
+      expect(manifest, contains('<package android:name="${app.package}"/>'),
+          reason: app.name);
+    }
+  });
+
+  test('a screenshot alone is enough proof; no proof is refused', () async {
+    state.debugSignIn(UserRole.tenant, tenantId: 't1');
+    final due = state.tenantDuePayment!;
+    expect(await state.submitPayment(payment: due, utr: '', paidAmount: 100),
+        contains('screenshot'));
+    // With a screenshot and no UTR it passes validation (and then fails
+    // closed only because there is no server in tests).
+    final withShot = await state.submitPayment(
+        payment: due,
+        utr: '',
+        paidAmount: 100,
+        screenshot: Uint8List.fromList([1, 2, 3]));
+    expect(withShot, isNot(contains('UTR')));
+    expect(withShot, isNot(contains('screenshot')));
+  });
+
+  test('submissions without a UTR are never flagged as duplicates', () {
+    state.debugSignIn(UserRole.owner);
+    UpiSubmission sub(String id) => UpiSubmission(
+        id: id,
+        tenantId: 't1',
+        paymentId: 'p-$id',
+        amount: 9500,
+        utr: '',
+        status: UpiStatus.pendingConfirmation,
+        submittedAt: DateTime.now());
+    state.submissions = [sub('a'), sub('b')];
+    expect(state.duplicateOf(state.submissions.first), isNull);
+  });
+
+  test('019 stores the owner QR and lets a screenshot stand in for the UTR',
+      () {
+    final sql = File('supabase/019_upi_qr.sql').readAsStringSync();
+    expect(sql, contains('add column if not exists qr_image text'));
+    expect(sql, contains('alter column utr drop not null'));
+    expect(sql, contains('upi_submissions_proof'));
   });
 }
 

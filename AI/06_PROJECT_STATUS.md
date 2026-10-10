@@ -29,6 +29,11 @@ Roadmap = `app improvements.md` (Prompts 1–11). Details of each area live in `
 ## Improvements batch complete
 - Tasks 1–9 shipped. Interim bugfix: admin "View PGs" reads app_data.
 
+## v1.21.0 (2026-10-10): simple UPI with the owner's own QR
+- Owner uploads the QR from their own UPI app (UPI settings); UPI ID optional. Stored in `pg_upi_settings.qr_image` (019).
+- Tenant pay sheet: amount (copy), the owner's QR (`UpiQrView`; generated from the UPI ID when no picture), Share/save QR (`shareUpiQr`), buttons that open GPay/PhonePe/Paytm/BHIM (`openUpiApp`: android_intent_plus by package; Chrome intent link on mobile web; `<queries><package>` in the manifest). Payment-link (pay intent) buttons removed — UPI apps often refuse them for personal accounts.
+- Proof: a screenshot or a 12-digit UTR (utr nullable, `upi_submissions_proof` check).
+
 ## v1.20.1 (2026-10-10): tenant sign-in blank screen
 - The tenant app's first page is the login screen; after signing in it called `Navigator.pop`, removing the only page (blank, unresponsive screen). It now pops only when it was pushed (owner portal list). Regression tests drive both apps' real login screens.
 - `_applyCredit` ignores dues with nothing left to pay (could otherwise loop forever).
