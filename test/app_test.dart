@@ -9,6 +9,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:pg_management/main.dart';
 import 'package:pg_management/src/access.dart';
 import 'package:pg_management/src/app_state.dart';
+import 'package:pg_management/src/app_version.dart';
 import 'package:pg_management/src/auth_screen.dart';
 import 'package:pg_management/src/dashboard_screen.dart';
 import 'package:pg_management/src/home_shell.dart';
@@ -3446,6 +3447,70 @@ void main() {
     expect(sql, contains('add column if not exists qr_image text'));
     expect(sql, contains('alter column utr drop not null'));
     expect(sql, contains('upi_submissions_proof'));
+  });
+
+  // ---- iPhone / web: opening UPI apps and picking up new versions ----
+
+  test('the app version matches pubspec.yaml', () {
+    final pubspec = File('pubspec.yaml').readAsStringSync();
+    final version =
+        RegExp(r'^version:\s*([0-9.]+)', multiLine: true).firstMatch(pubspec)!;
+    expect(appVersion, version.group(1));
+  });
+
+  test('the web app offers a reload only for a newer, settled deploy', () {
+    final now = DateTime(2026, 10, 10, 12);
+    String json(String v) => '{"version":"$v","build_number":"1"}';
+    expect(
+        newerWebVersion(
+            deployedJson: json('9.0.0'),
+            deployedAt: now.subtract(const Duration(minutes: 30)),
+            now: now,
+            running: '1.21.1'),
+        '9.0.0');
+    // Too fresh: a reload could still get the old, cached files.
+    expect(
+        newerWebVersion(
+            deployedJson: json('9.0.0'),
+            deployedAt: now.subtract(const Duration(minutes: 3)),
+            now: now,
+            running: '1.21.1'),
+        isNull);
+    expect(
+        newerWebVersion(
+            deployedJson: json('1.21.1'),
+            deployedAt: now.subtract(const Duration(hours: 1)),
+            now: now,
+            running: '1.21.1'),
+        isNull);
+  });
+
+  test('on iPhone the UPI app links use iPhone app names', () {
+    Uri pay(String app, {bool ios = false}) => upiPayUri(app,
+        upiId: 'owner@upi', payeeName: 'PG', web: true, ios: ios);
+    expect(pay('gpay', ios: true).toString(), startsWith('gpay://upi/pay?'));
+    expect(pay('other', ios: true).toString(), startsWith('upi://pay?'));
+    expect(pay('phonepe', ios: true).toString(), startsWith('phonepe://pay?'));
+    // Android browsers keep their links.
+    expect(pay('gpay').toString(), startsWith('tez://upi/pay?'));
+    expect(pay('other').toString(), startsWith('intent://'));
+    // With only a QR, the button opens the app to scan.
+    expect(upiAppHomeUri('gpay', ios: true).toString(), 'gpay://');
+    expect(upiAppHomeUri('phonepe', ios: true).toString(), 'phonepe://');
+    expect(upiAppHomeUri('paytm').toString(), 'paytmmp://');
+    expect(upiAppHomeUri('other', ios: true).toString(), 'bhim://');
+  });
+
+  test('the Android app opens UPI apps by their own launch screen', () {
+    final activity = File(
+            'android/app/src/main/kotlin/com/example/nestora_pg/MainActivity.kt')
+        .readAsStringSync();
+    expect(activity, contains('getLaunchIntentForPackage'));
+    expect(activity, contains('"pg_management/apps"'));
+    final screens = File('lib/src/upi_screens.dart').readAsStringSync();
+    expect(screens, contains("MethodChannel('pg_management/apps')"));
+    expect(File('pubspec.yaml').readAsStringSync(),
+        isNot(contains('android_intent_plus')));
   });
 }
 

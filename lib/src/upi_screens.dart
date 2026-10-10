@@ -1,8 +1,6 @@
 import 'dart:convert';
 import 'dart:ui' as ui;
 
-import 'package:android_intent_plus/android_intent.dart';
-import 'package:android_intent_plus/flag.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -140,10 +138,11 @@ Future<void> showUpiPayFlow(
                 for (final app in upiApps)
                   OutlinedButton(
                       onPressed: () async {
-                        if (!await openUpiApp(app.package)) {
+                        if (!await openUpiApp(app, settings)) {
                           messenger.showSnackBar(SnackBar(
-                              content: Text(
-                                  '${app.name}: ${l.t('upi.appMissing')}')));
+                              content: Text(kIsWeb
+                                  ? l.t('upi.openAppYourself')
+                                  : '${app.name}: ${l.t('upi.appMissing')}')));
                         }
                       },
                       child: Text(app.name)),
@@ -228,34 +227,47 @@ Future<void> showUpiPayFlow(
 }
 
 /// UPI apps a tenant can open from the pay screen to scan the owner's QR.
+/// [link] is the app's payment-link style for [upiPayUri] (used on the web).
 const upiApps = [
-  (name: 'GPay', package: 'com.google.android.apps.nbu.paisa.user'),
-  (name: 'PhonePe', package: 'com.phonepe.app'),
-  (name: 'Paytm', package: 'net.one97.paytm'),
-  (name: 'BHIM', package: 'in.org.npci.upiapp'),
+  (
+    name: 'GPay',
+    package: 'com.google.android.apps.nbu.paisa.user',
+    link: 'gpay'
+  ),
+  (name: 'PhonePe', package: 'com.phonepe.app', link: 'phonepe'),
+  (name: 'Paytm', package: 'net.one97.paytm', link: 'paytm'),
+  (name: 'BHIM', package: 'in.org.npci.upiapp', link: 'other'),
 ];
 
-/// Opens an installed UPI app on its home screen, where the tenant taps
-/// Scan. Android app: launched by package. Mobile web: Chrome's intent link,
-/// which opens the app (or its Play Store page). Returns false when it
-/// couldn't be opened.
-Future<bool> openUpiApp(String package) async {
+/// Talks to MainActivity.kt, which starts an installed app by its own
+/// launch intent.
+const _appsChannel = MethodChannel('pg_management/apps');
+
+/// Opens a UPI app.
+/// * Android app: on its home screen (by package), where the tenant taps
+///   Scan.
+/// * Browser or iPhone home-screen app: through the app's own link — its
+///   pay screen with the owner as payee when there is a UPI ID (the tenant
+///   types the amount), else the app itself to scan the saved QR.
+/// Returns false when it couldn't be opened.
+Future<bool> openUpiApp(({String name, String package, String link}) app,
+    UpiSettings settings) async {
   try {
     if (kIsWeb) {
-      return await launchUrl(
-          Uri.parse('intent://#Intent;action=android.intent.action.MAIN;'
-              'category=android.intent.category.LAUNCHER;package=$package;end'),
-          webOnlyWindowName: '_self');
+      final ios = defaultTargetPlatform == TargetPlatform.iOS;
+      final uri = settings.upiId.contains('@')
+          ? upiPayUri(app.link,
+              upiId: settings.upiId,
+              payeeName: settings.payeeName,
+              web: true,
+              ios: ios)
+          : upiAppHomeUri(app.link, ios: ios);
+      return await launchUrl(uri, webOnlyWindowName: '_self');
     }
     if (defaultTargetPlatform != TargetPlatform.android) return false;
-    final intent = AndroidIntent(
-        action: 'android.intent.action.MAIN',
-        category: 'android.intent.category.LAUNCHER',
-        package: package,
-        flags: const [Flag.FLAG_ACTIVITY_NEW_TASK]);
-    if (await intent.canResolveActivity() != true) return false;
-    await intent.launch();
-    return true;
+    return await _appsChannel
+            .invokeMethod<bool>('launch', {'package': app.package}) ??
+        false;
   } catch (_) {
     return false;
   }
@@ -347,21 +359,38 @@ class UpiQrView extends StatelessWidget {
 /// The amount is never prefilled: UPI apps reject prefilled intent payments
 /// to personal (unverified) ids above ₹2,000, so the tenant always types
 /// the amount — typed payments carry the normal UPI limit.
+///
+/// [ios]: iPhone (Safari or a home-screen web app), where Google Pay
+/// answers to `gpay://` and the generic link is plain `upi://` (iOS has no
+/// intent:// links).
 Uri upiPayUri(String app,
-    {required String upiId, required String payeeName, bool web = false}) {
+    {required String upiId,
+    required String payeeName,
+    bool web = false,
+    bool ios = false}) {
   final params = 'pa=${Uri.encodeComponent(upiId)}'
       '&pn=${Uri.encodeComponent(payeeName)}'
       '&tn=${Uri.encodeComponent('PG Rent')}'
       '&cu=INR';
   return switch (app) {
-    'gpay' => Uri.parse('tez://upi/pay?$params'),
+    'gpay' =>
+      Uri.parse(ios ? 'gpay://upi/pay?$params' : 'tez://upi/pay?$params'),
     'phonepe' => Uri.parse('phonepe://pay?$params'),
     'paytm' => Uri.parse('paytmmp://pay?$params'),
-    _ => web
+    _ => web && !ios
         ? Uri.parse('intent://pay?$params#Intent;scheme=upi;end')
         : Uri.parse('upi://pay?$params'),
   };
 }
+
+/// Opens a UPI app itself (no payment details), for scanning the owner's QR
+/// from a browser or iPhone home-screen app.
+Uri upiAppHomeUri(String app, {bool ios = false}) => Uri.parse(switch (app) {
+      'gpay' => ios ? 'gpay://' : 'tez://',
+      'phonepe' => 'phonepe://',
+      'paytm' => 'paytmmp://',
+      _ => 'bhim://',
+    });
 
 class PaymentReviewScreen extends StatelessWidget {
   const PaymentReviewScreen({super.key});
