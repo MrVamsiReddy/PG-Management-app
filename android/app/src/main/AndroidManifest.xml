@@ -65,5 +65,10 @@
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="paytmmp"/>
         </intent>
+        <!-- UPI apps the pay screen opens to scan the owner's QR. -->
+        <package android:name="com.google.android.apps.nbu.paisa.user"/>
+        <package android:name="com.phonepe.app"/>
+        <package android:name="net.one97.paytm"/>
+        <package android:name="in.org.npci.upiapp"/>
     </queries>
 </manifest>

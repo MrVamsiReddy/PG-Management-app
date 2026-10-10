@@ -2156,10 +2156,13 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Saves a PG's UPI details. [qrImage] is the owner's own UPI QR picture
+  /// (base64); null leaves the stored one as it is, '' removes it.
   Future<String?> saveUpiSettings(String pgId,
       {required String upiId,
       required String payeeName,
-      required bool enabled}) async {
+      required bool enabled,
+      String? qrImage}) async {
     final client = supabaseOrNull;
     if (client == null || !isLoggedIn) return 'Sign in to save UPI settings.';
     try {
@@ -2169,6 +2172,7 @@ class AppState extends ChangeNotifier {
         'upi_id': upiId.trim(),
         'payee_name': payeeName.trim(),
         'enabled': enabled,
+        if (qrImage != null) 'qr_image': qrImage.isEmpty ? null : qrImage,
         'updated_at': DateTime.now().toIso8601String(),
       }, onConflict: 'owner_id,pg_id');
       return null;
@@ -2186,8 +2190,13 @@ class AppState extends ChangeNotifier {
       required int paidAmount,
       String note = '',
       Uint8List? screenshot}) async {
+    // Proof is the payment screenshot, the UTR, or both. Some UPI apps
+    // bury the UTR, so a screenshot alone is enough.
     final ref = utr.replaceAll(RegExp(r'\s'), '');
-    if (!RegExp(r'^\d{12}$').hasMatch(ref)) {
+    if (ref.isEmpty && screenshot == null) {
+      return 'Attach the payment screenshot or enter the 12-digit UTR.';
+    }
+    if (ref.isNotEmpty && !RegExp(r'^\d{12}$').hasMatch(ref)) {
       return 'Enter the 12-digit UPI reference (UTR).';
     }
     if (paidAmount <= 0) return 'Enter the amount you paid.';
@@ -2196,8 +2205,9 @@ class AppState extends ChangeNotifier {
       return 'This payment is already submitted and awaiting review.';
     }
     // A UTR is unique per transaction — a repeat is a mistake or a re-use.
-    if (submissions
-        .any((s) => s.utr == ref && s.status != UpiStatus.rejected)) {
+    if (ref.isNotEmpty &&
+        submissions
+            .any((s) => s.utr == ref && s.status != UpiStatus.rejected)) {
       return 'This UTR was already submitted. Check the reference number.';
     }
     final client = supabaseOrNull;
@@ -2226,7 +2236,7 @@ class AppState extends ChangeNotifier {
         'payment_id': payment.id,
         'period': payment.period.toIso8601String(),
         'amount': paidAmount,
-        'utr': ref,
+        'utr': ref.isEmpty ? null : ref,
         'note': note.trim().isEmpty ? null : note.trim(),
         'screenshot_path': path,
       });
@@ -2248,8 +2258,13 @@ class AppState extends ChangeNotifier {
 
   /// Owner-side: another submission in this workspace already used the same
   /// amount + UTR. A warning, not a block.
-  UpiSubmission? duplicateOf(UpiSubmission s) => _firstOrNull(submissions,
-      (o) => o.id != s.id && o.utr == s.utr && o.amount == s.amount);
+  UpiSubmission? duplicateOf(UpiSubmission s) => _firstOrNull(
+      submissions,
+      (o) =>
+          o.id != s.id &&
+          s.utr.isNotEmpty &&
+          o.utr == s.utr &&
+          o.amount == s.amount);
 
   List<UpiSubmission> get pendingSubmissions => submissions
       .where((s) => s.status == UpiStatus.pendingConfirmation)
