@@ -125,6 +125,7 @@ class VisitorsScreen extends StatelessWidget {
                         FormLabel(
                             AppLocalizations.of(context).t('vis.visiting')),
                         DropdownButtonFormField<String>(
+                            isExpanded: true,
                             initialValue: tenantId,
                             items: scoped
                                 .map((e) => DropdownMenuItem(

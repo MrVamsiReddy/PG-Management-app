@@ -267,6 +267,7 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
                               keyboardType: TextInputType.phone),
                           const FormLabel('Subscription plan'),
                           DropdownButtonFormField<String>(
+                            isExpanded: true,
                             initialValue: plan,
                             items: const [
                               DropdownMenuItem(

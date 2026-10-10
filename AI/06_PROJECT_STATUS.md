@@ -29,6 +29,11 @@ Roadmap = `app improvements.md` (Prompts 1–11). Details of each area live in `
 ## Improvements batch complete
 - Tasks 1–9 shipped. Interim bugfix: admin "View PGs" reads app_data.
 
+## v1.22.0 (2026-10-11): tenant self-registration, true-black dark theme, smoother iPhone web app
+- Registration: tenant login → "New tenant? Register here" (`TenantRegisterScreen`: PG code, name, phone, email, ID photo) → `register_tenant` RPC files a request (020) and adds a managers notification. Login screen then shows `loginNotice`. Owner: Tenants screen lists requests (Accept opens onboarding prefilled → `onboardTenant` + `inviteTenant` emails the temp password → `resolveTenantRequest`; Reject erases the ID photo). Owner shares the code/link from Tenants → QR icon (`joinCodeFor`, `?join=CODE`). No account exists before acceptance.
+- Dark theme: black background, near-black bordered cards, white text, aqua `accent` (theme.dart tokens `accent/success/danger/info/amber/pink/violet/slate/heroGradient`); light theme unchanged. Screens use `accent`, never the fixed `primary`.
+- Smoothness: `decodedImage` caches decoded base64 photos; iPhone home-screen meta tags + matching page background; all dropdowns `isExpanded`.
+
 ## v1.21.1 (2026-10-10): UPI app buttons on Android and iPhone; web reload prompt
 - Android app: buttons open UPI apps via `MainActivity.kt` channel `pg_management/apps` (`getLaunchIntentForPackage`); a plain MAIN/LAUNCHER intent was refused (launcher screens lack CATEGORY_DEFAULT). android_intent_plus removed.
 - Web / iPhone home-screen app: buttons use each app's own link (`upiPayUri(..., ios:)` with the owner as payee when a UPI ID exists, else `upiAppHomeUri`: gpay://, phonepe://, paytmmp://, bhim://). Android-only intent:// links are no longer used on iPhone.

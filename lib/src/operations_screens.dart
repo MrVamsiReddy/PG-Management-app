@@ -149,6 +149,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                       FormLabel(AppLocalizations.of(context).t('common.room')),
                       if (manager)
                         DropdownButtonFormField<String>(
+                          isExpanded: true,
                           initialValue: roomId,
                           items: scoped
                               .map((r) => DropdownMenuItem(
@@ -165,6 +166,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                                 hintText: 'Room ${state.roomNumber(roomId)}')),
                       FormLabel(AppLocalizations.of(context).t('mnt.category')),
                       DropdownButtonFormField<String>(
+                          isExpanded: true,
                           initialValue: category,
                           items: [
                             'Plumbing',

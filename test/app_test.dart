@@ -20,6 +20,7 @@ import 'package:pg_management/src/owner_app.dart';
 import 'package:pg_management/src/pg_wizard.dart';
 import 'package:pg_management/src/repositories.dart';
 import 'package:pg_management/src/supabase_config.dart';
+import 'package:pg_management/src/tenant_register.dart';
 import 'package:pg_management/src/tenant_app.dart';
 import 'package:pg_management/src/theme.dart';
 import 'package:pg_management/src/update_check.dart';
@@ -3511,6 +3512,134 @@ void main() {
     expect(screens, contains("MethodChannel('pg_management/apps')"));
     expect(File('pubspec.yaml').readAsStringSync(),
         isNot(contains('android_intent_plus')));
+  });
+
+  // ---- Tenant self-registration ----
+
+  const idPhoto =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
+
+  Widget regPage(Widget home, AppState s) => AppScope(
+      notifier: s,
+      child: MaterialApp(localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ], theme: buildAppTheme(), home: home));
+
+  test('registration needs every field before it is sent', () async {
+    Future<String?> reg(
+            {String code = 'ABCD1234',
+            String name = 'Asha Rao',
+            String phone = '9876543210',
+            String email = 'asha@example.com',
+            String? id = idPhoto}) async =>
+        (await state.registerTenant(
+                code: code, name: name, phone: phone, email: email, kycDoc: id))
+            .error;
+    expect(await reg(code: ''), contains('PG code'));
+    expect(await reg(name: 'A'), contains('name'));
+    expect(await reg(phone: '12345'), contains('phone'));
+    expect(await reg(email: 'not-an-email'), contains('email'));
+    expect(await reg(id: null), contains('ID'));
+    // All valid: only the missing server stops it in tests.
+    expect(await reg(), contains('server'));
+  });
+
+  testWidgets('the tenant login offers registration; the owner login does not',
+      (tester) async {
+    await tester.pumpWidget(
+        regPage(const LoginScreen(portal: LoginPortal.tenant), state));
+    expect(find.text('New tenant? Register here'), findsOneWidget);
+    await tester.ensureVisible(find.text('New tenant? Register here'));
+    await tester.tap(find.text('New tenant? Register here'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TenantRegisterScreen), findsOneWidget);
+    expect(find.text('PG code'), findsOneWidget);
+    expect(find.text('Register'), findsOneWidget);
+
+    await tester.pumpWidget(
+        regPage(const LoginScreen(portal: LoginPortal.owner), state));
+    await tester.pumpAndSettle();
+    expect(find.text('New tenant? Register here'), findsNothing);
+  });
+
+  testWidgets('after registering, the login screen says what happens next',
+      (tester) async {
+    await tester.pumpWidget(
+        regPage(const LoginScreen(portal: LoginPortal.tenant), state));
+    expect(find.textContaining('temporary password'), findsNothing);
+    state.showLoginNotice(
+        'Registration sent to Green PG. Once your owner accepts it, a temporary password will be emailed to asha@example.com.');
+    await tester.pump();
+    expect(find.textContaining('temporary password'), findsOneWidget);
+  });
+
+  testWidgets('the owner sees registration requests with Accept and Reject',
+      (tester) async {
+    state.debugSignIn(UserRole.owner);
+    state.tenantRequests = [
+      TenantRequest(
+          id: 'req1',
+          pgId: 'p1',
+          name: 'Asha Rao',
+          phone: '9876543210',
+          email: 'asha@example.com',
+          createdAt: DateTime.now(),
+          kycDoc: idPhoto)
+    ];
+    await tester.pumpWidget(regPage(const TenantsScreen(), state));
+    await tester.pump();
+    expect(find.text('Registration request'), findsOneWidget);
+    expect(find.text('Asha Rao'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Accept'), findsOneWidget);
+    expect(find.text('Reject'), findsOneWidget);
+
+    // Accept opens onboarding with the tenant's details already filled in.
+    await tester.tap(find.widgetWithText(FilledButton, 'Accept'));
+    await tester.pumpAndSettle();
+    expect(
+        find.widgetWithText(TextFormField, 'asha@example.com'), findsOneWidget);
+  });
+
+  test('registration creates a request, never an account', () {
+    final sql = File('supabase/020_tenant_registration.sql').readAsStringSync();
+    expect(sql, contains('function public.register_tenant'));
+    expect(sql, contains('function public.pg_for_join_code'));
+    // Callable before sign-in, but it only files a request.
+    expect(sql, contains('to anon, authenticated'));
+    expect(sql, isNot(contains('insert into auth.users')));
+    expect(sql, isNot(contains('insert into public.members')));
+    expect(sql, isNot(contains('insert into members')));
+    // Requests are only created by the function: no insert policy.
+    expect(sql, isNot(contains('for insert')));
+    // Re-running 015 must not switch registration off.
+    final f15 = File('supabase/015_security_hardening.sql').readAsStringSync();
+    expect(f15, contains("'register_tenant', 'pg_for_join_code'"));
+    expect(AppState.joinLink('ABCD1234'), '$appWebUrl?join=ABCD1234');
+  });
+
+  // ---- True-black dark theme ----
+
+  test('dark mode is true black with a bright accent; light is unchanged', () {
+    final dark = buildDarkTheme();
+    expect(dark.scaffoldBackgroundColor, const Color(0xFF000000));
+    expect(dark.colorScheme.onSurface, const Color(0xFFFFFFFF));
+    applyThemeTokens(true);
+    expect(accent, darkAccent);
+    expect(accent, isNot(primary));
+    expect(surfaceCard, darkCard);
+    applyThemeTokens(false);
+    expect(accent, primary);
+    expect(surfaceCard, Colors.white);
+    expect(buildAppTheme().scaffoldBackgroundColor, canvas);
+  });
+
+  test('a stored photo is decoded once and reused', () {
+    final first = decodedImage(idPhoto);
+    expect(first, isNotNull);
+    expect(identical(decodedImage(idPhoto), first), isTrue);
+    expect(decodedImage('not base64 !!'), isNull);
   });
 }
 

@@ -261,6 +261,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                           style: Theme.of(context).textTheme.headlineMedium),
                       FormLabel(AppLocalizations.of(context).t('pay.tenant')),
                       DropdownButtonFormField<String>(
+                        isExpanded: true,
                         initialValue: tenantId,
                         items: scoped
                             .map((e) => DropdownMenuItem(
@@ -279,6 +280,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                           decoration: const InputDecoration(prefixText: '₹ ')),
                       FormLabel(AppLocalizations.of(context).t('pay.method')),
                       DropdownButtonFormField<String>(
+                          isExpanded: true,
                           initialValue: method,
                           items: ['UPI', 'Cash', 'Bank transfer', 'Card']
                               .map((e) =>

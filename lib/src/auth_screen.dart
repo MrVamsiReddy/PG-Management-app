@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'app_state.dart';
 import 'l10n.dart';
 import 'supabase_config.dart';
+import 'tenant_register.dart';
 import 'theme.dart';
 
 class AuthScreen extends StatelessWidget {
@@ -197,6 +198,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
+    final notice = AppScope.of(context).loginNotice;
     final loginTitle = switch (widget.portal) {
       LoginPortal.owner => l.t('auth.ownerLogin'),
       LoginPortal.tenant => l.t('auth.tenantLogin'),
@@ -226,6 +228,26 @@ class _LoginScreenState extends State<LoginScreen> {
                               .textTheme
                               .bodyLarge
                               ?.copyWith(color: subtle)),
+                      if (notice != null) ...[
+                        const SizedBox(height: 18),
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                              color: success.withValues(alpha: .14),
+                              borderRadius: BorderRadius.circular(14)),
+                          child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(Icons.mark_email_read_outlined,
+                                    color: success),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                    child: Text(notice,
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w600))),
+                              ]),
+                        ),
+                      ],
                       const SizedBox(height: 24),
                       TextFormField(
                         controller: email,
@@ -282,6 +304,19 @@ class _LoginScreenState extends State<LoginScreen> {
                                       builder: (_) =>
                                           const AdminSetupScreen())),
                           child: Text(l.t('auth.setupAdminLink')),
+                        ),
+                      ],
+                      if (widget.portal == LoginPortal.tenant) ...[
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: busy
+                              ? null
+                              : () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) =>
+                                          const TenantRegisterScreen())),
+                          child: Text(l.t('reg.link')),
                         ),
                       ],
                       if (widget.showOwnerLink && kIsWeb) ...[

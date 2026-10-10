@@ -339,6 +339,7 @@ class FloorPicker extends StatelessWidget {
     final floors = {for (var f = 0; f <= maxFloor; f++) f, value}.toList()
       ..sort();
     return DropdownButtonFormField<int>(
+        isExpanded: true,
         initialValue: value,
         items: [
           for (final f in floors)
